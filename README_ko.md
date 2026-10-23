@@ -83,20 +83,15 @@ flowchart TB
 
 ## 시작하기
 
-시험용 브랜치는 [contiloop/ouroboros](https://github.com/contiloop/ouroboros/tree/feature/ouroboros-rebrand)에 있습니다. GitHub 저장소 이름과 플러그인 이름 모두 **`ouroboros`**로 변경했습니다. 기존에 설치한 원본 Dryforge 플러그인을 단순 업데이트해도 이 Fork가 자동 설치되지는 않습니다.
-
 <details open>
 <summary><strong>Claude Code · 로컬 플러그인 테스트</strong></summary>
 
 ```bash
-git clone --branch feature/ouroboros-rebrand --single-branch \
-  https://github.com/contiloop/ouroboros.git ~/ouroboros
+git clone --depth 1 https://github.com/contiloop/ouroboros.git ~/ouroboros
 
 cd /path/to/your-project
 claude --plugin-dir ~/ouroboros/claude
 ```
-
-저장소 이름을 바꾸기 전에 Clone했다면 `git remote set-url origin https://github.com/contiloop/ouroboros.git`으로 원격 주소를 갱신할 수 있습니다.
 
 Mission은 **`/ouroboros:mission`**으로 명시적으로 실행합니다. 사람이 감독하는 단일 사이클은 `/ouroboros:ready` → `/ouroboros:go`를 사용할 수 있습니다. 실제 호스트가 필수 세션·중계·중첩 실행 기능을 제공하지 못하면 Mission 모드는 지원하는 척하지 않고 중단합니다.
 
@@ -128,7 +123,7 @@ ChatGPT와 논문을 읽다가 새로 배운 내용을 Zotero의 해당 논문�
 | 포함된 것 | 실행 호스트 및 실사용 검증이 필요한 것 |
 | :-- | :-- |
 | `mission`, `ready`, `go`, `migration` 스킬 | 실제 L1/L2 지속 세션과 L2의 L3 생성 |
-| 의도·승인·세션 생명주기 계약 | 권한 있는 의사결정 중계와 실행 한도 강제 |
+| 의도·승인·세션 생명주기 계약과 선택적 확장 스킬 인터페이스 | 권한 있는 의사결정 중계와 실행 한도 강제 |
 | `mission_state.py` 로컬 기록 및 상태 전이 검증 | 실제 검증 증거·Hook·중단 복원·외부 부수효과 검증 |
 | LANDSCAPE 조사 규칙, 5개 플랫폼 배포본 | Claude/Codex 실제 다중 사이클 종단간 테스트 |
 
@@ -150,6 +145,15 @@ docs/                    # Mission 및 MCP 설정 가이드
 platform/                # 플랫폼별 매니페스트 입력
 claude/ · codex/ · grok/ · agent-plugin/ · antigravity/
 ```
+
+### 확장 스킬 연결 (선택)
+
+L1에는 나중에 Interview·Research·Evaluation 등 다양한 스킬을 연결할 수 있습니다.
+결과의 **공통 영역(상태·근거·미해결 사항)**만 표준화하고, 구체적인 내용은 각 스킬이
+정의합니다. 결과가 Mission Intent의 변경을 제안하더라도 **L1 검토와 실제 사용자 승인**
+없이는 반영하지 않습니다. 이 기능은 **향후 스킬을 위한 인터페이스**이지,
+Interview 스킬이나 실제 에이전트 실행기가 설치됐다는 뜻은 아닙니다.
+[스킬 연결 가이드](docs/SKILL_INTERFACE.md)를 참고하세요.
 
 ### 테스트 및 검증
 

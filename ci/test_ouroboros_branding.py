@@ -45,7 +45,11 @@ class OuroborosBrandingTest(unittest.TestCase):
             if path.suffix == '.md' or '"homepage"' in content or '"repository"' in content:
                 self.assertIn(current,content,str(path))
             self.assertNotIn(old,content,str(path))
-        self.assertIn('git clone --branch feature/ouroboros-rebrand', (ROOT/'README.md').read_text())
+        for path in (ROOT/'README.md', ROOT/'README_ko.md'):
+            s=path.read_text()
+            self.assertIn('git clone --depth 1 https://github.com/contiloop/ouroboros.git',s)
+            self.assertNotIn('feature/ouroboros-rebrand',s)
+            self.assertIn('docs/SKILL_INTERFACE.md',s)
         self.assertIn(current+'.git', (ROOT/'README_ko.md').read_text())
 
     def test_legacy_state_is_preserved(self):
