@@ -301,6 +301,14 @@ Bring whatever you have — a one-line idea, a brainstorm, a vague spec, a PDF, 
 
 ready reads your project and, for substantial changes, checks for existing projects or integrations worth reusing before designing from scratch. It then works out what you mean and asks only what it needs from you. Discovery compares reuse, extension, and new development; planning then checks the chosen implementation mechanism. If a decisive technical capability remains unverified, it calls for an approved small experiment before dependent coding. If outside research is unavailable, it says so instead of making up sources. When every open decision is settled, it hands you the result to approve: your intent, drafted in plain Markdown under `.dryforge/` on your machine. Nothing is built until you approve it. Then run `go` in the same session. If the session ends first, `/go` picks up the approved intent from `.dryforge/` in a new one.
 
+For substantial external discovery, ready can delegate research to a read-only subagent and
+check its decisive sources before presenting options. **Recommended (optional):** connect
+[Grep MCP](https://mcp.grep.app) for public code search and
+[Context7 MCP](https://mcp.context7.com/mcp) for current library/API documentation.
+Ready checks which tools the researcher can actually access before starting; **neither MCP is
+required**, and missing tools are reported rather than installed automatically. See
+[research MCP setup](docs/RESEARCH_MCP_SETUP.md) for Claude Code and Codex commands.
+
 No repository yet? ready offers to set one up.
 
 ### go

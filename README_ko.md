@@ -303,6 +303,14 @@ ready는 프로젝트를 읽고, 새 기능이나 중요한 변경이라면 비�
 
 저장소가 아직 없다면 ready가 만들자고 먼저 제안합니다.
 
+유사 프로젝트 조사가 중요한 경우 `ready`는 읽기 전용 Research Subagent에게 검색을 위임하고,
+메인 에이전트가 핵심 출처를 직접 검토할 수 있습니다. **권장 도구(선택 설치, Optional):**
+공개 코드 검색용 [Grep MCP](https://mcp.grep.app)와 라이브러리·API 문서 확인용
+[Context7 MCP](https://mcp.context7.com/mcp)를 연결해 두면 조사의 질을 높일 수 있습니다.
+조사 전에 Subagent에서 사용 가능한 도구를 확인하며, **두 MCP 모두 필수는 아닙니다.**
+연결되어 있지 않아도 자동 설치하지 않고, 사용 가능한 다른 검색 수단을 활용하거나
+확인하지 못한 내용을 표시합니다. 설치 명령은 [연구 MCP 설정](docs/RESEARCH_MCP_SETUP.md)을 참고하세요.
+
 ### go
 
 ```text

@@ -64,15 +64,68 @@ class LandscapeContractTest(unittest.TestCase):
         self.assertIn("WebSearch", generated)
         self.assertIn("WebFetch", generated)
 
+    def test_delegated_research_but_main_owns_intent(self) -> None:
+        skill = SKILL.read_text(encoding="utf-8")
+        landscape = skill.split("## LANDSCAPE —", 1)[1].split("## ELICIT —", 1)[0]
+        self.assertIn("read-only general-purpose research", landscape)
+        self.assertIn("the main agent", landscape)
+        self.assertIn("landscape-researcher-prompt.md", landscape)
+        self.assertIn("two independent subagent audits", skill)
+
+    def test_research_prompt_read_only_and_bounded(self) -> None:
+        prompt = (READY / "references/landscape-researcher-prompt.md").read_text(encoding="utf-8")
+        for token in ("Read-only", "Grep", "Context7", "untrusted evidence",
+                      "EVIDENCE_READY", "BOUNDED_UNVERIFIED", "counter-evidence",
+                      "private code", "Decision Stability"):
+            self.assertIn(token.lower(), prompt.lower())
+
+    def test_optional_host_mcp_setup_and_security(self) -> None:
+        text = (ROOT / "docs/RESEARCH_MCP_SETUP.md").read_text(encoding="utf-8")
+        for token in ("https://mcp.grep.app", "https://mcp.context7.com/mcp",
+                      "claude mcp add", "codex mcp add", "plugin-provided agent",
+                      "not merely", "without either server"):
+            self.assertIn(token.lower(), text.lower())
+
+    def test_preflight_before_delegation(self) -> None:
+        skill = SKILL.read_text(encoding="utf-8")
+        landscape = skill.split("## LANDSCAPE —", 1)[1].split("## ELICIT —", 1)[0]
+        self.assertLess(landscape.index("run the Tool Preflight"), landscape.index("spawn **one"))
+        for token in ("available", "unavailable", "unknown", "Never install",
+                      "preflight tool-access snapshot", "research subagent"):
+            self.assertIn(token.lower(), landscape.lower())
+
+    def test_preflight_distinguishes_missing_from_unknown_and_has_fallback(self) -> None:
+        scan = REFERENCE.read_text(encoding="utf-8")
+        researcher = (READY / "references/landscape-researcher-prompt.md").read_text(encoding="utf-8")
+        for token in ("## Tool preflight", "available", "unavailable", "unknown",
+                      "subagent", "automatically available", "generic public",
+                      "not required", "never", "UNVERIFIED"):
+            self.assertIn(token.lower(), scan.lower())
+        for token in ("## Tool-access confirmation", "preflight snapshot",
+                      "actually callable", "install", "tool_access", "fallback"):
+            self.assertIn(token.lower(), researcher.lower())
+
+    def test_all_readmes_recommend_optional_mcp_setup(self) -> None:
+        for language in ("", "_ko", "_ja", "_zh"):
+            readme = (ROOT / f"README{language}.md").read_text(encoding="utf-8")
+            with self.subTest(language=language or "en"):
+                for token in ("Grep MCP", "Context7 MCP", "Optional",
+                              "docs/RESEARCH_MCP_SETUP.md"):
+                    self.assertIn(token.lower(), readme.lower())
+        setup = (ROOT / "docs/RESEARCH_MCP_SETUP.md").read_text(encoding="utf-8")
+        self.assertIn("## Tool preflight at runtime", setup)
+        self.assertIn("never installs MCP servers", setup)
+
     def test_reference_is_identical_in_all_packages(self) -> None:
-        expected = REFERENCE.read_bytes()
-        for package in (
-            "claude/skills", "codex/plugin/skills", "grok/skills",
-            "agent-plugin/skills", "antigravity/skills",
-        ):
-            path = ROOT / package / "ready/references/landscape-scan.md"
-            with self.subTest(package=package):
-                self.assertEqual(expected, path.read_bytes())
+        for name in ("landscape-scan.md", "landscape-researcher-prompt.md"):
+            expected = (READY / "references" / name).read_bytes()
+            for package in (
+                "claude/skills", "codex/plugin/skills", "grok/skills",
+                "agent-plugin/skills", "antigravity/skills",
+            ):
+                path = ROOT / package / "ready/references" / name
+                with self.subTest(package=package, name=name):
+                    self.assertEqual(expected, path.read_bytes())
 
 
 if __name__ == "__main__":
