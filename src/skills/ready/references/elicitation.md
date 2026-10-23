@@ -186,6 +186,18 @@ does not satisfy this** — picking a stack does not settle "how do simultaneous
 Present = options + trade-offs + a beat to decide; never silent. If the code already fixed the shape,
 **confirm** rather than re-ask.
 
+## External feasibility is not the user's intent
+
+LANDSCAPE may leave an exact technical capability `UNVERIFIED` even when the user has decided what
+they want and which approach they prefer. **Do not treat a missing search result as proof of
+impossibility**, and do not silently mark the capability `VERIFIED`. Research the approach-changing
+unknown specifically. If it still cannot be verified in ready, PRESENT the risk and choices: use a
+different approach, stop, or explicitly approve a **small conditional feasibility spike** that GO
+runs before dependent implementation. Ground the spike's success/failure observations and the rule
+"negative result → stop and return to user" in the dialogue. This closes the user's *decisions*,
+not the unknown fact — an `UNVERIFIED` claim must remain marked as such in the 3-doc. An unapproved
+or untestable pivotal unknown blocks the plan rather than leaking a guessed assumption into SPEC.
+
 ## Exit — you may write the spec only when no guess survives on a load-bearing decision
 
 Stop and proceed to SPEC **only when all hold** (not merely when the user says "that's enough"):

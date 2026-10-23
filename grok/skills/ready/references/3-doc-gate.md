@@ -45,6 +45,18 @@ consistency check** — is the pinned contract internally consistent and intact 
 **not** a place to *tighten* a half-pinned contract over rounds. A contract-precision gap surfacing
 here is an **upstream failure** (ELICIT/SPEC under-pinned it), not work for the gate to grind out.
 
+**Existing-solution dependencies when relevant:** if the 3-doc chooses a third-party
+integration, verify that the handoff carries the decision and material compatibility/license/
+uncertainty constraints needed to execute its plan, and that the plan has a way to verify it.
+Do not demand external research for a purely local edit or pretend to confirm a live external
+source the reviewer cannot reach. The upstream LANDSCAPE+ELICIT steps must have done that work.
+**Feasibility uncertainty:** check that no `UNVERIFIED` crucial capability is presented as a fact or
+silently `RULED_OUT` after a failed search. Where a decisive claim is unresolved, SPEC must state an
+approved conditional test outcome and stop-on-failure, HANDOFF must preserve the precise assumption,
+and PLAN must put a verifiable feasibility spike before *all* assumption-dependent tasks with
+correct `depends` edges. An unapproved fallback or non-executable spike is a blocker; this review
+checks the contract, not whether the external integration actually works.
+
 **The last uncorrelated look.** Both upstream checks can share a blind spot — ELICIT may never name an
 entity, and intent-completeness's residual-enumeration audit (`intent-completeness.md`) can miss the
 same one (correlated A=A). This gate is the one look at the *finished artifact* from yet another fresh

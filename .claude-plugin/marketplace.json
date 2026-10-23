@@ -1,15 +1,39 @@
 {
-  "name": "dryforge",
-  "description": "Official marketplace for Dryforge.",
-  "owner": { "name": "prekuter", "email": "prekuter@dryforge.dev" },
+  "name": "ouroboros",
+  "description": "Experimental Ouroboros plugin marketplace.",
+  "owner": {
+    "name": "contiloop",
+    "email": "126137639+contiloop@users.noreply.github.com"
+  },
   "plugins": [
     {
-      "name": "dryforge",
-      "description": "Intent to implementation: ready, then go.",
-      "author": { "name": "prekuter", "email": "prekuter@dryforge.dev" },
+      "name": "ouroboros",
+      "description": "Intent-driven development orchestration: mission → ready → go, with evidence at every cycle.",
+      "author": {
+        "name": "contiloop"
+      },
       "source": "./claude",
-      "homepage": "https://github.com/prekuter/dryforge",
-      "keywords": ["agent-harness", "harness", "bounded-autonomy", "plugin", "coding-agent", "claude-code", "codex", "copilot", "intent", "elicitation", "spec", "planning", "brainstorming", "verification", "autonomy"]
+      "homepage": "https://github.com/contiloop/ouroboros",
+      "keywords": [
+        "ouroboros",
+        "intent-driven",
+        "mission-orchestration",
+        "agent-harness",
+        "harness",
+        "bounded-autonomy",
+        "plugin",
+        "coding-agent",
+        "claude-code",
+        "codex",
+        "copilot",
+        "intent",
+        "elicitation",
+        "spec",
+        "planning",
+        "brainstorming",
+        "verification",
+        "autonomy"
+      ]
     }
   ]
 }

@@ -19,6 +19,12 @@ and **wording you adapt** (the example below is one phrasing, not a fixed script
   (the task worktree has no `.dryforge/` files to read — `.dryforge/` is gitignored). Build to the
   spec, not just to the task line ("correct" = matches the spec).
 - **Hard gates** — the relevant non-negotiable constraints from the handoff.
+- **Feasibility tasks, when declared** — carry the exact `UNVERIFIED` claim, the user's approved
+  minimal experiment, precise pass/fail observations, and the stop-on-failure requirement into the
+  task prompt. Record both command + exit code **and the observed effect**. A working command with
+  a failed expected outcome is still a **negative experiment**: return `BLOCKED` with the evidence,
+  not `DONE`, `DONE_WITH_CONCERNS`, or a workaround that changes the approved approach. Missing
+  access/inconclusive evidence → `NEEDS_CONTEXT`/`BLOCKED`, never a guessed pass.
 - **Verify-first, right-sized** — drive the work against the task's **real verification gate**: the
   project's verify commands, discovered by the producer (which may be a typecheck/lint/test set, a
   build/run, or a single command — not every stack has all three; never assume the triad).
@@ -38,7 +44,12 @@ and **wording you adapt** (the example below is one phrasing, not a fixed script
   platform's worktree-isolation dispatch option — the orchestrator already
   created the worktree; see `orchestration.md`); verify with `git rev-parse --show-toplevel` before
   editing.
+- **Session contract** — when dispatch/resume identity is available, pin the actual session ID,
+  parent cycle, task contract digest and current worktree/branch/HEAD. A resumed same-task agent
+  rereads the accepted delta; a fresh replacement receives an explicit handoff and must not claim
+  inherited memory. Follow `references/agent-lifecycle.md`; never become your own independent reviewer.
 - **Report contract** — commit when done; return the structured summary below. Do not dump diffs.
+  Also return the task/session checkpoint and pending side effects when lifecycle management is active.
 
 ## Example skeleton (one wording — adapt; the elements above are required)
 
@@ -65,7 +76,9 @@ When done: commit, then return ONLY the structured summary. Do not inline diffs.
   actually run (build / validate / render / ...). A claimed pass with no command/exit code is
   needs-fix; and **omitting tests on a task that has real testable behavior is needs-fix** (the
   no-test path is only for genuinely non-unit-testable or trivial work)
-- `concerns`: anything the orchestrator should weigh (or what is blocking)
+- `concerns`: anything the orchestrator should weigh (or what is blocking). For a feasibility
+  spike, report the approved expected observation versus the actual result; a confirmed negative
+  outcome must be `BLOCKED` and prevent downstream work.
 
 ## escalate-don't-guess (for the implementer)
 
