@@ -1,7 +1,7 @@
 # Mission mode: three levels, persistent cycles
 
 This fork adds an **experimental opt-in `mission` skill**, an L3 lifecycle policy, and a tested
-local state ledger. It does **not** bundle a Claude/Codex SDK daemon, install global hooks,
+local state ledger. It includes an optional [runtime bridge](RUNTIME.md), but does **not** install global hooks,
 authenticate human approvals, or guarantee that an arbitrary host supports nested/resumable
 agents. Its live multi-agent acceptance test has not been run in the development sandbox.
 
@@ -34,7 +34,7 @@ review must never reuse/fork the implementer's context. No agent replacement req
 ## Try it
 
 Use this fork's generated plugin package, not the original upstream install. In a capable host,
-explicitly invoke `/mission` (or `/dryforge:mission`) in Claude Code, or `$mission` in Codex.
+explicitly invoke `/ouroboros:mission` in Claude Code, or `$mission` in Codex.
 Example request:
 
 > Help me define the final outcome and delegated decisions. Use persistent ready-go workers.
@@ -49,9 +49,8 @@ Keep ordinary `/ready` and `/go` for a single manually supervised cycle.
 
 A host adapter must create actual sessions, retain IDs, route questions/answers to the correct
 worker, explicitly load ready/go, enforce budgets/permissions, quiesce children, inspect evidence
-and reconcile filesystem state. Native tools can provide this in a capable agent host. A separate
-SDK adapter is **not included** in this change. A JSON event alone neither spawns nor resumes a
-model. The runtime preflight and official sources are in
+and reconcile filesystem state. Native tools can provide this in a capable agent host. The optional [runtime bridge](RUNTIME.md) supplies Claude SDK and Codex App Server operations.
+Use its actual CLI commands; a JSON ledger event alone neither spawns nor resumes a model. The runtime preflight and official sources are in
 [host-adapter.md](../src/skills/mission/references/host-adapter.md).
 
 Hooks can supply observations. A stopped process/agent does not mean a successful cycle, and an
