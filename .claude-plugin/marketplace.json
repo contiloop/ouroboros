@@ -13,7 +13,7 @@
         "name": "contiloop"
       },
       "source": "./claude",
-      "homepage": "https://github.com/contiloop/dryforge",
+      "homepage": "https://github.com/contiloop/ouroboros",
       "keywords": [
         "ouroboros",
         "intent-driven",

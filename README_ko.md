@@ -83,18 +83,20 @@ flowchart TB
 
 ## 시작하기
 
-시험용 브랜치는 [contiloop/dryforge](https://github.com/contiloop/dryforge/tree/feature/ouroboros-rebrand)에 있습니다. GitHub 저장소 주소는 별도 변경 전까지 이전 슬러그를 사용하지만, **이 브랜치의 플러그인 이름은 `ouroboros`**입니다. 기존 플러그인을 단순 업데이트한다고 이 새 이름의 플러그인이 설치되지는 않습니다.
+시험용 브랜치는 [contiloop/ouroboros](https://github.com/contiloop/ouroboros/tree/feature/ouroboros-rebrand)에 있습니다. GitHub 저장소 이름과 플러그인 이름 모두 **`ouroboros`**로 변경했습니다. 기존에 설치한 원본 Dryforge 플러그인을 단순 업데이트해도 이 Fork가 자동 설치되지는 않습니다.
 
 <details open>
 <summary><strong>Claude Code · 로컬 플러그인 테스트</strong></summary>
 
 ```bash
 git clone --branch feature/ouroboros-rebrand --single-branch \
-  https://github.com/contiloop/dryforge.git ~/ouroboros
+  https://github.com/contiloop/ouroboros.git ~/ouroboros
 
 cd /path/to/your-project
 claude --plugin-dir ~/ouroboros/claude
 ```
+
+저장소 이름을 바꾸기 전에 Clone했다면 `git remote set-url origin https://github.com/contiloop/ouroboros.git`으로 원격 주소를 갱신할 수 있습니다.
 
 Mission은 **`/ouroboros:mission`**으로 명시적으로 실행합니다. 사람이 감독하는 단일 사이클은 `/ouroboros:ready` → `/ouroboros:go`를 사용할 수 있습니다. 실제 호스트가 필수 세션·중계·중첩 실행 기능을 제공하지 못하면 Mission 모드는 지원하는 척하지 않고 중단합니다.
 
