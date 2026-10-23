@@ -1,0 +1,3 @@
+# Optional Claude backend only; user installs explicitly. Codex uses its installed CLI.
+# Pin inspected SDK version. This pin does not claim live model compatibility.
+claude-agent-sdk==0.2.173

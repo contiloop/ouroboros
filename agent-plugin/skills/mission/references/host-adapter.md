@@ -10,8 +10,8 @@ supported merely because a manifest or a tool name exists. Before the first miss
 5. Repository and ignored state are accessible at the pinned checkpoint; previous writers stop.
 6. The controller can enforce finite budgets, record unknown capacity and preserve recovery state.
 
-Use **native nested sessions** when all checks work. An **external persistent session controller**
-is also valid: L2 is a full host session with its own L3 agents. If neither is available, stop with
+Use **native nested sessions** when all checks work. The bundled optional **external persistent session controller**
+(`runtime-bridge.md`, `scripts/worker_runtime.py`) is also valid: L2 is a full host session with its own L3 agents. If neither is available, stop with
 a capability report. Do not use one-shot shell commands with only a summary as a fake persistent
 worker. Do not auto-install clients, change permissions or enable experimental flags.
 
@@ -26,7 +26,7 @@ users. Loading approved procedure files in mission mode is not evidence that `/r
 
 Use the installed host's actual Agent/message/resume interfaces. Do not hardcode a guessed Agent
 `resume` parameter or silently replace a lost ID. An SDK controller can manage separate worker
-sessions and callbacks, but none is bundled here. Configured MCP tools are still subject to L2/L3
+sessions and callbacks, and the optional runtime implements this path; see `runtime-bridge.md`. Configured MCP tools are still subject to L2/L3
 availability checks. Keep the optional Grep/Context7 fallback from LANDSCAPE.
 
 ## Codex
@@ -37,6 +37,15 @@ notification is not a completed ready-go cycle. Do not assume a configuration ke
 nesting depth across client versions. Check actual schemas and capabilities before invocation.
 If a top-level worker session is used instead of native nesting, keep the same worker thread
 through ready/go and give it its own independent task agents.
+
+## Optional executable transport
+
+The bundled worker_runtime.py uses a persistent ClaudeSDKClient or Codex stdio App Server thread.
+L2 is a full host session, so L1 need not consume an extra native subagent nesting level. L2 still
+needs actual L3 tools; this capability is not certified by starting the controller. The bridge
+checks exact-cycle Go approval, records only explicit execution start, and never infers approval,
+acceptance or mission completion from receipts. Real model behavior is not certified. Python
+3.11+ and POSIX locks are required; use macOS/Linux/WSL. See `runtime-bridge.md`.
 
 ## Hooks: observe, do not authorize
 

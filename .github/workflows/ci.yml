@@ -45,5 +45,7 @@ jobs:
             args+=(--tag "$RELEASE_TAG")
           fi
           python3 ci/verify.py "${args[@]}"
-      - name: Check ready research stage contract
+      - name: Check contracts and local runtime protocols
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
         run: python3 -m unittest discover -s ci -p 'test_*.py'

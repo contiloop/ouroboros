@@ -71,3 +71,9 @@ messages and reconcile delivery after a crash; this is **not** exactly-once exte
 The helper uses atomic file replacement, a writer lock and expected revision checks. It is a
 local trusted ledger, not a daemon, message broker, permission sandbox or SDK adapter. Hook
 handlers and the host still supply actual sessions, message delivery and evidence verification.
+
+## Optional runtime transport
+
+The bundled `scripts/worker_runtime.py` implements the full-host session and mailbox path described
+in `runtime-bridge.md`. It does not fabricate approval events. Only an explicit, already-approved
+Go dispatch records execution start; host turn completion never records acceptance or success.
