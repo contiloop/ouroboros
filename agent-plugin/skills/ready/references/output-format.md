@@ -96,6 +96,40 @@ regen_barriers:
   runtime-derived (git diff), or computed.
 - `id`s match the prose plan; the graph is the scheduling skeleton only.
 
+## External landscape decisions (when material)
+
+The early and plan-time checks follow `landscape-scan.md`: LANDSCAPE compares reuse/extend/build;
+PLAN researches the mechanism of the *approved* path. Record **approved behavior** in SPEC,
+chosen technical approach + reason + evidence (source URL, version/date, specific unknowns) in
+HANDOFF, and executable integration/adaptation tasks in PLAN. Distinguish `VERIFIED`, `UNVERIFIED`,
+`RULED_OUT` claims. For a decisive unknown, obey "Conditional feasibility" below; do not smuggle
+uncertainty into a supposedly firm implementation plan. Search failure is not evidence of
+impossibility. Do not require a landscape section for an immaterial local edit.
+
+## Conditional feasibility (only when material and user-approved)
+
+A technical claim may be unverified without leaving *intent* unsettled. Do not pretend to know
+whether an external capability works. If the chosen approach depends on such a claim and targeted
+research cannot settle it, the user must **approve the conditional experiment and response to a
+negative result** before the 3-doc is written. This is not a generic permission to defer design.
+
+- **SPEC** contains the already-settled WHAT, the experiment's required observable outcome, and the
+  rule that an unsuccessful experiment **blocks downstream implementation pending a new user
+  decision**. Do not prescribe a silent fallback or claim verified implementation behavior.
+- **HANDOFF** identifies the *exact* `UNVERIFIED` assumption, supporting/rejecting sources and
+  affected approach, the user's approved conditional decision, and the authorization boundary. Make
+  `VERIFIED` / `UNVERIFIED` / `RULED_OUT` claims route- and version-specific.
+- **PLAN** names an explicit **first feasibility task** with a minimal work target, pass/fail
+  verification command + observable evidence, and a mandatory stop-on-failure. Any task that relies
+  on its success **depends** on that task, even if there is no shared file. No other task that
+  presumes success may run in parallel with the spike. Use the existing Execution Graph schema:
+  `depends`, and optional `risk`, with **no new graph keys**.
+
+Only when the spike succeeds with captured evidence may `go` proceed on that approach. A negative
+experiment is evidence, not a successful completed task; GO pauses and escalates to the user. If
+neither a source check nor a safe experiment can establish essential feasibility, ready reports the
+blocker instead of describing the plan as executable.
+
 ## Shared-write handling — two layers (hint + safety net)
 
 Parallel tasks must not collide on shared/registration files (an aggregator/index file, a module

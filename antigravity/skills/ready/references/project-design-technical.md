@@ -16,6 +16,17 @@ rounds converge a generality into this project's specific technical decision.
 **Floor, not ceiling.** You know how to present technical options. This file blocks the failure modes
 and lays the floor; which options to present, in what order, is your judgment.
 
+**Evidence for options:** use the candidates and verified limitations from
+`landscape-scan.md` when they matter. Before proposing a new custom implementation, consider an
+existing integration or extension that could satisfy the extracted requirements. This is evidence
+for PRESENT, not an excuse to let a GitHub README decide the user's intent. If the search is
+unavailable, disclose the limitation rather than presenting a remembered option as verified.
+**Separate feasibility from preference:** source-backed technical claims can be `VERIFIED`,
+`UNVERIFIED`, or `RULED_OUT` only for a precisely described route/version. For a material
+`UNVERIFIED` claim, attempt targeted research, then explain the remaining risk and ask whether the
+user approves a conditional early feasibility spike + stop-on-failure, or prefers another approach.
+Do not decide the fallback or silently claim feasibility.
+
 ## Failure modes and guardrails
 
 - **Silent decision (the core one).** Never settle a technical direction without user approval.
@@ -54,7 +65,9 @@ fixed amount of ceremony.
 - Every technical decision is **settled by user confirmation** — no solo agent decision.
 - Every decision that has a trade-off was presented as **options + each trade-off**.
 - The security model is this project's **specific** policy, not a generality.
-- **No open technical question remains.**
+- **No open user-owned technical decision remains.** A factual feasibility claim may remain
+  `UNVERIFIED` only under a user-approved conditional, first-task experiment with explicit success
+  criteria and stop-on-failure; never disguise a missing decision as that exception.
 
 The ceiling is open.
 

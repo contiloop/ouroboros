@@ -23,7 +23,9 @@ risk-proportional judgment.
 - **Domain too narrow** — a core feature/entity is missing — the trace of closing without asking the
   user "are there others?" (the breadth guard was skipped).
 - **Technical decision left open** — a "decide later" / "TBD" survives. An open load-bearing technical
-  question is a gap (the executor will fill it arbitrarily).
+  **user decision** is a gap (the executor would fill it arbitrarily). Distinguish this from a
+  precisely recorded `UNVERIFIED` *factual feasibility* with a user-approved, first-task spike and
+  mandatory stop-on-failure; that conditional route settles the decision but does not prove the fact.
 - **Security generality** — "security considered" with no project-specific policy (auth approach,
   authorization model, audit scope).
 - **Scoping mismatch** — the design is heavier or lighter than the project's confirmed character.
@@ -32,7 +34,9 @@ risk-proportional judgment.
 ## Floor
 
 - Every domain concept meets `project-design-domain.md`'s depth floor.
-- Every technical decision is closed by user confirmation (no open question).
+- Every user-owned technical decision is closed by user confirmation (no open question).
+  A pivotal external fact may remain `UNVERIFIED` only if the user approved an executable
+  conditional first-task experiment and a stop-on-failure; otherwise block.
 - **Zero** vague modifiers.
 - Design depth is consistent with the CALIBRATE character profile.
 

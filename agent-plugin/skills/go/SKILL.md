@@ -32,6 +32,11 @@ references load at their steps.
   missing task, that is a producer-side defect — **stop and escalate**, do not silently re-judge.)
 - **Serve the spec.** "Correct" = matches the spec. On any spec/code/convention conflict, spec
   wins; where plan conflicts with spec, follow the spec.
+- **Prove feasibility before reliance.** If the approved 3-doc names a first-task feasibility spike
+  for a decisive `UNVERIFIED` capability, require captured evidence of the **specified observed
+  behavior** before dependent work proceeds. A command's exit 0 alone does not prove feasibility if
+  its expected effect did not occur. A confirmed negative result **stops the run** and goes to the
+  user for a new decision; never quietly switch approaches or call the spike complete.
 - **escalate-don't-guess.** Architecture mismatch, suspected spec violation, ambiguous task,
   unresolvable conflict → stop and **ask the user**; never guess. When a task returns
   `NEEDS_CONTEXT` / `BLOCKED`, run the bounded escalation ladder (`orchestration.md` — re-dispatch
@@ -144,7 +149,10 @@ real task** (no dangling reference), and that the plan body and the graph **agre
 is the authoritative rule set for these checks. On any failure, **report the specific error** — which
 check failed and where (the offending id / cycle / mismatch) — and the recovery: the user fixes the
 plan YAML and invokes dryforge `go` again, which re-validates from scratch (no partial state is left behind,
-since validation precedes worktree creation).
+since validation precedes worktree creation). **When the 3-doc declares a conditional feasibility
+spike**, also check that the spike task appears in the plan/graph, has an observable pass/fail gate,
+and every task that presumes success has a `depends` path from it. If not, stop with a producer-side
+defect — do not improvise missing dependencies or bypass the spike.
 
 ## Flow
 
@@ -155,11 +163,16 @@ producer; same working tree, nothing to copy). The orchestrator reads
 `.dryforge/` here — task subagents do **not**; they receive spec slices inline (`orchestration.md`).
 A task whose declared work targets are **state/external only** (no file diff) is handled on the base
 sequentially, **never dispatched into a parallel worktree** — the file-diff merge-gate cannot verify
-it and worktree isolation buys it nothing (`orchestration.md`, Wave scheduling). Then, per wave:
+it and worktree isolation buys it nothing (`orchestration.md`, Wave scheduling). **For a conditional
+spike, evaluate the observed outcome against its approved success criteria before unblocking any
+`depends` task** (`orchestration.md`, "Feasibility-first gate"). A negative result is a stop + user
+escalation, not a green task, a repair retry, or permission to replace the design. Then, per wave:
 
 **Scaffold (inline, before dispatch).** Project initialization — manifests, dependencies, directory
 layout, build config, server/client entry points, shared types — is the orchestrator's job, not a
-task. On the base, perform scaffold inline: read the spec's tech decisions and set up the project so
+task. **Conditional-feasibility exception:** when a first-task spike gates the chosen approach,
+scaffold only what that experiment needs until it proves the path. Do not pre-build architecture
+that assumes the unverified capability works. On the base, perform scaffold inline: read the spec's tech decisions and set up the project so
 implementers start in a working skeleton. Scaffold is not in the Execution Graph. **Batch file
 writes** — scaffold typically creates many independent files; write 4–5 per tool-call turn instead
 of one at a time. Each extra turn adds thinking overhead and an API round-trip. Exception: if scaffold requires **investigation or trial-and-error** to get right (e.g. container
@@ -307,7 +320,9 @@ Mechanics, subagent dispatch constraints, status protocol, context budget, and f
 
 Done only when ALL hold — on **evidence**, not assertion:
 - every wave merged; every spec requirement traced to a merged task; zero open
-  `BLOCKED` / needs-fix. **"Zero open BLOCKED" is not "counted as done"** — each BLOCKED task must have
+  `BLOCKED` / needs-fix. **Any conditional spike must have demonstrated its declared observable
+  success** before assumption-dependent tasks ran; an inconclusive or negative spike cannot be
+  counted as done. **"Zero open BLOCKED" is not "counted as done"** — each BLOCKED task must have
   **completed escalation to the user** (the user has been told and has resolved its disposition) with
   its **worktree preserved** for diagnosis; a BLOCKED task may never be silently tallied into "done".
 - every `DONE_WITH_CONCERNS` concern **resolved (fix-dispatched) or explicitly accepted and

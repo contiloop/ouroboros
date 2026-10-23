@@ -23,6 +23,30 @@ Before the first wave, write a compact verification plan in the orchestrator's w
 The plan prevents re-deciding verification every wave. Independent commands may run in parallel as
 long as each exit code is captured separately. The completion gate remains the full safety net.
 
+## Feasibility-first gate (only for an approved conditional spike)
+
+- Before any dependent work, read SPEC's success/failure rules, HANDOFF's exact `UNVERIFIED` claim,
+  and PLAN's first feasibility task. Check that `depends` prevents **all** assumption-dependent
+  work from running in parallel or earlier. This is graph validation, not a license to recompute
+  producer dependencies; missing edges → **stop and escalate** the defective plan.
+- **Minimal scaffold first:** create only the fixtures/dependencies required to run the experiment.
+  Do not spend a wave building a full system around an untested architecture.
+- **Prove an observed effect, not a command's existence.** Run the approved test against the
+  declared environment and check the precise outcome (including state after save/reopen if required).
+  Record literal commands, exit codes, observed outputs/state, and source/version where relevant.
+- **If the outcome matches the pass condition:** keep the captured evidence and proceed to dependent
+  tasks. A success for one interface/version is not proof that every possible implementation works.
+- **If it disproves the assumption:** return `BLOCKED` with the **negative feasibility evidence**;
+  STOP before downstream work, preserve diagnostic worktree/branch and inform the user. This is an
+  informative negative experiment, **not** a transient agent failure: **do not** apply the bounded
+  model-retry ladder to try to force a green outcome, and do not auto-switch to another solution.
+  A new architecture or altered behavior requires a newly approved SPEC/PLAN through ready.
+- **If the experiment could not run / evidence is inconclusive:** return `NEEDS_CONTEXT` or
+  `BLOCKED` explaining the environmental limitation. The ordinary bounded escalation ladder may
+  address missing access or setup, but never convert absence of evidence into a pass.
+- Do not mark a negative or inconclusive spike `DONE_WITH_CONCERNS`. No downstream dependency is
+  satisfied until the declared behavior was actually observed.
+
 ## Wave scheduling
 
 - Topologically sort the plan's `depends` into waves: a wave = tasks with no unmet dependency.
@@ -186,9 +210,10 @@ the orchestrator knows its own state):
 | `DONE` | complete, self-checks pass | merge (review per policy — the single final review, or a mid-run spec-review if it triggers) |
 | `DONE_WITH_CONCERNS` | complete, but flags something | record the concern; weigh at final review (or mid-run spec-review if review policy triggers it) |
 | `NEEDS_CONTEXT` | missing info to proceed | provide the missing context, re-dispatch |
-| `BLOCKED` | cannot proceed (conflict, ambiguity) | analyze; walk the bounded escalation ladder (below), then **escalate to the user** |
+| `BLOCKED` | cannot proceed (conflict, ambiguity; includes a conclusively negative feasibility spike) | analyze; use the bounded escalation ladder only for recoverable failure — a confirmed negative spike **stops and goes directly to the user** |
 
-**Bounded escalation ladder** (for `BLOCKED` / `NEEDS_CONTEXT`): **attempt 1** — re-dispatch with
+**Bounded escalation ladder** (for recoverable `BLOCKED` / `NEEDS_CONTEXT`, **not** an observed
+negative feasibility result): **attempt 1** — re-dispatch with
 more context (the missing slice, the resolved ambiguity); **attempt 2** — re-dispatch with a
 stronger model where the platform allows it; if it is **still BLOCKED**, **escalate to the user**
 with full context: what was tried, what each attempt produced, and why it failed. The budget is
