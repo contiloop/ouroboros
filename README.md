@@ -299,7 +299,7 @@ Use `/ready`, `/go`, and `/migration`. In Codex, the prefix is `$`: `$ready`, `$
 
 Bring whatever you have — a one-line idea, a brainstorm, a vague spec, a PDF, a plan another tool wrote, or all of it at once. No need to clean up your thinking or fit it into a format.
 
-ready reads your project, works out what you mean, and asks only what it needs from you. When every open decision is settled, it hands you the result to approve: your intent, drafted in plain Markdown under `.dryforge/` on your machine. Nothing is built until you approve it. Then run `go` in the same session. If the session ends first, `/go` picks up the approved intent from `.dryforge/` in a new one.
+ready reads your project and, for substantial changes, checks for existing projects or integrations worth reusing before designing from scratch. It then works out what you mean and asks only what it needs from you. Discovery compares reuse, extension, and new development; planning then checks the chosen implementation mechanism. If a decisive technical capability remains unverified, it calls for an approved small experiment before dependent coding. If outside research is unavailable, it says so instead of making up sources. When every open decision is settled, it hands you the result to approve: your intent, drafted in plain Markdown under `.dryforge/` on your machine. Nothing is built until you approve it. Then run `go` in the same session. If the session ends first, `/go` picks up the approved intent from `.dryforge/` in a new one.
 
 No repository yet? ready offers to set one up.
 

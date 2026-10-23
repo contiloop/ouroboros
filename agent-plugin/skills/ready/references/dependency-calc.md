@@ -45,6 +45,12 @@ writer task the others `depends` on) when the parallel writes are **not** idempo
 otherwise record the safe-parallel assumption in the handoff. ORIENT surfaces these project-specific
 constraints.
 
+**Feasibility before reliance.** If a user-approved plan contains a first-task feasibility spike
+for a material `UNVERIFIED` capability, every task that assumes the capability works must
+`depends` on that spike, even if it consumes no output file. The spike must be isolated from
+assumption-dependent parallel execution; a negative result stops the run and requires a new user
+decision, not an automatic alternative. This is a genuine runtime dependency, not a spurious edge.
+
 ## Task risk tier (optional)
 
 Per task, optionally classify the behavioral risk. It sizes the implementer's **per-task test

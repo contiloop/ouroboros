@@ -58,7 +58,8 @@ for d in "$SRC"/*/; do [ -d "$d" ] && SKILLS="$SKILLS $(basename "$d")"; done
 # dispatches the final independent harness REVIEW subagent. bash 3.2 — no assoc arrays.
 claude_tools() {
   case "$1" in
-    migration|ready|go) echo "Read, Edit, Write, Bash, Grep, Glob, Agent, AskUserQuestion" ;;
+    ready) echo "Read, Edit, Write, Bash, Grep, Glob, Agent, AskUserQuestion, WebSearch, WebFetch" ;;
+    migration|go) echo "Read, Edit, Write, Bash, Grep, Glob, Agent, AskUserQuestion" ;;
   esac
 }
 
