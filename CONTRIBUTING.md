@@ -4,7 +4,7 @@ For questions and quick feedback, join us on [Discord](https://discord.gg/bU7yjy
 
 ## Reporting a problem
 
-If something goes wrong, open an issue with what happened. The agent you used, your Dryforge version, and the command you ran help us look into it. For a faster fix and a closer look, include the conversation where it happened, with anything private masked.
+If something goes wrong, open an issue with what happened. The agent you used, your Ouroboros version, and the command you ran help us look into it. For a faster fix and a closer look, include the conversation where it happened, with anything private masked.
 
 ## Proposing a change
 

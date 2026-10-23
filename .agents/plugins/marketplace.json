@@ -1,11 +1,11 @@
 {
-  "name": "dryforge",
+  "name": "ouroboros",
   "interface": {
-    "displayName": "Dryforge"
+    "displayName": "Ouroboros"
   },
   "plugins": [
     {
-      "name": "dryforge",
+      "name": "ouroboros",
       "source": {
         "source": "local",
         "path": "./codex/plugin"

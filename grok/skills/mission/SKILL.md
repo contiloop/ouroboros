@@ -20,7 +20,7 @@ is unchanged. Force-load `references/intent-contract.md`, `references/cycle-cont
 - **L1 / Mission Orchestrator (you):** understand the human's intent, preserve its constraints,
   answer within delegated authority, evaluate outcomes, and select the next cycle. Do not absorb
   raw task logs or implement the cycle yourself to hide a missing worker capability.
-- **L2 / Cycle Worker:** the existing Dryforge main agent. One assignment is **one ready-go cycle**.
+- **L2 / Cycle Worker:** the existing Ouroboros main agent. One assignment is **one ready-go cycle**.
   The same L2 session must span questions, ready approval, go, result approval, and handoff.
   It may receive another cycle only after reporting back and L1's evaluation. It is **not** an
   autonomous sector owner allowed to invent its own successive cycles.

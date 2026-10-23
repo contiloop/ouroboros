@@ -1,7 +1,7 @@
 interface:
-  display_name: "Dryforge mission"
+  display_name: "Ouroboros mission"
   short_description: "Preserve intent across persistent ready-go cycles."
-  default_prompt: "Use Dryforge mission to align my intent and supervise persistent ready-go workers."
+  default_prompt: "Use Ouroboros mission to align my intent and supervise persistent ready-go workers."
 
 policy:
   allow_implicit_invocation: false
