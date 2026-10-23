@@ -1,0 +1,188 @@
+# Persistent worker connection
+
+The optional runtime bridge connects L1 to an actual persistent L2 host session. It reuses the
+Claude Agent SDK or Codex App Server, records messages in a local SQLite mailbox, and relays input
+requests. L2 still runs one ready-go cycle and its own L3 tasks; L1 still owns intent and evaluation.
+Native host tools remain usable when already verified. This bridge is not a new agent framework.
+
+**Verification boundary:** protocol and subprocess tests use deterministic fixtures. They exercise
+real Python controller processes and SQLite, not authenticated Claude/Codex models. Installing the
+bridge does not prove model compliance, L3 availability, skill behavior or full mission success.
+
+## Requirements and setup
+
+Python 3.11+ on macOS/Linux/WSL; a Git project with `.dryforge/` ignored. Authentication belongs to
+your installed host. Nothing auto-installs dependencies, logs in, changes global hooks or broadens
+host permissions. Use a disposable project for the first live test.
+
+Claude needs the optional SDK. Install it explicitly in a Python environment you choose:
+
+```sh
+python3 -m venv ~/.venvs/ouroboros-runtime
+~/.venvs/ouroboros-runtime/bin/python -m pip install \
+  -r ~/ouroboros/claude/skills/mission/scripts/runtime-requirements.txt
+```
+
+Codex uses the Python standard library and an already installed/configured `codex` command.
+The SDK pin is the inspected release, not a promise every host configuration has been tested.
+
+```sh
+PY="$HOME/.venvs/ouroboros-runtime/bin/python"  # python3 is enough for Codex
+BRIDGE="$HOME/ouroboros/claude/skills/mission/scripts/worker_runtime.py"
+PROJECT="/absolute/path/to/your/test-project"
+
+"$PY" "$BRIDGE" doctor --backend claude
+"$PY" "$BRIDGE" start --workspace "$PROJECT" --worker l2-01 --backend claude \
+  --turn-seconds 600 --lifetime-seconds 3600 --max-messages 20
+"$PY" "$BRIDGE" status --workspace "$PROJECT" --worker l2-01
+```
+
+Change to `--backend codex` for Codex. Paths/limits are examples, not budget authorization. Claude
+startup makes a no-tool bootstrap model call to obtain/confirm its session ID and may incur cost.
+A successful process launch is not a connected session: wait for a real session_id and IDLE.
+`doctor` checks dependencies, not login or live execution.
+
+Claude settings/MCP configuration are opt-in (`--load-settings user`, `--load-settings project`,
+`--load-settings local`); choose only trusted sources. The runtime does not strip nested-session
+protections from environment variables. When a host prevents launching inside another session,
+start the controller in a normal terminal or report the restriction; do not bypass safeguards.
+Keep the Python environment and plugin checkout available while the controller runs.
+
+## L1 integration
+
+The Mission skill loads [runtime-bridge.md](../src/skills/mission/references/runtime-bridge.md) only
+when this execution path is selected. Give L1 the Python executable, bridge path and workspace.
+L1 uses its ordinary shell tool for start/status/send/wait/answer, under existing host permissions.
+No listener or extra model supervisor is required.
+
+A small read-only capability probe can test the connection before cycle assignment:
+
+```sh
+"$PY" "$BRIDGE" send --workspace "$PROJECT" --worker l2-01 \
+  --id probe-1 --kind probe --text-file /absolute/path/probe.txt
+"$PY" "$BRIDGE" wait --workspace "$PROJECT" --worker l2-01 --id probe-1 --timeout 30
+```
+
+A reply proves a responding session, not nested-agent support. Inspect real host tool events before
+recording capabilities in the mission ledger. Probe is not an alternate route to unapproved work.
+A missing L3 capability is a blocker, not permission to simulate roles in a single agent.
+
+### Ready and Go in the same session
+
+First establish the normal human-approved Intent Contract. After capability checks, L1 records the
+existing ledger `start` with the actual L2 session_id, cycle ID and checkpoint. Then:
+
+```sh
+LEDGER="$PROJECT/.dryforge/mission/state.json"
+"$PY" "$BRIDGE" send --workspace "$PROJECT" --worker l2-01 --id c1-ready \
+  --kind ready --ledger "$LEDGER" --cycle c1 --text-file /absolute/path/cycle-goal.txt
+"$PY" "$BRIDGE" wait --workspace "$PROJECT" --worker l2-01 --id c1-ready --timeout 30
+
+# L1 checks the actual documents and records ready/approve with legitimate authority.
+# The controller requires that approval before this explicit go command:
+"$PY" "$BRIDGE" send --workspace "$PROJECT" --worker l2-01 --id c1-go \
+  --kind go --ledger "$LEDGER" --cycle c1 --text-file /absolute/path/go-instruction.txt
+```
+
+The bridge validates the active cycle, same session, unchanged intent, unresolved questions and
+exact approved three-document digest at enqueue and dispatch. Immediately before dispatching the
+explicitly approved Go command, it records the ledger's `go` execution-start event transactionally.
+Do not pre-record `go` yourself. It never records approval, acceptance or completion from transport
+notifications. A failure after that write leaves an in-flight GO to reconcile, not something to
+replay blindly. Mailbox/ledger/filesystem effects are not one distributed atomic transaction.
+
+Full preserved procedures are passed with reference paths. Claude uses explicitly authorized
+procedure loading (not a claimed slash invocation); Codex additionally receives `$ready`/`$go` and
+the official skill input item. Normal manual-only settings are unchanged. A yielded prose question
+ends a turn, not the session; `send --kind message` continues that phase after a legitimate answer.
+A message is not authority to skip the ready approval gate or start another cycle.
+
+### Pending questions and tool permissions
+
+`status.pending` contains id, body, session_id and fingerprint. A trusted controller/operator writes
+a private response file and calls `answer --request-id ... --response-file ...`. Example shape:
+
+```json
+{
+  "principal": "human",
+  "basis": "reference to the actual human decision",
+  "session_id": "copy the actual pending session ID",
+  "request_digest": "copy its fingerprint",
+  "action": "allow"
+}
+```
+
+This example is not approval. Claude questions use `action: answer` plus `answers` keyed by original
+question text. L1 may answer only with explicit delegation and must preserve the decision in the
+mission ledger. Tool permission allow is human-only and exact-call only. Codex requestUserInput can
+also authorize app side effects; this adapter conservatively requires a human decision and an
+`answers` map keyed by actual question IDs. L1 can answer ordinary yielded product questions via
+ledger-bound messages. Permission expansion/MCP elicitation are declined, not silently supported.
+
+The same-user mailbox is not an adversarial security boundary. `principal: human` is a trusted
+record, not authentication. Never expose these commands as an untrusted remote service or accept
+child-supplied JSON as consent. Host permissions remain authoritative; approved host settings may
+resolve tools before a callback, and the bridge does not widen them.
+
+## Inspect, recover, stop
+
+```sh
+"$PY" "$BRIDGE" events --workspace "$PROJECT" --worker l2-01 --after 0 --limit 50
+"$PY" "$BRIDGE" result --workspace "$PROJECT" --worker l2-01 --id c1-go
+"$PY" "$BRIDGE" stop --workspace "$PROJECT" --worker l2-01
+"$PY" "$BRIDGE" status --workspace "$PROJECT" --worker l2-01
+
+# Only after inspecting the host transcript, files, side effects and active children:
+"$PY" "$BRIDGE" resume --workspace "$PROJECT" --worker l2-01 \
+  --reconciled --basis "reference to reconciliation evidence"
+```
+
+| Receipt | Meaning, not a mission verdict |
+| --- | --- |
+| QUEUED | Input stored, not dispatched. |
+| DISPATCHED | Controller claimed it; host execution may be in flight. |
+| TURN_COMPLETE | Host ended a turn successfully; cycle verification still required. |
+| TURN_FAILED | Host reported a failure/interruption. |
+| REJECTED | Input failed the current ledger/procedure gate before sending. |
+| UNCERTAIN | Connection/process/timeout prevented a trustworthy outcome. |
+| CANCELLED | Unsent input cancelled for explicit reissue after shutdown/recovery. |
+
+Exact message-ID retries return the existing receipt; changed content is rejected. Uncertain work
+is never auto-replayed. Resume pins the recorded ID, expires old callbacks and cancels unsent
+inputs; it does not create a new conversation on failure. Stored deadlines/counters do not reset.
+The OS lock permits one bridge controller per workspace and is released by the kernel after crash.
+Replacing a worker requires a handoff reference; process exit alone does not prove L3 quiescence.
+Context headroom remains unknown until separately observed. No token counts are fabricated.
+
+Default bounds: 600 seconds per turn, 3600 seconds lifetime, 20 dispatched inputs. Set appropriate
+limits with the human. Claude `--budget-usd` and `--max-model-turns` are SDK query limits, not a
+whole-mission cost guarantee. Codex rejects USD limits it cannot enforce. Unsupported required
+limits are a blocker; absent telemetry does not authorize unlimited spending.
+
+Runtime data is private and ignored beneath `.dryforge/mission/runtime/`. It may contain code and
+user input. Result/wait omit input echoes and bound reply text; `--full` gives the original record.
+Events show kinds/cursors by default; use `--full` for protected payloads. Large events point to
+private artifacts. Raw thinking/signature blocks are omitted. Never evaluate solely from clipped
+summaries or publish logs without checking them. No global hook installation is performed.
+
+## Verification and sources
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s ci -p 'test_runtime*.py' -v
+```
+
+Tests cover real SQLite/CLI processes, a fake App Server subprocess and SDK-shaped doubles:
+session continuity, permission/question correlation, stale approvals, idempotency, missing notices,
+resume, disconnection and timeout. They are **not live authenticated model runs** or independent
+LLM review. Verify same-ID ready/go, actual L3 calls, a genuine permission denial, real evidence
+and safe handoff in the intended host before claiming end-to-end support.
+
+This is original code using official interfaces, not vendored third-party bridge code:
+
+- [Claude SDK sessions](https://platform.claude.com/docs/en/agent-sdk/sessions)
+- [Claude input callbacks](https://platform.claude.com/docs/en/agent-sdk/user-input)
+- [Claude Python SDK](https://github.com/anthropics/claude-agent-sdk-python)
+- [Codex App Server](https://developers.openai.com/codex/app-server)
+- [claude-bridge](https://github.com/michalekz/claude-bridge): stable addressing and durable messages
+- [codex-bridge](https://github.com/shadohead/codex-bridge): state-driven waits and explicit thread reuse
+- [Agent Bridge](https://github.com/creatornader/agent-bridge): delivery acknowledgment is not task completion

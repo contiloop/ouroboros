@@ -2,6 +2,11 @@
 
 ## Unreleased — experimental fork mission extension
 
+- Add optional persistent Claude SDK / Codex App Server workers, durable local messaging and
+  request/permission relay with explicit same-ID recovery and uncertain-delivery handling.
+- Connect Mission to executable transport without changing intent, review or approval ownership.
+- Add deterministic protocol/subprocess tests; live model acceptance remains unverified.
+
 - Rebrand public plugin identity and documentation as **Ouroboros**; preserve upstream attribution and legacy `.dryforge/` state paths.
 - Add centered GitHub README layouts with architecture diagrams and quick-start instructions; leave live session support explicitly experimental.
 - Add opt-in mission intent ownership, persistent ready-go cycle workers, decision relay and
@@ -10,7 +15,7 @@
   session/relay additions at their entrypoints.
 - Add SPAWN/RESUME/FRESH_REVIEW lifecycle contracts and explicit artifact/checkpoint handoffs.
 - Bundle a standard-library local ledger with approval/session/revision/idempotency guards.
-- Document capability preflight, hook limitations and untested live-host acceptance; no SDK daemon
+- Document capability preflight, hook limitations and untested live-host acceptance; no global service
   or permission-bypassing hook is installed. Upstream version 1.3.8 is retained; this is not a release.
 
 ## v1.3.8 (2026-10-17)
