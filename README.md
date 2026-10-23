@@ -83,18 +83,20 @@ Ouroboros keeps the earlier **LANDSCAPE** stage: look for existing products, pro
 
 ## Try it
 
-The development branch lives in [contiloop/dryforge](https://github.com/contiloop/dryforge/tree/feature/ouroboros-rebrand). The GitHub repository URL retains its old slug until the owner renames it; **the plugin identity in this branch is `ouroboros`**. Updating an older plugin does not automatically install this differently named fork.
+The development branch lives in [contiloop/ouroboros](https://github.com/contiloop/ouroboros/tree/feature/ouroboros-rebrand). The GitHub repository has been renamed to **Ouroboros**, and the plugin identity is `ouroboros`. Updating an older upstream Dryforge plugin does not automatically install this differently named fork.
 
 <details open>
 <summary><strong>Claude Code · local plugin test</strong></summary>
 
 ```bash
 git clone --branch feature/ouroboros-rebrand --single-branch \
-  https://github.com/contiloop/dryforge.git ~/ouroboros
+  https://github.com/contiloop/ouroboros.git ~/ouroboros
 
 cd /path/to/your-project
 claude --plugin-dir ~/ouroboros/claude
 ```
+
+If you cloned the fork before the repository rename, update its remote with `git remote set-url origin https://github.com/contiloop/ouroboros.git`.
 
 Invoke **`/ouroboros:mission`** explicitly. For a human-supervised single cycle, use `/ouroboros:ready`, then `/ouroboros:go`. If the host cannot provide the required session/relay/nesting capabilities, mission mode stops rather than pretending it ran.
 

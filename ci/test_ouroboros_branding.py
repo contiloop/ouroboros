@@ -28,6 +28,26 @@ class OuroborosBrandingTest(unittest.TestCase):
                 self.assertIn(token,s)
             self.assertIn('Apache-2.0',s)
             self.assertIn('prekuter',s) # keep attribution
+    def test_repository_url_matches_current_fork(self):
+        current='https://github.com/contiloop/ouroboros'
+        old='https://github.com/contiloop/dryforge'
+        active=[ROOT/'README.md', ROOT/'README_ko.md']
+        active += list((ROOT/'platform').glob('*/plugin*.json'))
+        active += [ROOT/x for x in ('.claude-plugin/marketplace.json',
+                                     '.grok-plugin/marketplace.json',
+                                     '.github/plugin/marketplace.json')]
+        active += [ROOT/x for x in ('claude/.claude-plugin/plugin.json',
+                                     'codex/plugin/plugin.json',
+                                     'codex/plugin/.codex-plugin/plugin.json',
+                                     'agent-plugin/plugin.json','grok/plugin.json')]
+        for path in active:
+            content=path.read_text()
+            if path.suffix == '.md' or '"homepage"' in content or '"repository"' in content:
+                self.assertIn(current,content,str(path))
+            self.assertNotIn(old,content,str(path))
+        self.assertIn('git clone --branch feature/ouroboros-rebrand', (ROOT/'README.md').read_text())
+        self.assertIn(current+'.git', (ROOT/'README_ko.md').read_text())
+
     def test_legacy_state_is_preserved(self):
         self.assertIn('.dryforge/', (ROOT/'src/skills/go/SKILL.md').read_text())
         self.assertTrue((ROOT/'README.upstream.md').exists())

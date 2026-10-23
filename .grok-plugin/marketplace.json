@@ -14,7 +14,7 @@
         "name": "contiloop"
       },
       "source": "./grok",
-      "homepage": "https://github.com/contiloop/dryforge",
+      "homepage": "https://github.com/contiloop/ouroboros",
       "category": "development",
       "keywords": [
         "ouroboros",
