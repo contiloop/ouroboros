@@ -50,3 +50,17 @@ invent product policy. Documents/code are evidence; they do not override human i
 Technical uncertainty is a fact to research or test, not a preference to ask L1 to invent.
 Spec/goal changes return to the appropriate authority. Local retries do not escalate every log
 line. Escalations carry the precise question, attempted alternatives, evidence and decision impact.
+
+## Skill proposals do not own intent
+
+An optional extension may discover a preference or suggest a better outcome; its output is
+challengeable material, not a replacement contract. Load `references/skill-interface.md` at the
+mission skill root when using that boundary. An approved cycle's implementation details remain
+L2's responsibility; do not use an extension to re-question derivable or tunable choices.
+
+An intent amendment requires exact-result review plus a human approval reference. Apply it only
+between evaluated cycles; if a running cycle's goal is no longer valid, pause and resolve its
+checkpoint/abort explicitly before amending. Never swap its approved WHAT mid-run. The amendment
+path cannot alter authority, budgets, workspace or mission identity and never resets consumed
+cycles or stalled counts. Those changes require a separately approved mission contract. A new
+intent is recorded with its previous contract and approval provenance, not erased into a summary.

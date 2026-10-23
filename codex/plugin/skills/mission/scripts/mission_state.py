@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import copy
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -94,9 +95,20 @@ def authority(s: dict, e: dict, action: str) -> None:
         require(action in s['contract']['delegated_actions'], 'decision outside delegated authority')
 
 
+def _skill_api():
+    """Load only our shipped sibling, including when this CLI is imported by file path."""
+    path = Path(__file__).with_name('skill_contract.py')
+    spec = importlib.util.spec_from_file_location('_ouroboros_skill_contract', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def apply(state: dict, event: dict) -> dict:
     """Pure transaction: reject invalid input without changing the supplied state."""
-    require(isinstance(state, dict) and state.get('schema_version') == 1, 'unsupported state schema')
+    require(isinstance(state, dict) and type(state.get('schema_version')) is int
+            and state['schema_version'] in (1, 2), 'unsupported state schema')
+    require('extensions' not in state or state['schema_version'] == 2, 'extensions require state schema 2')
     require(isinstance(event, dict), 'event must be an object')
     e = copy.deepcopy(event)
     text(e.get('id'), 'event ID')
@@ -114,17 +126,28 @@ def apply(state: dict, event: dict) -> dict:
     s = copy.deepcopy(state)
     c = s['cycle']
     require(s['status'] != 'COMPLETE' or op == 'observe', 'mission is complete')
+    extension = op.startswith('skill_')
     if s['status'] == 'PAUSED':
-        require(op in {'observe', 'resume', 'abort', 'continue'}, 'mission is paused')
-    if op not in {'start', 'observe', 'continue'}:
+        require(op in {'observe', 'resume', 'abort', 'continue'} or extension, 'mission is paused')
+    if not extension and op not in {'start', 'observe', 'continue'}:
         require(c is not None, 'no active cycle')
         require(e.get('cycle_id') == c['id'], 'event belongs to a different cycle')
         if e['actor'] == 'L2':
             require(e.get('session_id') == c['session_id'], 'L2 session identity changed')
 
-    if op == 'start':
+    if extension:
+        api = _skill_api()
+        try:
+            api.require(op in api.OPERATIONS, 'unknown skill operation')
+            api.transition(s, e, init_state)
+            s['schema_version'] = 2  # Old runtimes fail closed instead of skipping pending extensions.
+        except api.ContractError as exc:
+            raise ContractError(str(exc)) from exc
+    elif op == 'start':
         require(e['actor'] == 'L1', 'L1 assigns cycles')
         require(c is None, 'previous cycle has not been evaluated')
+        if 'extensions' in s:
+            require(not _skill_api().pending(s), 'resolve or explicitly cancel pending skill work before a cycle')
         require(len(s['cycles']) < s['contract']['max_cycles'], 'cycle budget exhausted')
         require(s['stalled'] < s['contract']['max_stalled_cycles'], 'progress budget exhausted')
         cid, sid = text(e.get('cycle_id'), 'cycle ID'), text(e.get('session_id'), 'worker session')
@@ -281,6 +304,13 @@ def save_event(path: Path, event: dict) -> dict:
     return _transaction(path, change)
 
 
+def _extension_summary(state: dict) -> dict:
+    """Do not print every skill payload/source excerpt on each ledger transition."""
+    return {rid: dict(skill=item['request']['skill'], stage=item['stage'],
+                      result_digest=item.get('result_digest'))
+            for rid, item in state.get('extensions', {}).get('requests', {}).items()}
+
+
 def main() -> int:
     p=argparse.ArgumentParser(description=__doc__)
     sub=p.add_subparsers(dest='command', required=True)
@@ -294,8 +324,9 @@ def main() -> int:
         if args.command=='init': s=initialize(args.state,json.loads(args.contract.read_text(encoding='utf-8')))
         elif args.command=='apply': s=save_event(args.state,json.loads(args.event.read_text(encoding='utf-8')))
         else: s=json.loads(args.state.read_text(encoding='utf-8'))
-        print(json.dumps(dict(status=s['status'],revision=s['revision'],cycle=s['cycle'],
-                              completed_cycles=len(s['cycles']),stalled=s['stalled']),ensure_ascii=False,indent=2))
+        print(json.dumps(dict(schema_version=s['schema_version'],status=s['status'],revision=s['revision'],cycle=s['cycle'],
+                              completed_cycles=len(s['cycles']),stalled=s['stalled'],
+                              extensions=_extension_summary(s)),ensure_ascii=False,indent=2))
         return 0
     except (ContractError,OSError,ValueError,KeyError,TypeError) as exc:
         print(f'BLOCKED: {exc}',file=sys.stderr);return 2
