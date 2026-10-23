@@ -2,6 +2,8 @@
 
 ## Unreleased — experimental fork mission extension
 
+- Rebrand public plugin identity and documentation as **Ouroboros**; preserve upstream attribution and legacy `.dryforge/` state paths.
+- Add centered GitHub README layouts with architecture diagrams and quick-start instructions; leave live session support explicitly experimental.
 - Add opt-in mission intent ownership, persistent ready-go cycle workers, decision relay and
   cycle-boundary reuse/replacement. Keep existing task dispatch and independent-review gates.
 - Preserve existing ready/go procedures in force-loaded workflow references, with separate

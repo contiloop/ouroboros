@@ -1,5 +1,5 @@
 {
   "$schema": "https://antigravity.google/schemas/v1/plugin.json",
-  "name": "dryforge",
-  "description": "Intent to implementation: ready, then go."
+  "name": "ouroboros",
+  "description": "Intent-driven development orchestration: mission → ready → go, with evidence at every cycle."
 }

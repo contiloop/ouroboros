@@ -182,7 +182,7 @@ def validate_marketplaces(root: Path) -> None:
         if not isinstance(plugins, list) or len(plugins) != 1 or not isinstance(plugins[0], dict):
             raise VerificationError(f"expected one plugin entry: {manifest}")
         entry = plugins[0]
-        if entry.get("name") != "dryforge":
+        if entry.get("name") != "ouroboros":
             raise VerificationError(f"unexpected plugin name: {manifest}")
         entry_version = entry.get("version")
         if entry_version is not None and entry_version != version:
@@ -366,7 +366,7 @@ def validate_antigravity_package(root: Path) -> None:
         raise VerificationError(f"unknown Antigravity manifest fields: {', '.join(sorted(unknown))}")
     if manifest.get("$schema") != ANTIGRAVITY_SCHEMA:
         raise VerificationError("Antigravity schema is missing or unsupported")
-    if manifest.get("name") != "dryforge":
+    if manifest.get("name") != "ouroboros":
         raise VerificationError("unexpected Antigravity plugin name")
     if not isinstance(manifest.get("description"), str) or not manifest["description"].strip():
         raise VerificationError("Antigravity description is missing")
@@ -400,9 +400,9 @@ def validate_antigravity_package(root: Path) -> None:
     if not source_rule.is_file() or source_rule.read_bytes() != rule.read_bytes():
         raise VerificationError("Antigravity invocation rule differs from platform source")
     required_phrases = (
-        "Only invoke a dryforge skill when the user explicitly enters",
-        "Do not select or invoke dryforge from semantic similarity",
-        "Without an explicit dryforge slash command",
+        "Only invoke an ouroboros skill when the user explicitly enters",
+        "Do not select or invoke ouroboros from semantic similarity",
+        "Without an explicit ouroboros slash command",
     )
     if any(phrase not in rule_text for phrase in required_phrases):
         raise VerificationError("Antigravity invocation rule is missing the manual-only contract")

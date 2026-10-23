@@ -1,6 +1,6 @@
-# Optional research MCP tools for Dryforge ready
+# Optional research MCP tools for Ouroboros ready
 
-Dryforge's LANDSCAPE research subagent uses available tools to discover existing solutions and
+Ouroboros's LANDSCAPE research subagent uses available tools to discover existing solutions and
 returns a compact evidence ledger for the main agent to verify. **MCP servers are configured in
 the coding-agent host, not merely by mentioning a tool in `SKILL.md`.** The research stage runs
 without these services and must flag any gaps. Do not commit API keys or access tokens.
@@ -34,10 +34,10 @@ setup](https://github.com/upstash/context7/blob/master/docs/clients/claude-code.
 Normal Claude Code subagents can inherit MCP tools available to the parent session. Claude Code
 also supports `mcpServers` frontmatter for **project/user-defined** `.claude/agents/*.md` agents.
 **Caveat:** Claude Code ignores `mcpServers` in **plugin-provided agent files**; do not rely on
-that for per-agent MCP scope. The portable Dryforge skill delegates a general-purpose research
+that for per-agent MCP scope. The portable Ouroboros skill delegates a general-purpose research
 subagent and requires tool availability to be confirmed at runtime. If strict per-agent scoping is
 required, create a trusted project/user-level custom agent rather than placing the scope in a
-Dryforge plugin agent file. Read [Claude Code subagent docs](https://code.claude.com/docs/en/sub-agents).
+Ouroboros plugin agent file. Read [Claude Code subagent docs](https://code.claude.com/docs/en/sub-agents).
 
 ## Codex CLI / Desktop
 

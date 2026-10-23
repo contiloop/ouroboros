@@ -23,7 +23,7 @@ only clean task worktrees and archive the active 3-doc as the workflow specifies
 ## Mission mode (explicit opt-in only)
 
 When a trusted mission dispatch supplies a human-approved intent/delegation contract, force-load
-`../mission/references/cycle-contract.md`. You are L2, the existing Dryforge main agent, not a
+`../mission/references/cycle-contract.md`. You are L2, the existing Ouroboros main agent, not a
 leaf task worker. Keep the **same host session** through ready, approval, go and result handoff.
 Use the verified decision relay for questions and approvals; the provider may be human or L1,
 but its provenance and authority must be recorded. Do not infer delegation from an agent's name.

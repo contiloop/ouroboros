@@ -1,7 +1,7 @@
 interface:
-  display_name: "Dryforge migration"
-  short_description: "Bring an existing codebase into Dryforge."
-  default_prompt: "Use Dryforge migration to bring this project in."
+  display_name: "Ouroboros migration"
+  short_description: "Bring an existing codebase into Ouroboros."
+  default_prompt: "Use Ouroboros migration to bring this project in."
 
 policy:
   allow_implicit_invocation: false

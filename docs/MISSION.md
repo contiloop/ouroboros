@@ -12,7 +12,7 @@ Human <-> L1 Mission Orchestrator
              |
              | one cycle goal + delegated decisions
              v
-          L2 Dryforge main agent (persistent session)
+          L2 Ouroboros main agent (persistent session)
              ready -> questions/approval -> go -> acceptance -> checkpoint
                                            |
                                            +-- L3 implementer(s)
