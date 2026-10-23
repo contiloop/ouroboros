@@ -83,20 +83,15 @@ Ouroboros keeps the earlier **LANDSCAPE** stage: look for existing products, pro
 
 ## Try it
 
-The development branch lives in [contiloop/ouroboros](https://github.com/contiloop/ouroboros/tree/feature/ouroboros-rebrand). The GitHub repository has been renamed to **Ouroboros**, and the plugin identity is `ouroboros`. Updating an older upstream Dryforge plugin does not automatically install this differently named fork.
-
 <details open>
 <summary><strong>Claude Code · local plugin test</strong></summary>
 
 ```bash
-git clone --branch feature/ouroboros-rebrand --single-branch \
-  https://github.com/contiloop/ouroboros.git ~/ouroboros
+git clone --depth 1 https://github.com/contiloop/ouroboros.git ~/ouroboros
 
 cd /path/to/your-project
 claude --plugin-dir ~/ouroboros/claude
 ```
-
-If you cloned the fork before the repository rename, update its remote with `git remote set-url origin https://github.com/contiloop/ouroboros.git`.
 
 Invoke **`/ouroboros:mission`** explicitly. For a human-supervised single cycle, use `/ouroboros:ready`, then `/ouroboros:go`. If the host cannot provide the required session/relay/nesting capabilities, mission mode stops rather than pretending it ran.
 
@@ -128,7 +123,7 @@ Do not change the final goal, merge, deploy, or spend money without approval.
 | Included | Still required from the runtime / live tests |
 | :-- | :-- |
 | `mission`, `ready`, `go`, `migration` skills | Actual persistent L1/L2 sessions and L2→L3 spawning |
-| Decision/approval and session-lifecycle contracts | Authenticated decision relay, runtime authorization and budgets |
+| Decision/approval and session-lifecycle contracts; optional skill result interface | Authenticated decision relay, runtime authorization and budgets |
 | `mission_state.py` ledger with local transition checks | Real evidence verification, interruption reconciliation, hook wiring |
 | LANDSCAPE research guidance and 5 platform packages | Live multi-cycle end-to-end acceptance in the chosen host |
 
@@ -150,6 +145,14 @@ docs/                    # mission, research MCP setup
 platform/                # platform-specific manifest inputs
 claude/ · codex/ · grok/ · agent-plugin/ · antigravity/
 ```
+
+### Optional skill extensions
+
+L1 can accept Interview, Research, or Evaluation results through a small **evidence + authority
+contract**: shared identity/status/evidence fields, with a skill-specific payload. A result may
+propose an intent change, but cannot approve or apply it. A changed mission goal requires L1 review
+and explicit human approval. This is **an interface for future skills, not an installed Interview
+skill or a working agent transport**. See [extension guide](docs/SKILL_INTERFACE.md).
 
 ### Development checks
 
