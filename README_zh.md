@@ -303,6 +303,13 @@ ready 会先查看你的项目；对于新功能或重要变更，还会查找�
 
 还没有仓库？ready 会提议帮你建一个。
 
+对于重要的外部调研，`ready` 可以委派只读 Research Subagent 搜索，再由主代理核查关键原始资料。
+**推荐（可选安装，Optional）：** [Grep MCP](https://mcp.grep.app) 用于搜索公开代码，
+[Context7 MCP](https://mcp.context7.com/mcp) 用于查询库和 API 文档。
+开始调研前会检查 Subagent 实际可用的工具，但**这两个 MCP 都不是必需的**。
+缺少时不会自动安装；系统会使用其他可用搜索工具，或明确标注未验证的信息。
+安装说明参见 [研究 MCP 配置](docs/RESEARCH_MCP_SETUP.md)。
+
 ### go
 
 ```text

@@ -23,6 +23,63 @@ material outside solution can be `not material` with a reason. For substantive n
 integrations, or architecture choices, attempt external research with available tools, not memory
 alone. Tools unavailable → a bounded, explicitly `UNVERIFIED` result, not invented sources.
 
+## Tool preflight — before research dispatch
+
+For a material LANDSCAPE, the **main agent** first inspects the tools that the host exposes
+**to the intended research subagent**, not merely what the main session can use:
+
+- **Grep-style public code search (optional MCP):** exposed and usable for read-only public-code queries?
+- **Context7-style library documentation (optional MCP):** exposed and usable for read-only API/docs queries?
+- **General web / GitHub / primary-source retrieval:** what usable fallback or complementary search exists?
+
+Classify each as **`available`** (actual usable access confirmed), **`unavailable`** (absent, denied,
+unauthenticated, or failed), or **`unknown`** (the host cannot establish availability yet).
+Use the host's tool listing/permissions when available. If an inexpensive, safe probe is needed,
+use only a generic public read-only query; never test with private code, PDFs, user dialogue or
+credentials. A listed server is **not** proof that its calls work, and a tool available to the main
+is **not** automatically available to the subagent. Do not invent probe results.
+
+Pass this **tool-access snapshot** with the sanitized research brief. On spawn, the researcher
+checks actual callable tools before using them and reports any difference; no automatic MCP
+installation, login, credential request, tool permission escalation, or opaque setup commands.
+**Grep and Context7 are helpful, not required.** If one is missing, use reliable alternatives;
+if neither works, prefer normal source/web search. If no useful external retrieval works at all,
+return a bounded `UNVERIFIED` outcome and state which evidence could not be obtained. Do not
+interrupt ready only to ask the user to install optional MCP tools; surface a blocker only when
+a *decisive technical fact* remains unverifiable even by safe research or an approved spike.
+
+## Research dispatch and main-agent review
+
+For substantive outside solution discovery, the main agent may dispatch **one fresh, read-only
+research subagent**, using `landscape-researcher-prompt.md` as its mandate. This is a delegated
+*evidence producer*, not an independent reviewer of user intent. The main retains raw dialogue and
+all decisions. **Default to delegation** when external search is material, a subagent can access
+relevant research tools, and keeping search results out of the main context adds value. A bounded
+local edit, missing subagent support, or no useful research tools means inline discovery or a
+plainly marked tool limitation, not a fabricated dispatch.
+
+Give the researcher a **sanitized brief**: desired public behavior, platform names, constraints
+safe to disclose, unknowns, the **tool preflight snapshot**, and the required evidence ledger. Never send confidential documents,
+private code, credentials, unapproved user content, or sensitive URLs to external tools. Specify
+read-only work: no installs, write commands, source edits, or user messages. The subagent may use
+**Grep-style public code search** for implementation evidence, **Context7-style current library
+documentation** for API contracts, and ordinary source/web search to *discover* projects. These
+MCP services are optional **host-provided tools**, not hard dependencies of the skill. A source
+snippet is not proof that a whole workflow works; documentation is not proof of runtime success.
+
+**Main-agent evidence review (mandatory after delegated research):**
+- Independently open the primary source for every claim that might change reuse/extend/build choice.
+  Check the *specific* version, quoted capability, license and necessary integration surface.
+- Challenge the favored recommendation: consider a credible counter-route and check whether the
+  search skipped a class of alternatives. Do targeted follow-up research if an important claim fails.
+- Record `VERIFIED`, `UNVERIFIED`, or `RULED_OUT` against each *specific* route and limitation.
+  Do not upgrade a researcher's unsupported claim into a verified fact.
+- Keep ELICIT's user decision intact. The main, not the researcher, presents options and requests
+  approval; do not add an extra mandatory reviewer or replace the two independent intent gates.
+
+If the researcher reports no external access, the main may try the host's available tools itself;
+otherwise leave a bounded `UNVERIFIED` result. No arbitrary retries or endless agent loops.
+
 ## LANDSCAPE search objective and scope
 
 Look for three layers **in this order of decision value**, not as quotas requiring exhaustive search:
@@ -121,4 +178,5 @@ Do not create feasibility spikes for minor tuning choices or technical trivia.
 no user-only choice decided by the agent. **PLAN:** selected path researched to task-level detail,
 including verification and material constraints; decisive unknowns resolved **or** handled by an
 explicitly approved first-task spike and stop-on-failure rule. Otherwise return to ELICIT or surface
-an actual blocker. These are reasoning gates — no additional subagent dispatch.
+an actual blocker. These are reasoning gates — PLAN adds no independent-review subagent; the optional LANDSCAPE
+research dispatch above is distinct from the two ready intent/artifact audits.
