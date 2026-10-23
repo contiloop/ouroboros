@@ -59,6 +59,13 @@ Return technical unknowns to research/testing, not to the human as invented pref
 
 ## 2. Verify the host, then choose a cycle
 
+If native persistence/relay is insufficient or the human selects a separate full-host worker,
+force-load `references/runtime-bridge.md` at that point. The bundled `scripts/worker_runtime.py`
+implements actual Claude SDK / Codex App Server sessions, durable messages and input callbacks.
+Use the chosen Python/client environment; never auto-install or weaken permissions. Follow
+start/status/send/wait/answer rather than a new one-shot process per prompt. Transport receipts
+are not approval or mission completion; only an explicitly approved Go command records start.
+
 Run the capability preflight in `references/host-adapter.md`. Require actual worker identity,
 resume/message support, L2-to-L3 spawning, explicit procedure loading, and a question relay.
 A tool appearing in L1's list is not proof it works in L2. No spawning capability → report a

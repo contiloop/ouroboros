@@ -22,7 +22,7 @@ From a human goal to a verified result — one `ready → go` cycle at a time.
 > **Cycle success is not mission success.** Ouroboros keeps the human's approved intent at the top and uses observed evidence — not an agent's confidence — to choose what comes next.
 
 > [!WARNING]
-> **Experimental, not a turnkey autonomous service.** The repository includes skills, lifecycle contracts, and a tested local mission ledger. It does **not** bundle a session-controller daemon, install global hooks, or prove live three-level execution in Claude Code/Codex. The host must actually support persistent workers, decision relay, and nested agents.
+> **Experimental, not a turnkey autonomous service.** The repository includes skills, lifecycle contracts, and a tested local mission ledger. An optional [local runtime bridge](docs/RUNTIME.md) connects real Claude SDK sessions and Codex App Server threads. It does **not** auto-install dependencies/global hooks or establish live three-level acceptance. The host must actually support persistent workers, decision relay, and nested agents.
 
 ## Why Ouroboros?
 
@@ -124,10 +124,17 @@ Do not change the final goal, merge, deploy, or spend money without approval.
 | :-- | :-- |
 | `mission`, `ready`, `go`, `migration` skills | Actual persistent L1/L2 sessions and L2→L3 spawning |
 | Decision/approval and session-lifecycle contracts; optional skill result interface | Authenticated decision relay, runtime authorization and budgets |
-| `mission_state.py` ledger with local transition checks | Real evidence verification, interruption reconciliation, hook wiring |
+| Mission ledger, persistent worker transport and question/permission relay | Live model behavior, evidence verification and interruption reconciliation |
 | LANDSCAPE research guidance and 5 platform packages | Live multi-cycle end-to-end acceptance in the chosen host |
 
 Hooks are **observations**, never approvals. A process stop or successful command is not proof of mission completion. The ledger validates events provided to it; it cannot verify a human identity or the truth of tests by itself.
+
+### Persistent worker connection
+
+Use the optional [runtime bridge](docs/RUNTIME.md) when native worker tools are insufficient.
+It keeps the same L2 host session across turns, records message IDs, relays input requests and
+rejects stale Go approvals. Dependencies/authentication are user-managed. Transport tests use
+fixtures, not live models; a delivered message is never treated as completed mission work.
 
 ### Source map
 

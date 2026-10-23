@@ -32,7 +32,8 @@ class MissionContractTest(unittest.TestCase):
         t=(ROOT/'src/skills/mission/references/host-adapter.md').read_text()
         self.assertIn('No auto-go-on-stop hook',t)
         self.assertIn('SDK controller',t)
-        self.assertIn('none is bundled here',t)
+        self.assertIn('runtime-bridge.md',t)
+        self.assertIn('not certified',t)
         self.assertIn('AskUserQuestion',t)
 
     def test_platform_mission_files_identical(self):
