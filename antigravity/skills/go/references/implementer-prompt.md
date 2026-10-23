@@ -44,7 +44,12 @@ and **wording you adapt** (the example below is one phrasing, not a fixed script
   platform's worktree-isolation dispatch option — the orchestrator already
   created the worktree; see `orchestration.md`); verify with `git rev-parse --show-toplevel` before
   editing.
+- **Session contract** — when dispatch/resume identity is available, pin the actual session ID,
+  parent cycle, task contract digest and current worktree/branch/HEAD. A resumed same-task agent
+  rereads the accepted delta; a fresh replacement receives an explicit handoff and must not claim
+  inherited memory. Follow `references/agent-lifecycle.md`; never become your own independent reviewer.
 - **Report contract** — commit when done; return the structured summary below. Do not dump diffs.
+  Also return the task/session checkpoint and pending side effects when lifecycle management is active.
 
 ## Example skeleton (one wording — adapt; the elements above are required)
 
