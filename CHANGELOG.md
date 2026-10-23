@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — experimental fork mission extension
+
+- Add opt-in mission intent ownership, persistent ready-go cycle workers, decision relay and
+  cycle-boundary reuse/replacement. Keep existing task dispatch and independent-review gates.
+- Preserve existing ready/go procedures in force-loaded workflow references, with separate
+  session/relay additions at their entrypoints.
+- Add SPAWN/RESUME/FRESH_REVIEW lifecycle contracts and explicit artifact/checkpoint handoffs.
+- Bundle a standard-library local ledger with approval/session/revision/idempotency guards.
+- Document capability preflight, hook limitations and untested live-host acceptance; no SDK daemon
+  or permission-bypassing hook is installed. Upstream version 1.3.8 is retained; this is not a release.
+
 ## v1.3.8 (2026-10-17)
 
 - Updated the Codex package to the current plugin format; older Codex versions keep working

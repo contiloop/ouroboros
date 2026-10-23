@@ -6,6 +6,7 @@ that an LLM follows the skill or that an external API integration works.
 
 from pathlib import Path
 import unittest
+from skill_text import skill_text
 
 ROOT = Path(__file__).resolve().parent.parent
 READY = ROOT / 'src/skills/ready'
@@ -13,7 +14,7 @@ GO = ROOT / 'src/skills/go'
 
 
 def source(path: Path) -> str:
-    return path.read_text(encoding='utf-8')
+    return skill_text(path) if path.name == 'SKILL.md' else path.read_text(encoding='utf-8')
 
 
 class FeasibilityContractTests(unittest.TestCase):

@@ -8,6 +8,12 @@ quality, and (when the harness was created/updated this cycle) harness content a
 > You are in a fresh session with no live user conversation — do **not** ask the user directly.
 > Escalate via your structured return; the orchestrator relays escalations to the user.
 
+## Independence precondition
+
+Start fresh; do not reuse or fork the implementer's session as this reviewer. Apply
+`references/agent-lifecycle.md`. A bounded re-check may resume this read-only reviewer only if it
+never authored the fix. Missing independent execution is a blocker, not a self-review substitute.
+
 ## Scope — four lenses, one pass
 
 **Lens 1: spec conformance.** Does the implementation do what the spec says — behavior, invariants,

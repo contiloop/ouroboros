@@ -6,6 +6,7 @@ These tests verify the authored + packaged skill wiring; they do not simulate an
 from __future__ import annotations
 
 import unittest
+from skill_text import skill_text
 from pathlib import Path
 
 
@@ -17,7 +18,7 @@ REFERENCE = READY / "references/landscape-scan.md"
 
 class LandscapeContractTest(unittest.TestCase):
     def test_stage_order_and_repeat_at_plan(self) -> None:
-        skill = SKILL.read_text(encoding="utf-8")
+        skill = skill_text(SKILL)
         stage_map = skill.split("## Stage map + cycle-conditional reference loading", 1)[1]
         stage_map = stage_map.split("```", 2)[1]
         labels = [line.split()[0] for line in stage_map.splitlines() if line and not line.startswith(" ")]
@@ -29,7 +30,7 @@ class LandscapeContractTest(unittest.TestCase):
         self.assertIn("landscape-scan.md (targeted re-check)", stage_map)
 
     def test_force_loading_at_both_checkpoints(self) -> None:
-        skill = SKILL.read_text(encoding="utf-8")
+        skill = skill_text(SKILL)
         landscape = skill.split("## LANDSCAPE —", 1)[1].split("## ELICIT —", 1)[0]
         plan = skill.split("## PLAN —", 1)[1].split("## HANDOFF —", 1)[0]
         self.assertIn("Force-load `references/landscape-scan.md`", landscape)
@@ -59,13 +60,13 @@ class LandscapeContractTest(unittest.TestCase):
 
     def test_claude_ready_has_search_tools(self) -> None:
         builder = (ROOT / "build/build.sh").read_text(encoding="utf-8")
-        self.assertIn('ready) echo "Read, Edit, Write, Bash, Grep, Glob, Agent, AskUserQuestion, WebSearch, WebFetch"', builder)
+        self.assertIn('ready) echo "Read, Edit, Write, Bash, Grep, Glob, Agent, AskUserQuestion, WebSearch, WebFetch, SendMessage"', builder)
         generated = (ROOT / "claude/skills/ready/SKILL.md").read_text(encoding="utf-8")
         self.assertIn("WebSearch", generated)
         self.assertIn("WebFetch", generated)
 
     def test_delegated_research_but_main_owns_intent(self) -> None:
-        skill = SKILL.read_text(encoding="utf-8")
+        skill = skill_text(SKILL)
         landscape = skill.split("## LANDSCAPE —", 1)[1].split("## ELICIT —", 1)[0]
         self.assertIn("read-only general-purpose research", landscape)
         self.assertIn("the main agent", landscape)
@@ -87,7 +88,7 @@ class LandscapeContractTest(unittest.TestCase):
             self.assertIn(token.lower(), text.lower())
 
     def test_preflight_before_delegation(self) -> None:
-        skill = SKILL.read_text(encoding="utf-8")
+        skill = skill_text(SKILL)
         landscape = skill.split("## LANDSCAPE —", 1)[1].split("## ELICIT —", 1)[0]
         self.assertLess(landscape.index("run the Tool Preflight"), landscape.index("spawn **one"))
         for token in ("available", "unavailable", "unknown", "Never install",
