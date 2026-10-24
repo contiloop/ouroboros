@@ -217,6 +217,20 @@ L1 may then approve exact Go worktree operations independently within that grant
 denied request is NOT automatically retried: reconcile the worktree first and have Codex issue a
 new request in the same L2 session. In-flight callbacks expire across controller replacement.
 
-This release does NOT automatically authorize `git worktree add/remove`, merging task branches,
-rebase or force operations. Those still require a separate human decision or future bounded policy.
+A v2 grant does NOT authorize `git merge`. Version 3 can separately grant exact, pinned
+`git merge --no-ff <40-hex-SHA> -m <message>` operations from the clean approved base,
+after validating the registered task worktree, branch identity and complete allowed diff.
+This is a new HUMAN `runtime_policy` grant, never inferred from prior v1/v2 approval.
+Worktree add/remove, destructive operations and other integration commands remain
+human-reviewed. See [integration scope](../src/skills/mission/references/runtime-permissions.md).
 Likewise, worktree support is not an end-to-end live Mission acceptance claim.
+
+### Parent-turn/child-callback lifetime (v1.3.11)
+
+An L2 Codex turn may yield while a nested L3 permission callback is still alive.
+The controller keeps the parent's message `DISPATCHED` and retains child `PENDING` or
+`ANSWERED` requests until the host has consumed their answer. It never turns the parent
+`IDLE` or reports `TURN_COMPLETE` solely because the parent host turn ended.
+The ORIGINAL finite turn and worker lifetime limits still apply. Missing callbacks,
+timeouts and disconnects are uncertain outcomes, not a reason to issue the same Git
+command again. Check pending requests and the host transcript before recovery.

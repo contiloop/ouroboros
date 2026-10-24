@@ -12,7 +12,7 @@ import re
 import shlex
 import subprocess
 
-OPERATIONS = {'git_add', 'git_commit', 'workspace_edit', 'verify'}
+OPERATIONS = {'git_add', 'git_commit', 'workspace_edit', 'verify', 'git_merge'}
 PROTECTED = {'.git', '.dryforge', '.claude', '.codex', '.agents'}
 SHELLS = {'sh', 'bash', 'zsh', '/bin/sh', '/bin/bash', '/bin/zsh', '/usr/bin/bash', '/usr/bin/zsh'}
 GIT = {'git', '/usr/bin/git', '/bin/git'}
@@ -48,13 +48,21 @@ def relative_scope(value):
 def validate_policy(policy):
     require(isinstance(policy, dict), 'runtime policy must be an object')
     version = policy.get('version')
-    require(type(version) is int and version in (1, 2), 'unsupported runtime policy')
+    require(type(version) is int and version in (1, 2, 3), 'unsupported runtime policy')
     fields = {'version', 'operations', 'paths', 'verification_commands', 'trust_workspace_code'}
-    if version == 2:
+    if version >= 2:
         fields.add('go_worktrees')
+    if version == 3:
+        fields.add('integration_branch')
     require(set(policy) == fields, 'runtime policy has missing or unknown fields')
-    if version == 2:
+    if version >= 2:
         require(type(policy['go_worktrees']) is bool, 'go_worktrees must be an explicit boolean grant')
+    if version == 3:
+        branch = policy['integration_branch']
+        require(nonempty(branch) and len(branch) <= 96 and
+                re.fullmatch(r'[A-Za-z0-9]+(?:[-_/][A-Za-z0-9]+)*',branch) and
+                '..' not in branch and '//' not in branch,
+                'integration_branch must name one explicit ordinary branch')
     ops, paths, commands = policy['operations'], policy['paths'], policy['verification_commands']
     require(isinstance(ops, list) and bool(ops) and all(isinstance(x, str) for x in ops)
             and len(set(ops)) == len(ops) and set(ops) <= OPERATIONS, 'invalid delegated operations')
@@ -63,11 +71,14 @@ def validate_policy(policy):
         relative_scope(p)
     require(len(set(paths)) == len(paths), 'duplicate paths')
     require(type(policy['trust_workspace_code']) is bool, 'project-code trust must be explicit')
-    if version == 2 and policy['go_worktrees']:
+    if version >= 2 and policy['go_worktrees']:
         require(policy['trust_workspace_code'], 'worktree delegation requires explicit project-code trust')
         require(bool(set(ops) & {'git_add', 'git_commit', 'workspace_edit', 'verify'}),
                 'worktree delegation requires a scoped operation')
-    if set(ops) & {'git_add', 'git_commit', 'verify'}:
+    if 'git_merge' in ops:
+        require(version == 3 and policy['go_worktrees'],
+                'Git merge requires a separate human-approved v3 integration scope')
+    if set(ops) & {'git_add', 'git_commit', 'git_merge', 'verify'}:
         require(policy['trust_workspace_code'], 'Git filters/hooks and verification may execute project code; explicit trust required')
     require(isinstance(commands, list) and len(commands) <= 64, 'verification_commands must be a bounded list')
     require(('verify' in ops) == bool(commands), 'verify needs explicit commands, and commands need verify')
@@ -75,8 +86,9 @@ def validate_policy(policy):
         require(isinstance(argv, list) and bool(argv) and all(nonempty(x) for x in argv), 'verification command must be argv')
         # Exact, recognized verification entrypoints only; this is NOT a proof of their effects.
         exe = Path(argv[0]).name
+        python_args = argv[2:] if argv[1:2] == ['-B'] else argv[1:]
         valid = ((exe in ('python', 'python3', 'python3.11', 'python3.12', 'python3.13')
-                  and argv[1:3] in (['-m', 'unittest'], ['-m', 'pytest'], ['-m', 'compileall']))
+                  and python_args[:2] in (['-m', 'unittest'], ['-m', 'pytest'], ['-m', 'compileall']))
                  or exe in ('pytest', 'pytest-3')
                  or (exe in ('npm', 'pnpm', 'yarn') and len(argv) >= 2 and argv[1] == 'test'))
         require(valid, 'only explicit verification entrypoints can be delegated')
@@ -153,7 +165,7 @@ def _known_worktree(base, wt, policy):
     Neither a matching directory name nor a user-supplied .git pointer alone is proof.
     This is an authorization guard within a trusted checkout, not a security sandbox.
     """
-    require(policy['version'] == 2 and policy['go_worktrees'],
+    require(policy['version'] in (2, 3) and policy['go_worktrees'],
             'linked worktree requires a human-approved policy v2 go_worktrees grant')
     pool = base / '.dryforge' / 'worktrees'
     require(wt.parent == pool and re.fullmatch(r'[A-Za-z][A-Za-z0-9_-]{0,63}', wt.name),
@@ -271,6 +283,10 @@ def classify(payload, workspace, policy):
             require(not (effective / '.git' / 'commondir').exists(), 'unexpected shared Git metadata')
             require(git_read(effective, 'rev-parse', '--show-toplevel').decode().strip() == str(effective),
                     'Git root mismatch')
+        if argv[1:2] == ['merge']:
+            require(worktree is None, 'merges are delegated only from the approved root')
+            from runtime_merge import inspect_merge
+            return inspect_merge(root,argv,policy,git_read,_known_worktree,scoped_path,require)
         if argv[1:2] == ['add']:
             paths = argv[2:]
             if paths[:1] == ['--']:
