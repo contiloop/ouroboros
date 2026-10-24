@@ -93,14 +93,14 @@ cd /path/to/your-project
 claude --plugin-dir ~/ouroboros/claude
 ```
 
-Mission은 **`/ouroboros:mission`**으로 명시적으로 실행합니다. 사람이 감독하는 단일 사이클은 `/ouroboros:ready` → `/ouroboros:go`를 사용할 수 있습니다. 실제 호스트가 필수 세션·중계·중첩 실행 기능을 제공하지 못하면 Mission 모드는 지원하는 척하지 않고 중단합니다.
+**`/ouroboros:init`**으로 L1과 대화하며 의도와 위임 범위를 다듬습니다. **`/ouroboros:approve`**로 검토한 내용을 승인하면 L1이 Ready·Go 반복을 맡습니다. 실행 중에도 사용자와 L1의 대화는 계속됩니다. 사람이 감독하는 단일 사이클은 `/ouroboros:ready` → `/ouroboros:go`를 사용할 수 있습니다. 실제 호스트가 필수 세션·중계·중첩 실행 기능을 제공하지 못하면 Mission 모드는 지원하는 척하지 않고 중단합니다.
 
 </details>
 
 <details>
 <summary><strong>Codex · 로컬 플러그인 패키지</strong></summary>
 
-`.agents/plugins/marketplace.json`이 `codex/plugin/` 패키지를 가리킵니다. 사용하는 Codex의 로컬 Marketplace 절차로 등록한 뒤 **`ouroboros`** 플러그인을 활성화하고 이전 스킬 이름이 중복되지 않는지 확인하세요. 스킬이 정상 표시되면 `$mission`, `$ready`, `$go`를 명시적으로 실행합니다.
+`.agents/plugins/marketplace.json`이 `codex/plugin/` 패키지를 가리킵니다. 사용하는 Codex의 로컬 Marketplace 절차로 등록한 뒤 **`ouroboros`** 플러그인을 활성화하고 이전 스킬 이름이 중복되지 않는지 확인하세요. 스킬이 정상 표시되면 `$init` → `$approve` (독립 실행은 `$ready` → `$go`)를 명시적으로 실행합니다.
 
 </details>
 
@@ -122,7 +122,7 @@ ChatGPT와 논문을 읽다가 새로 배운 내용을 Zotero의 해당 논문�
 
 | 포함된 것 | 실행 호스트 및 실사용 검증이 필요한 것 |
 | :-- | :-- |
-| `mission`, `ready`, `go`, `migration` 스킬 | 실제 L1/L2 지속 세션과 L2의 L3 생성 |
+| `init`, `approve`, `ready`, `go`, `migration` 스킬 | 실제 L1/L2 지속 세션과 L2의 L3 생성 |
 | 의도·승인·세션 생명주기 계약과 선택적 확장 스킬 인터페이스 | 권한 있는 의사결정 중계와 실행 한도 강제 |
 | Mission 상태 검증과 지속 Worker 연결·질문/권한 요청 중계 | 실제 모델 동작·검증 증거·중단 복원·외부 부수효과 검증 |
 | LANDSCAPE 조사 규칙, 5개 플랫폼 배포본 | Claude/Codex 실제 다중 사이클 종단간 테스트 |
@@ -140,16 +140,17 @@ Hook은 **상태 관측 수단**이지 승인이 아닙니다. 프로세스 종�
 
 사용자가 한 번 명시적으로 위임한 범위에서는 L1이 로컬 스테이징·커밋·파일 수정·지정된 검증 명령을 직접 승인합니다.
 범위 밖 요청은 사람에게 전달하며 샌드박스 규칙을 해제하지 않습니다. 기존 Mission에 권한이 자동 추가되지는 않습니다.
-[실행 승인 범위](src/skills/mission/references/runtime-permissions.md)를 참고하세요.
+[실행 승인 범위](src/skills/init/references/runtime-permissions.md)를 참고하세요.
 
 ### 소스 구조
 
 ```text
 src/skills/
-├── mission/             # L1 오케스트레이션 + 상태 기록
+├── init/                # L1 대화 + 공통 실행 절차와 상태 기록
 │   ├── SKILL.md
 │   ├── references/      # 의도·사이클·호스트 계약
 │   └── scripts/mission_state.py
+├── approve/             # 검토한 의도를 L1 실행 루프로 인계
 ├── ready/               # L2 의도 확정 + LANDSCAPE
 ├── go/                  # L2 구현 + L3 생명주기
 └── migration/           # 기존 프로젝트의 최초 Harness 구성

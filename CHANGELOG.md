@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.4.0 (2026-10-24) — init conversation and approve handoff
+
+- Replace the public mission skill with `ouroboros:init` for ongoing intent discussion and
+  `ouroboros:approve` for handing the reviewed proposal to L1's ordinary Ready/Go loop.
+- Add durable DRAFT/revise/activate transitions. No cycle execution or active tool authority
+  before activation; one human handoff binds exact intent and proposed execution scope.
+- Keep the user conversation open during execution and isolate the interview procedure for
+  future upgrades. Preserve independent Ready/Go review and caller-neutral lower tiers.
+- Retain existing mission ledgers and IDs. Repeated commands do not reset runs, refill budgets
+  or expand authority. Formal intent amendments still commit at evaluated cycle boundaries.
+- Regenerate all five platform packages with five explicit-invocation skills. State/CLI tests
+  verify handoff semantics; a complete fresh live-model loop remains unverified.
+
 ## v1.3.11 (2026-10-24) — ordinary caller interface and child request lifetime
 
 - Keep Mission identity and authority in the outer controller; Ready/Go use their ordinary

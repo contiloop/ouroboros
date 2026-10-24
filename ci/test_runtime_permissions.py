@@ -8,7 +8,7 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = ROOT / 'src/skills/mission/scripts'
+SCRIPTS = ROOT / 'src/skills/init/scripts'
 sys.path.insert(0, str(SCRIPTS))
 import mission_state as ledger
 import runtime_permissions as policy

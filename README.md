@@ -93,14 +93,14 @@ cd /path/to/your-project
 claude --plugin-dir ~/ouroboros/claude
 ```
 
-Invoke **`/ouroboros:mission`** explicitly. For a human-supervised single cycle, use `/ouroboros:ready`, then `/ouroboros:go`. If the host cannot provide the required session/relay/nesting capabilities, mission mode stops rather than pretending it ran.
+Invoke **`/ouroboros:init`** to discuss and refine intent, then **`/ouroboros:approve`** to hand the reviewed proposal to L1 for Ready/Go cycles. Keep talking to L1 while it works. For a human-supervised single cycle, use `/ouroboros:ready`, then `/ouroboros:go`. If the host cannot provide the required session/relay/nesting capabilities, mission mode stops rather than pretending it ran.
 
 </details>
 
 <details>
 <summary><strong>Codex · local plugin package</strong></summary>
 
-The marketplace descriptor is `.agents/plugins/marketplace.json` and the plugin package is `codex/plugin/`. Register this checkout through your Codex client's local marketplace flow; enable the **`ouroboros`** plugin and check for duplicate older skill names. Explicitly invoke `$mission`, `$ready`, or `$go` once the client reports them available.
+The marketplace descriptor is `.agents/plugins/marketplace.json` and the plugin package is `codex/plugin/`. Register this checkout through your Codex client's local marketplace flow; enable the **`ouroboros`** plugin and check for duplicate older skill names. Explicitly invoke `$init`, then `$approve` (or standalone `$ready`/`$go`) once the client reports them available.
 
 </details>
 
@@ -122,7 +122,7 @@ Do not change the final goal, merge, deploy, or spend money without approval.
 
 | Included | Still required from the runtime / live tests |
 | :-- | :-- |
-| `mission`, `ready`, `go`, `migration` skills | Actual persistent L1/L2 sessions and L2→L3 spawning |
+| `init`, `approve`, `ready`, `go`, `migration` skills | Actual persistent L1/L2 sessions and L2→L3 spawning |
 | Decision/approval and session-lifecycle contracts; optional skill result interface | Authenticated decision relay, runtime authorization and budgets |
 | Mission ledger, persistent worker transport and question/permission relay | Live model behavior, evidence verification and interruption reconciliation |
 | LANDSCAPE research guidance and 5 platform packages | Live multi-cycle end-to-end acceptance in the chosen host |
@@ -140,16 +140,17 @@ fixtures, not live models; a delivered message is never treated as completed mis
 
 After one explicit human grant, L1 may approve matching local staging, commits, file edits or exact verification commands.
 Unmatched requests still go to the human; no sandbox rules are disabled. Existing missions gain no permission automatically.
-See [runtime approval scope](src/skills/mission/references/runtime-permissions.md).
+See [runtime approval scope](src/skills/init/references/runtime-permissions.md).
 
 ### Source map
 
 ```text
 src/skills/
-├── mission/             # L1 orchestration + ledger
+├── init/                # L1 conversation + shared orchestration and ledger
 │   ├── SKILL.md
 │   ├── references/      # intent, cycle, host contracts
 │   └── scripts/mission_state.py
+├── approve/             # reviewed handoff into the execution loop
 ├── ready/               # L2 intent discovery + LANDSCAPE
 ├── go/                  # L2 implementation + L3 lifecycle
 └── migration/           # one-time project harness onboarding

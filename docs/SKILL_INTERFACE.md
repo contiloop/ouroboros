@@ -80,10 +80,10 @@ The CLI uses the standard library only. From a checkout, with actual files suppl
 host/controller (the placeholder paths below are not authorizations):
 
 ```sh
-python3 src/skills/mission/scripts/skill_contract.py digest --json /project/approved-contract.json
-python3 src/skills/mission/scripts/skill_contract.py validate \
+python3 src/skills/init/scripts/skill_contract.py digest --json /project/approved-contract.json
+python3 src/skills/init/scripts/skill_contract.py validate \
   --request /project/request.json --result /project/result.json
-python3 src/skills/mission/scripts/mission_state.py apply \
+python3 src/skills/init/scripts/mission_state.py apply \
   --state /project/.dryforge/mission/state.json --event /project/next-event.json
 ```
 
@@ -150,6 +150,6 @@ The ledger is a trusted local consistency check, not a security sandbox. A malic
 can lie about `actor`, source checks or evidence. Keep writes and human-approval verification in the
 trusted runtime; never route raw hook or child-agent output straight to authority-bearing events.
 
-See the [runtime contract](../src/skills/mission/references/skill-interface.md),
-[validator](../src/skills/mission/scripts/skill_contract.py),
+See the [runtime contract](../src/skills/init/references/skill-interface.md),
+[validator](../src/skills/init/scripts/skill_contract.py),
 [behavior tests](../ci/test_skill_interface.py), and [Mission guide](MISSION.md).

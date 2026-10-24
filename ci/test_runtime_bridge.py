@@ -14,7 +14,7 @@ import unittest
 from unittest.mock import patch
 
 ROOT=Path(__file__).resolve().parents[1]
-SCRIPTS=ROOT/'src/skills/mission/scripts'
+SCRIPTS=ROOT/'src/skills/init/scripts'
 sys.dont_write_bytecode=True
 sys.path.insert(0,str(SCRIPTS))
 from runtime_bridge.store import Store,BridgeError,controller_lock,digest

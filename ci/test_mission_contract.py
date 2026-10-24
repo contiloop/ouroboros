@@ -8,8 +8,22 @@ PACKAGES=('claude/skills','codex/plugin/skills','grok/skills','agent-plugin/skil
 
 
 class MissionContractTest(unittest.TestCase):
+    def test_public_entrypoints_separate_discussion_and_execution(self):
+        for package in ('src/skills', *PACKAGES):
+            root = ROOT/package
+            self.assertFalse((root/'mission').exists())
+            self.assertTrue((root/'init/SKILL.md').is_file())
+            self.assertTrue((root/'approve/SKILL.md').is_file())
+        init = (ROOT/'src/skills/init/SKILL.md').read_text()
+        approve = (ROOT/'src/skills/approve/SKILL.md').read_text()
+        self.assertIn('references/interview.md', init)
+        self.assertIn('Do not launch cycle workers', init)
+        self.assertIn('expected_proposal_digest', approve)
+        self.assertIn('../init/references/orchestration.md', approve)
+        self.assertIn('conversation remains open', init)
+
     def test_mission_is_one_cycle_not_a_sector_loop(self):
-        t=(ROOT/'src/skills/mission/SKILL.md').read_text()
+        t=(ROOT/'src/skills/init/references/orchestration.md').read_text()
         for s in ('one ready-go cycle','not** an','same L2 session','REUSE','SPAWN','migration','CONTINUE','REPLAN','ESCALATE','COMPLETE'):
             self.assertIn(s,t)
 
@@ -17,7 +31,7 @@ class MissionContractTest(unittest.TestCase):
         for skill in ('ready','go'):
             t=(ROOT/f'src/skills/{skill}/SKILL.md').read_text()
             self.assertIn('## Caller interface',t)
-            self.assertNotIn('../mission/references/cycle-contract.md',t)
+            self.assertNotIn('../init/references/cycle-contract.md',t)
             self.assertNotIn('Mission mode',t)
             self.assertNotIn('L1',t)
 
@@ -30,7 +44,7 @@ class MissionContractTest(unittest.TestCase):
             self.assertIn(s,t)
 
     def test_no_auto_approval_hook_claim(self):
-        t=(ROOT/'src/skills/mission/references/host-adapter.md').read_text()
+        t=(ROOT/'src/skills/init/references/host-adapter.md').read_text()
         self.assertIn('No auto-go-on-stop hook',t)
         self.assertIn('SDK controller',t)
         self.assertIn('runtime-bridge.md',t)
@@ -38,11 +52,11 @@ class MissionContractTest(unittest.TestCase):
         self.assertIn('AskUserQuestion',t)
 
     def test_platform_mission_files_identical(self):
-        source=ROOT/'src/skills/mission'
+        source=ROOT/'src/skills/init'
         for f in source.rglob('*'):
             if not f.is_file() or f.name=='SKILL.md':continue
             for package in PACKAGES:
-                target=ROOT/package/'mission'/f.relative_to(source)
+                target=ROOT/package/'init'/f.relative_to(source)
                 with self.subTest(path=str(target)):
                     self.assertEqual(f.read_bytes(),target.read_bytes())
 
@@ -55,7 +69,7 @@ class MissionContractTest(unittest.TestCase):
     def test_readmes_link_mission_and_keep_optional_mcp(self):
         for language in ('','_ko'):
             t=(ROOT/f'README{language}.md').read_text()
-            for token in ('/mission','docs/MISSION.md','Context7 MCP','Grep MCP','Optional'):
+            for token in ('/init','docs/MISSION.md','Context7 MCP','Grep MCP','Optional'):
                 self.assertIn(token.lower(),t.lower())
 
     def test_preserved_workflows_are_loaded_and_mirrored(self):
@@ -70,7 +84,7 @@ class MissionContractTest(unittest.TestCase):
         import subprocess
         import sys
         for package in PACKAGES:
-            result=subprocess.run([sys.executable,str(ROOT/package/'mission/scripts/mission_state.py'),'--help'],capture_output=True,text=True)
+            result=subprocess.run([sys.executable,str(ROOT/package/'init/scripts/mission_state.py'),'--help'],capture_output=True,text=True)
             self.assertEqual(result.returncode,0,result.stderr)
 
 

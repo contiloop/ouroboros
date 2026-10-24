@@ -59,7 +59,7 @@ for d in "$SRC"/*/; do [ -d "$d" ] && SKILLS="$SKILLS $(basename "$d")"; done
 claude_tools() {
   case "$1" in
     ready) echo "Read, Edit, Write, Bash, Grep, Glob, Agent, AskUserQuestion, WebSearch, WebFetch, SendMessage" ;;
-    mission) echo "Read, Edit, Write, Bash, Grep, Glob, Agent, SendMessage, AskUserQuestion" ;;
+    init|approve) echo "Read, Edit, Write, Bash, Grep, Glob, Agent, SendMessage, AskUserQuestion" ;;
     go) echo "Read, Edit, Write, Bash, Grep, Glob, Agent, AskUserQuestion, SendMessage" ;;
     migration) echo "Read, Edit, Write, Bash, Grep, Glob, Agent, AskUserQuestion" ;;
   esac
