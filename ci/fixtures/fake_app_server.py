@@ -32,13 +32,15 @@ for line in sys.stdin:
         text = params['input'][0]['text']
         if 'FIXTURE_DISCONNECT' in text: os._exit(9)
         if 'FIXTURE_HANG' in text: continue
-        if 'FIXTURE_PERMISSION' in text or 'FIXTURE_QUESTION' in text:
+        if any(x in text for x in ('FIXTURE_PERMISSION', 'FIXTURE_QUESTION', 'FIXTURE_GIT_ADD')):
             key = 'request-'+t['id']; pending[key] = t
             body = {'threadId':state['id'],'turnId':t['id'],'itemId':'fixture-item'}
             if 'FIXTURE_QUESTION' in text:
                 method = 'item/tool/requestUserInput'; body['questions'] = [{'id':'q1','question':'Fixture question?'}]
             else:
                 method = 'item/commandExecution/requestApproval'; body['command'] = 'fixture command (not executed)'
+                if 'FIXTURE_GIT_ADD' in text:
+                    body.update(command='git add tests/__init__.py', cwd=params['cwd'])
             emit({'id':key,'method':method,'params':body}); continue
         complete(t,notice='FIXTURE_DROP_NOTICE' not in text,status='failed' if 'FIXTURE_FAILURE' in text else 'completed'); continue
     else:

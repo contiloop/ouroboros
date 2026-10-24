@@ -9,7 +9,7 @@
     {
       "name": "ouroboros",
       "description": "Intent-driven development orchestration: mission → ready → go, with evidence at every cycle.",
-      "version": "1.3.8",
+      "version": "1.3.9",
       "author": {
         "name": "contiloop"
       },

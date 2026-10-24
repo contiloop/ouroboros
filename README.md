@@ -136,6 +136,12 @@ It keeps the same L2 host session across turns, records message IDs, relays inpu
 rejects stale Go approvals. Dependencies/authentication are user-managed. Transport tests use
 fixtures, not live models; a delivered message is never treated as completed mission work.
 
+### Scoped L1 tool approvals
+
+After one explicit human grant, L1 may approve matching local staging, commits, file edits or exact verification commands.
+Unmatched requests still go to the human; no sandbox rules are disabled. Existing missions gain no permission automatically.
+See [runtime approval scope](src/skills/mission/references/runtime-permissions.md).
+
 ### Source map
 
 ```text
@@ -179,6 +185,6 @@ The checks are **contract / ledger / package tests**, not proof of live Claude C
 
 Ouroboros builds on the original **Dryforge** project by **prekuter**, distributed under [Apache-2.0](LICENSE). The original source and historical README remain available in [upstream](https://github.com/prekuter/dryforge), [English snapshot](README.upstream.md), and [Korean snapshot](README_ko.upstream.md). This is an independent experimental fork, not an upstream release.
 
-The existing on-disk `.dryforge/` state path is deliberately retained for compatibility with prior cycles; **changing the public product/plugin name does not silently migrate user data**. Upstream historical version `1.3.8` is retained in manifests for now, not presented as an Ouroboros stable release.
+The existing on-disk `.dryforge/` state path is deliberately retained for compatibility with prior cycles; **changing the public product/plugin name does not silently migrate user data**. The package remains experimental; installation is not proof of live multi-agent compatibility.
 
 </details>

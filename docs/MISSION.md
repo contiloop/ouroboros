@@ -111,3 +111,10 @@ fresh review, pause/recovery, budget/stall stops, persistence and five-platform 
 two/three-cycle tests are **not live Claude/Codex runs**. Before unattended use, demonstrate same-ID
 ready/go, actual L3 spawning and review, a relayed question, human-only escalation, L2 reuse and
 replacement, interruption recovery, and mission-level success evidence on the target host.
+
+## Delegated tool decisions
+
+L1 can be the decision provider for local tool permissions as well as cycle specs, within an
+explicit human-approved [runtime policy](../src/skills/mission/references/runtime-permissions.md).
+This uses a `runtime_policy` event and state schema 3. It does not change the active Intent or
+Ready approval. Schema-1/2 ledgers remain readable and human-only until explicitly opted in.

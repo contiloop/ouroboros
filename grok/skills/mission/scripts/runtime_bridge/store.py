@@ -222,7 +222,11 @@ class Store:
             action = response.get('action')
             if r['kind'] == 'permission':
                 require(action in ('allow','deny'),'invalid permission response')
-                require(action != 'allow' or response['principal'] == 'human','tool permission is not delegated by ready approval')
+                # A generic ready approval is still insufficient: validate the separate grant.
+                if action == 'allow' and response['principal'] == 'L1':
+                    from .controller import check_answer
+                    authorization = check_answer(self,wid,rid,response)
+                    self.event(wid,'request.delegation_checked',dict(authorization,request_id=rid,phase='record'))
             else:
                 require(action in ('answer','deny'),'invalid question response')
                 if action == 'answer': require(isinstance(response.get('answers'),dict) and response['answers'],'answers required')
@@ -236,6 +240,12 @@ class Store:
             require(r and r['owner'] == owner,'request ownership changed')
             if r['state'] == 'PENDING': return None
             require(r['state'] == 'ANSWERED','request expired or consumed')
+            response = json.loads(r['response'])
+            if response.get('principal') == 'L1' and response.get('action') != 'deny':
+                from .controller import check_answer
+                authorization = check_answer(self,wid,rid,response)
+                if authorization is not None:
+                    self.event(wid,'request.delegation_checked',dict(authorization,request_id=rid,phase='consume'))
             self.db.execute("UPDATE requests SET state='CONSUMED' WHERE id=?",(rid,))
             if not self.db.execute("SELECT 1 FROM requests WHERE worker=? AND state IN ('PENDING','ANSWERED')",(wid,)).fetchone():
                 self.db.execute("UPDATE workers SET state='RUNNING' WHERE id=?",(wid,))

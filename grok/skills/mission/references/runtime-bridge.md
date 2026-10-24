@@ -55,9 +55,13 @@ basis and action. These are records from a trusted controller, not self-authenti
 
 Claude AskUserQuestion uses `action: answer` plus `answers` keyed by original question text.
 L1 may answer only when the matching active cycle delegates answer; it must still check that the
-content follows the human's intent. Tool callbacks use allow/deny, with **human-only allow** for
-that exact invocation, never new rules or allow-for-session. Generic Ready approval is not a tool
-permission. Already-approved host rules may resolve tools before the callback; no rule is widened.
+content follows the human's intent. Tool callbacks use allow/deny for that exact invocation,
+never new rules or allow-for-session. Generic Ready approval is not a tool permission. An explicit
+human-approved runtime policy may delegate a bounded allow to L1; force-load
+`references/runtime-permissions.md` for this path. `status.pending[].delegation` reports eligibility
+and policy digest, not approval. L1 must inspect the exact request, record its own basis and answer
+as `principal: L1`; do not ask the human again for a matching delegated action. Unknown/out-of-scope
+requests still require the human. Host rules may resolve tools earlier; no host rule is widened.
 
 Codex structured requestUserInput can include app side-effect approvals: conservatively require a
 human response (`action: allow`, `answers` keyed by actual question IDs). Yielded product questions

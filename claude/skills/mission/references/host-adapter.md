@@ -69,3 +69,8 @@ These establish integration surfaces, not a successful test on the user's instal
 acceptance test must show two cycles, at least one L3 implementer and independent reviewer,
 same-ID ready/go, a delegated question, a human-only escalation, reuse then fresh-worker handoff,
 and interruption recovery. Static/unit tests do not prove model compliance or live SDK behavior.
+
+Runtime tool approvals can be scoped to L1 through a human-approved execution-policy attachment.
+See `runtime-permissions.md`. This uses the host's ordinary exact-call allow response, not an
+allow-for-session, exec-policy amendment, network grant or permission bypass. An updated plugin
+cannot replace an already-running controller: reconcile and resume it explicitly on the new code.

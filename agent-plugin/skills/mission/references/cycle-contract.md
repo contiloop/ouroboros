@@ -31,7 +31,9 @@ L1 answers from approved human intent or relays to the human. Send the response 
 worker session. An answer is not a blanket go approval. READY_REVIEW sends the three document
 paths and their combined SHA-256 digest; approval is bound to that digest and cycle. Any rewrite
 invalidates it. The host's ordinary permission prompts are separate from product/spec approval.
-Never answer a tool permission prompt using a generic ready approval.
+Never answer a tool permission prompt using a generic ready approval. A separate human-approved
+runtime policy can authorize L1 to answer that exact tool request; see `runtime-permissions.md`.
+Keep L1 provenance, policy digest, request identity and pre-consumption checks.
 
 If AskUserQuestion is unavailable inside L2, route an equivalent structured request through a
 verified parent-message or external session controller. Do not repeatedly call an unavailable

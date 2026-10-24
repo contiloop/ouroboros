@@ -104,11 +104,20 @@ def _skill_api():
     return module
 
 
+def _runtime_api():
+    path = Path(__file__).with_name('runtime_permissions.py')
+    spec = importlib.util.spec_from_file_location('_ouroboros_runtime_permissions', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def apply(state: dict, event: dict) -> dict:
     """Pure transaction: reject invalid input without changing the supplied state."""
     require(isinstance(state, dict) and type(state.get('schema_version')) is int
-            and state['schema_version'] in (1, 2), 'unsupported state schema')
-    require('extensions' not in state or state['schema_version'] == 2, 'extensions require state schema 2')
+            and state['schema_version'] in (1, 2, 3), 'unsupported state schema')
+    require('extensions' not in state or state['schema_version'] >= 2, 'extensions require state schema 2 or later')
+    require('runtime_authority' not in state or state['schema_version'] == 3, 'runtime authority requires state schema 3')
     require(isinstance(event, dict), 'event must be an object')
     e = copy.deepcopy(event)
     text(e.get('id'), 'event ID')
@@ -128,19 +137,44 @@ def apply(state: dict, event: dict) -> dict:
     require(s['status'] != 'COMPLETE' or op == 'observe', 'mission is complete')
     extension = op.startswith('skill_')
     if s['status'] == 'PAUSED':
-        require(op in {'observe', 'resume', 'abort', 'continue'} or extension, 'mission is paused')
-    if not extension and op not in {'start', 'observe', 'continue'}:
+        require(op in {'observe', 'resume', 'abort', 'continue'} or extension or op == 'runtime_policy', 'mission is paused')
+    if not extension and op not in {'start', 'observe', 'continue', 'runtime_policy'}:
         require(c is not None, 'no active cycle')
         require(e.get('cycle_id') == c['id'], 'event belongs to a different cycle')
         if e['actor'] == 'L2':
             require(e.get('session_id') == c['session_id'], 'L2 session identity changed')
 
-    if extension:
+    if op == 'runtime_policy':
+        # Separate execution authority: may grant/revoke while a tool callback is waiting.
+        # Does not mutate the mission WHAT, approved documents, budgets or active phase.
+        require(e['actor'] == 'human', 'only a human may grant or revoke runtime authority')
+        text(e.get('basis'), 'runtime authority basis')
+        text(e.get('approval_ref'), 'human runtime approval reference')
+        api = _runtime_api()
+        previous = s.get('runtime_authority')
+        require(e.get('expected_policy_digest') == api.fingerprint(previous), 'stale runtime authority')
+        if c is not None:
+            require(e.get('cycle_id') == c['id'], 'runtime authority targets another active cycle')
+        else:
+            require(e.get('cycle_id') is None, 'no active cycle for this authority event')
+        require('policy' in e, 'runtime_policy needs explicit policy or null')
+        policy = e['policy']
+        if policy is not None:
+            try:
+                api.validate_policy(policy)
+            except api.PolicyError as exc:
+                raise ContractError(str(exc)) from exc
+        s['runtime_authority'] = dict(version=1, revision=(previous or {}).get('revision', 0) + 1,
+            mission_id=s['contract']['mission_id'], workspace=s['contract']['workspace'],
+            policy=copy.deepcopy(policy), approved_by='human', approval_ref=e['approval_ref'],
+            event_id=e['id'])
+        s['schema_version'] = 3  # Older runtimes reject instead of losing/reinterpreting grants.
+    elif extension:
         api = _skill_api()
         try:
             api.require(op in api.OPERATIONS, 'unknown skill operation')
             api.transition(s, e, init_state)
-            s['schema_version'] = 2  # Old runtimes fail closed instead of skipping pending extensions.
+            s['schema_version'] = max(2, s['schema_version'])  # Old runtimes fail closed instead of skipping pending extensions.
         except api.ContractError as exc:
             raise ContractError(str(exc)) from exc
     elif op == 'start':
@@ -326,7 +360,8 @@ def main() -> int:
         else: s=json.loads(args.state.read_text(encoding='utf-8'))
         print(json.dumps(dict(schema_version=s['schema_version'],status=s['status'],revision=s['revision'],cycle=s['cycle'],
                               completed_cycles=len(s['cycles']),stalled=s['stalled'],
-                              extensions=_extension_summary(s)),ensure_ascii=False,indent=2))
+                              extensions=_extension_summary(s),
+                              runtime_policy_digest=_runtime_api().fingerprint(s.get('runtime_authority'))),ensure_ascii=False,indent=2))
         return 0
     except (ContractError,OSError,ValueError,KeyError,TypeError) as exc:
         print(f'BLOCKED: {exc}',file=sys.stderr);return 2

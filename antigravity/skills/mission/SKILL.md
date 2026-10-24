@@ -12,7 +12,7 @@ description: >
 Reply in the user's language. This is an opt-in experimental extension; ordinary ready/go usage
 is unchanged. Force-load `references/intent-contract.md`, `references/cycle-contract.md`, and
 `references/host-adapter.md` before delegation. The executable ledger is
-`scripts/mission_state.py`; it validates transitions, not model behavior or tool permissions.
+`scripts/mission_state.py`; it validates transitions and recorded delegation, not model behavior or human identity.
 
 ## Three levels, different lifetimes
 
@@ -37,7 +37,11 @@ finite execution limits. Preserve exact decision excerpts or transcript referenc
 paraphrase claiming to understand the user. Never infer permission to merge, deploy, spend money,
 expose private data, or destroy state from a general request to finish the project.
 
-The human approves the contract before any cycle. Store it and the decision ledger under
+The human approves the contract before any cycle. At that initial conversation, offer scoped
+runtime-tool delegation only when useful: load `references/runtime-permissions.md`. A human may
+approve the intent and the execution-policy attachment together; record each separately. Within
+that explicit scope L1 is the decision provider for L2/L3, whether the caller is human or AI.
+Keep actual principal `L1` in the audit trail. Outside scope, ask the human; never self-grant. Store it and the decision ledger under
 `.dryforge/mission/`, outside tracked project documentation. Ensure `.dryforge/` is ignored.
 Use `scripts/mission_state.py init` to initialize a ledger when Python 3 is available; otherwise
 pause for an explicit compatible runtime, not an untracked autonomous loop.

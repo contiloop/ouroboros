@@ -299,6 +299,38 @@ class CliTests(unittest.TestCase):
         answer['principal']='human';p.write_text(json.dumps(answer));self.call('answer','--request-id',r['id'],'--response-file',str(p))
         self.assertEqual(self.call('wait','--id','m','--timeout','5')['message']['state'],'TURN_COMPLETE')
         self.call('stop');self.state({'STOPPED'})
+    def test_delegated_git_callback_real_cli_roundtrip(self):
+        # Real controller/SQLite/CLI, deterministic non-model host; consent is a fixture.
+        sid=self.start()['session_id']
+        target=self.project/'tests/__init__.py';target.parent.mkdir();target.write_text('')
+        docs=self.project/'.dryforge'
+        for name in ('spec.md','plan.md','handoff.md'):(docs/name).write_text(name)
+        state_path=docs/'mission/state.json'
+        contract=dict(mission_id='delegate-fixture',goal='fixture',workspace=str(self.project),
+                      success_criteria=['fixture'],constraints=[],human_only=[],delegated_actions=['answer'],
+                      max_cycles=2,max_stalled_cycles=2,approved_by='human',approval_ref='FIXTURE-NOT-REAL-CONSENT')
+        s=mission_state.init_state(contract);d=mission_state.document_digest(docs)
+        s['cycle']=dict(id='c1',session_id=sid,stage='GO',pending={},digest=d,approved_digest=d)
+        policy=dict(version=1,operations=['git_add'],paths=['tests'],verification_commands=[],trust_workspace_code=True)
+        s=mission_state.apply(s,dict(id='grant',op='runtime_policy',actor='human',mission_id='delegate-fixture',
+             cycle_id='c1',expected_revision=0,expected_policy_digest=digest(None),policy=policy,
+             approval_ref='FIXTURE-GRANT',basis='fixture local Git delegation'))
+        state_path.write_text(json.dumps(s));prompt=self.root/'task.txt';prompt.write_text('FIXTURE_GIT_ADD')
+        self.call('send','--id','delegated','--kind','message','--ledger',str(state_path),'--cycle','c1','--text-file',str(prompt))
+        req=self.state({'WAITING'})['pending'][0]
+        self.assertTrue(req['delegation']['eligible'])
+        response=dict(principal='L1',action='allow',basis='fixture approved scope',session_id=sid,
+                      request_digest=req['fingerprint'],policy_digest=req['delegation']['policy_digest'])
+        response_path=self.root/'response.json';response_path.write_text(json.dumps(response))
+        self.call('answer','--request-id',req['id'],'--response-file',str(response_path))
+        result=self.call('wait','--id','delegated','--timeout','5')['message']
+        self.assertEqual(result['state'],'TURN_COMPLETE')
+        self.assertEqual(result['session_id'],sid)
+        self.assertIn('accept',result['result']['text'])
+        events=self.call('events','--full')['events']
+        self.assertTrue(any(e['kind']=='request.delegation_checked' and e['body']['phase']=='consume' for e in events))
+        self.call('stop');self.state({'STOPPED'})
+
     def test_cli_idempotent_after_result(self):
         self.start();self.send('m','hello');self.call('wait','--id','m','--timeout','5')
         self.assertEqual(self.send('m','hello')['state'],'TURN_COMPLETE')
