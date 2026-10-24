@@ -43,8 +43,11 @@ The human approves the contract before any cycle. At that initial conversation, 
 runtime-tool delegation only when useful: load `references/runtime-permissions.md`. A human may
 approve the intent and the execution-policy attachment together; record each separately. Within
 that explicit scope L1 is the decision provider for L2/L3, whether the caller is human or AI.
-Keep actual principal `L1` in the audit trail. Outside scope, ask the human; never self-grant. Store it and the decision ledger under
-`.dryforge/mission/`, outside tracked project documentation. Ensure `.dryforge/` is ignored.
+Keep actual principal `L1` in the audit trail. Outside scope, ask the human; never self-grant. A
+worktree is within delegated scope only with a separately approved policy v2 `go_worktrees` grant
+and verified registration under the mission's `.dryforge/worktrees/` pool. Store the contract and
+decision ledger under `.dryforge/mission/`, outside tracked project documentation. Ensure
+`.dryforge/` is ignored.
 Use `scripts/mission_state.py init` to initialize a ledger when Python 3 is available; otherwise
 pause for an explicit compatible runtime, not an untracked autonomous loop.
 

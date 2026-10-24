@@ -199,3 +199,24 @@ reconcile the host/files/children, and explicitly resume the SAME host session o
 code. Old callbacks expire; never replay an uncertain command without checking its effects.
 An unchanged local checkout path must not be deleted while the controller is active. Installing
 in a new plugin-cache version requires using the corresponding new script, not the old cached CLI.
+
+### Delegating verified Go worktree operations (v1.3.10)
+
+When Go's task implementer is checked out in `.dryforge/worktrees/T1`, Codex reports that
+worktree as the command's `cwd`, while Git stores its index in the parent repository's
+`.git/worktrees/<name>/index` rather than `.git/index`. Delegated `git add`, `git commit -m`,
+file edits and exact approved test commands now recognize this case **only** for registered task
+worktrees tied to the mission repository. The exact workspace, operation and worktree ID are
+recorded at both authorization and consumption; a changed commit index is rejected.
+
+The earlier v1 policy was deliberately base-only. It does not silently gain worktree authority
+when v1.3.10 is installed. A human must explicitly authorize a **version 2** policy with
+`"go_worktrees": true` and the same bounded operations and paths, using a new `runtime_policy`
+event. See [scoped policy example](../src/skills/mission/references/runtime-permissions.md).
+L1 may then approve exact Go worktree operations independently within that grant. An existing
+denied request is NOT automatically retried: reconcile the worktree first and have Codex issue a
+new request in the same L2 session. In-flight callbacks expire across controller replacement.
+
+This release does NOT automatically authorize `git worktree add/remove`, merging task branches,
+rebase or force operations. Those still require a separate human decision or future bounded policy.
+Likewise, worktree support is not an end-to-end live Mission acceptance claim.

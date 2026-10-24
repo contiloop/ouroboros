@@ -12,15 +12,16 @@ approve this attachment together with the initial mission contract; the two reco
 mean two user interruptions. Existing missions stay human-only until a grant is actually recorded.
 Do not infer execution powers from `approve_ready`, a generic "build it", or a worker's request.
 
-Example policy (illustrative, not consent):
+Example policy including Go-managed task worktrees (illustrative, **not consent**):
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "operations": ["git_add", "git_commit", "workspace_edit", "verify"],
   "paths": ["memo_cli", "tests"],
   "verification_commands": [["python3", "-m", "unittest", "discover", "-s", "tests"]],
-  "trust_workspace_code": true
+  "trust_workspace_code": true,
+  "go_worktrees": true
 }
 ```
 
@@ -29,6 +30,13 @@ The effective workspace is the mission's pinned Git root. `paths` are literal re
 not globs. `.` may be chosen explicitly, but protected metadata remains excluded. A permission
 policy is a maximum scope, not proof that every matching operation serves the user's goal: L1
 must inspect the exact request and decide whether it is warranted by the approved spec.
+
+**Existing policy v1 stays base-repository-only.** It does NOT silently receive worktree
+permissions when a plugin is updated. Version 2 requires an explicit boolean `go_worktrees`:
+use `true` only after the human approves L1 deciding within the *same* paths and operations in
+verified Go task worktrees; `false` denies them. Updating an existing live Mission requires a
+new human `runtime_policy` event with the revised object and the current authority digest.
+This changes execution scope, not Mission Intent or Ready approval.
 
 `trust_workspace_code` is an explicit acknowledgement, not a security check. Git can run configured
 filters/hooks; tests and package scripts execute project code and may have side effects. An exact
@@ -40,15 +48,29 @@ This same-user runtime cannot sandbox malicious L1/L2 code or authenticate a JSO
 
 | Operation | Boundary |
 | --- | --- |
-| `git_add` | Existing explicit files within approved paths; optional `--`; no bulk `.`, globs, force, options, deletions or pathspec magic. |
-| `git_commit` | Only `git commit -m <message>`; every staged path must be an allowed addition/modification. No amend, deletion, signing/config flags, rebase or merge. |
+| `git_add` | Existing explicit files within approved paths; optional `--`; no bulk `.`, globs, force, options, deletions or pathspec magic. Works at the base or a verified Go task worktree root if v2 opted in. |
+| `git_commit` | Only `git commit -m <message>`; every staged path must be an allowed addition/modification in the **effective worktree index**. No amend, deletion, signing/config flags, rebase or merge. |
 | `workspace_edit` | Claude Write/Edit/MultiEdit with an absolute path, or Codex file changes re-read from the exact host item; add/update only, no move/delete. |
 | `verify` | Exact approved argv from recognized unittest/pytest/compileall or package-test entrypoints, in the workspace root. No arbitrary shell, install, publish or interpreter `-c`. |
 
-Command callbacks require a host-observed workspace-root cwd, or explicit `git -C /absolute/root`.
+Command callbacks require the host-observed root cwd (base or eligible worktree), or explicit
+`git -C /absolute/root` selecting that exact root.
 Claude Bash lacks trusted cwd in the callback: use explicit `git -C` for delegated Git, otherwise
 ask the human. A simple known shell `-c`/`-lc` wrapper is accepted, not command chains/expansion.
-Linked worktrees/alternate Git metadata need a separate human decision in this first policy version.
+An eligible worktree must be a **direct named child** of
+`<mission-workspace>/.dryforge/worktrees/<task-id>`, have a regular `.git` pointer to an entry
+under the pinned repository's `.git/worktrees`, have a matching reverse pointer, report the
+expected common Git directory, and appear in the parent's registered `git worktree list`.
+Names alone and nested/foreign worktrees are not enough. The same relative path grants apply
+*inside* each registered task worktree, never to `.dryforge` metadata itself. Host requests
+mixing multiple worktrees/base roots are not delegated. Permission logs record which actual
+worktree was authorized; L1 still assesses the task's reason for making the change.
+
+This grants **Git staging and local commits within already registered task worktrees**;
+`git worktree add/remove`, `git merge`, rebase, base-branch integration and destructive Git
+operations are NOT automatically delegated. Go may still need a human decision for those
+operations until separately reviewed, bounded policies exist. Never treat this fix as proof
+of a fully unattended Go workflow.
 Metadata `.git`, `.dryforge`, `.claude`, `.codex`, `.agents`, symlinks and parent traversal are not
 ordinary file-write grants. Git's own index/commit updates are permitted only through matching Git
 commands, never arbitrary writes into `.git`. Network/permission expansion, tool elicitation and
@@ -101,6 +123,9 @@ exec-policy/network amendments, bypass modes or persistent permission updates.
 The runtime checks the active mission/cycle/session, unchanged intent, approved document digest,
 no unresolved decision, current grant and exact host operation both at answer storage and just
 before consumption. Revocation/stale scope denies the callback instead of forwarding an old allow.
+For delegated Git commits, the effective worktree index digest and observed operation must also
+match the snapshot recorded when L1 allowed the request. This stops a newly staged in-scope file
+from quietly changing an already-authorized commit (a previously missing check).
 `request.delegation_checked` audit events name the grant, operation, paths/argv and record/consume
 phase; `request.answered` preserves principal and basis. Delivery/approval still does not prove
 execution success. A local same-user filesystem can change after a check: these guards are not a
