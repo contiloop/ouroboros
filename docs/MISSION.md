@@ -43,8 +43,8 @@ Use this fork's generated plugin package. In Claude Code:
 1. `/ouroboros:init` — open the conversation, refine intent and review the proposed delegation.
 2. `/ouroboros:approve` — approve the current reviewed proposal and hand cycle management to L1.
 
-In Codex explicitly select `$init`, then `$approve`, from this plugin once available. The old
-`mission` skill is no longer shipped. Ordinary `$ready`/`$go` remain available for a manually
+In Codex explicitly select `$ouroboros:init`, then `$ouroboros:approve`, from this plugin once available. The old
+`mission` skill is no longer shipped. Ordinary `$ouroboros:ready`/`$ouroboros:go` remain available for a manually
 supervised single cycle. Internal `.dryforge/mission/` records are retained; do not reset old runs.
 
 Example: “Build a local memo CLI; help me work out what it should do.” Discuss the requirements
