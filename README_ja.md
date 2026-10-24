@@ -5,7 +5,7 @@
 ### 意図を保ち、開発サイクルをつなぐ。
 
 **ユーザーの意図を軸にした3階層の開発ハーネス**  
-`mission → ready → go`、検証を通して次のサイクルへ。
+`init → approve → (ready → go)*`、検証を通して次のサイクルへ。
 
 [English](README.md) · [한국어](README_ko.md) · [Mission guide](docs/MISSION.md)
 
@@ -32,3 +32,5 @@ Grep MCP / Context7 MCP の導入は**任意（Optional）**です。[MCP 設定
 Ouroboros は prekuter による [Dryforge](https://github.com/prekuter/dryforge) を元にしています。ライセンスは [Apache-2.0](LICENSE) です。旧 `.dryforge/` ステートパスは互換性のため維持します。
 
 </details>
+
+`/ouroboros:init` で対話を始め、意図と委任範囲を整理します。`/ouroboros:approve` で確認済みの内容を承認すると、L1 が Ready/Go の反復を担当します。実行中も対話は続けられます。

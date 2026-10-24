@@ -5,7 +5,7 @@
 ### 保留意图，让开发循环前进。
 
 **以用户意图为中心的三层开发 Harness**  
-`mission → ready → go`，每个周期都以实际证据推动下一步。
+`init → approve → (ready → go)*`，每个周期都以实际证据推动下一步。
 
 [English](README.md) · [한국어](README_ko.md) · [Mission guide](docs/MISSION.md)
 
@@ -32,3 +32,5 @@ Grep MCP 与 Context7 MCP **推荐但非必需（Optional）**：[MCP 设置](do
 Ouroboros 基于 prekuter 的 [Dryforge](https://github.com/prekuter/dryforge)，并保留 [Apache-2.0](LICENSE) 许可证。原 `.dryforge/` 状态路径为了兼容旧项目而保留。
 
 </details>
+
+用 `/ouroboros:init` 开始对话，完善目标和委托范围；用 `/ouroboros:approve` 批准已审阅的方案后，由 L1 负责 Ready/Go 循环。执行期间仍可继续与 L1 对话。

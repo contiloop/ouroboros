@@ -15,7 +15,7 @@ import test_mission_state as fixture
 m = fixture.m
 contract = fixture.contract
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / 'src/skills/mission/scripts/skill_contract.py'
+SCRIPT = ROOT / 'src/skills/init/scripts/skill_contract.py'
 
 
 def load_api():
@@ -282,7 +282,7 @@ class SkillInterfaceTest(unittest.TestCase):
             path=Path(directory)/'state.json'
             req=self.request();self.result(req,payload={'secret_note':'PRIVATE_PAYLOAD_EXAMPLE'})
             path.write_text(json.dumps(self.s))
-            proc=subprocess.run([sys.executable,str(ROOT/'src/skills/mission/scripts/mission_state.py'),
+            proc=subprocess.run([sys.executable,str(ROOT/'src/skills/init/scripts/mission_state.py'),
                                  'show','--state',str(path)],text=True,capture_output=True)
             self.assertEqual(proc.returncode,0,proc.stderr)
             self.assertNotIn('PRIVATE_PAYLOAD_EXAMPLE',proc.stdout)

@@ -20,7 +20,7 @@ Claude needs the optional SDK. Install it explicitly in a Python environment you
 ```sh
 python3 -m venv ~/.venvs/ouroboros-runtime
 ~/.venvs/ouroboros-runtime/bin/python -m pip install \
-  -r ~/ouroboros/claude/skills/mission/scripts/runtime-requirements.txt
+  -r ~/ouroboros/claude/skills/init/scripts/runtime-requirements.txt
 ```
 
 Codex uses the Python standard library and an already installed/configured `codex` command.
@@ -28,7 +28,7 @@ The SDK pin is the inspected release, not a promise every host configuration has
 
 ```sh
 PY="$HOME/.venvs/ouroboros-runtime/bin/python"  # python3 is enough for Codex
-BRIDGE="$HOME/ouroboros/claude/skills/mission/scripts/worker_runtime.py"
+BRIDGE="$HOME/ouroboros/claude/skills/init/scripts/worker_runtime.py"
 PROJECT="/absolute/path/to/your/test-project"
 
 "$PY" "$BRIDGE" doctor --backend claude
@@ -50,7 +50,7 @@ Keep the Python environment and plugin checkout available while the controller r
 
 ## L1 integration
 
-The Mission skill loads [runtime-bridge.md](../src/skills/mission/references/runtime-bridge.md) only
+The Mission skill loads [runtime-bridge.md](../src/skills/init/references/runtime-bridge.md) only
 when this execution path is selected. Give L1 the Python executable, bridge path and workspace.
 L1 uses its ordinary shell tool for start/status/send/wait/answer, under existing host permissions.
 No listener or extra model supervisor is required.
@@ -116,7 +116,7 @@ This example is not approval. Claude questions use `action: answer` plus `answer
 question text. L1 may answer only with explicit delegation and must preserve the decision in the
 mission ledger. Tool permission allow is exact-call only. It defaults to human review; with a
 separately human-approved runtime policy, L1 may approve matching local operations. See
-[delegated runtime approvals](../src/skills/mission/references/runtime-permissions.md) for the
+[delegated runtime approvals](../src/skills/init/references/runtime-permissions.md) for the
 policy shape, grant/revoke events, eligibility hints and audit fields. Codex requestUserInput uses
 `action: answer` and an `answers` map keyed by actual question IDs. The same contract-bound L1
 question authority applies as for Claude; human-only or out-of-intent decisions still go to the human. Permission expansion/MCP elicitation are declined, not silently supported.
@@ -211,7 +211,7 @@ recorded at both authorization and consumption; a changed commit index is reject
 The earlier v1 policy was deliberately base-only. It does not silently gain worktree authority
 when v1.3.10 is installed. A human must explicitly authorize a **version 2** policy with
 `"go_worktrees": true` and the same bounded operations and paths, using a new `runtime_policy`
-event. See [scoped policy example](../src/skills/mission/references/runtime-permissions.md).
+event. See [scoped policy example](../src/skills/init/references/runtime-permissions.md).
 L1 may then approve exact Go worktree operations independently within that grant. An existing
 denied request is NOT automatically retried: reconcile the worktree first and have Codex issue a
 new request in the same L2 session. In-flight callbacks expire across controller replacement.
@@ -232,7 +232,7 @@ existing limits rather than requesting extra model turns. This behavior needs li
 in addition to deterministic protocol tests; Claude child lifecycle is not certified here.
 
 Policy v3 can explicitly delegate local Go worktree creation, scoped task integration and safe
-cleanup. See the [exact commands and state guards](../src/skills/mission/references/runtime-permissions.md).
+cleanup. See the [exact commands and state guards](../src/skills/init/references/runtime-permissions.md).
 Existing v1/v2 grants remain unchanged. Cleanup refuses ignored evidence as well as ordinary
 untracked files; force removal is never delegated. Python `-B -m unittest` is recognized only when
 that exact argv appears in the human-approved policy.

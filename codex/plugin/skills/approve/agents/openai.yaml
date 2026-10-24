@@ -1,0 +1,7 @@
+interface:
+  display_name: "Ouroboros approve"
+  short_description: "Hand the reviewed intent to L1."
+  default_prompt: "Use Ouroboros approve to activate the reviewed proposal and manage Ready/Go cycles."
+
+policy:
+  allow_implicit_invocation: false

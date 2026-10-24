@@ -1,0 +1,7 @@
+interface:
+  display_name: "Ouroboros init"
+  short_description: "Discuss and refine intent before execution."
+  default_prompt: "Use Ouroboros init to understand my intent and prepare a proposal for approval."
+
+policy:
+  allow_implicit_invocation: false
