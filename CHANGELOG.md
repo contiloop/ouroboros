@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.3.10 (2026-10-24) — bounded Go worktree permissions
+
+- Add a separately human-approved `go_worktrees` opt-in under runtime policy version 2;
+  existing version-1 grants remain base-only and cannot silently expand on upgrade.
+- Permit scoped Git staging, local commits, file edits and exact verification commands from
+  registered `.dryforge/worktrees/<task-id>` checkouts of the approved repository.
+- Validate Git's worktree registry, linked `.git` pointer, common metadata and effective index;
+  reject foreign checkout, traversal, symlink, unapproved paths and dangerous commands.
+- Bind delegated callback consumption to the **same reviewed operation and index digest**, fixing
+  a record/consume gap where an additional in-scope file could be staged after an L1 approval.
+- Keep worktree creation, removal, task-branch merging and remote/destructive commands human-only;
+  real model end-to-end behavior remains unverified.
+
 ## v1.3.9 (2026-10-24) — experimental scoped delegation
 
 - Let L1 approve exact local tool requests within an explicitly human-approved runtime policy.

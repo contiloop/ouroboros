@@ -245,6 +245,18 @@ class Store:
                 from .controller import check_answer
                 authorization = check_answer(self,wid,rid,response)
                 if authorization is not None:
+                    # The permission must still describe the SAME observed action
+                    # and Git index that L1 reviewed. Revalidating scope alone is
+                    # insufficient if a different in-scope file was staged later.
+                    prior = None
+                    for row in self.db.execute("SELECT body FROM events WHERE worker=? AND kind='request.delegation_checked' ORDER BY seq DESC",
+                                               (wid,)):
+                        value = json.loads(row['body'])
+                        if value.get('request_id') == rid and value.get('phase') == 'record':
+                            prior = {k:v for k,v in value.items() if k not in ('request_id','phase')}
+                            break
+                    require(prior is not None and prior == authorization,
+                            'delegated operation/index changed since L1 approved it')
                     self.event(wid,'request.delegation_checked',dict(authorization,request_id=rid,phase='consume'))
             self.db.execute("UPDATE requests SET state='CONSUMED' WHERE id=?",(rid,))
             if not self.db.execute("SELECT 1 FROM requests WHERE worker=? AND state IN ('PENDING','ANSWERED')",(wid,)).fetchone():

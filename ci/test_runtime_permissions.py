@@ -22,6 +22,11 @@ def grant():
             'trust_workspace_code': True}
 
 
+def worktree_grant():
+    # Version 1 grants intentionally DO NOT gain worktree rights on upgrade.
+    return dict(grant(), version=2, go_worktrees=True)
+
+
 class DelegationTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(); self.root = Path(self.tmp.name).resolve()
@@ -73,6 +78,117 @@ class DelegationTests(unittest.TestCase):
         self.store.answer('w',rid,a)
         self.assertEqual(self.store.take_answer('w','owner',rid)['principal'],'L1')
         return rid
+
+    def worktree(self, name='T1'):
+        subprocess.run(['git','-C',str(self.root),'add','memo_cli/__init__.py','tests/__init__.py'],
+                       check=True, capture_output=True)
+        subprocess.run(['git','-C',str(self.root),'-c','user.name=Fixture',
+                        '-c','user.email=fixture@example.invalid','commit','-qm','test base'],
+                       check=True,capture_output=True)
+        wt = self.root/'.dryforge/worktrees'/name
+        wt.parent.mkdir(parents=True, exist_ok=True)
+        subprocess.run(['git','-C',str(self.root),'worktree','add','-q','-b','task-'+name,
+                        str(wt),'HEAD'],check=True,capture_output=True)
+        return wt
+
+    def host_request(self, cwd, command):
+        return {'method':'item/commandExecution/requestApproval',
+                'params':{'cwd':str(cwd),'command':command,'threadId':'sid',
+                          'turnId':'turn-1','itemId':'item-1'}}
+
+    def test_v1_or_v2_disabled_does_not_silently_gain_worktree_rights(self):
+        wt=self.worktree()
+        (wt/'tests/new.py').write_text('test = 1\n')
+        payload=self.host_request(wt,'git add tests/new.py')
+        for g in (grant(),dict(worktree_grant(),go_worktrees=False)):
+            with self.subTest(version=g['version']):
+                self.event(g)
+                rid,r,a=self.request(payload=payload)
+                with self.assertRaises(BridgeError): self.store.answer('w',rid,a)
+
+    def test_real_t1_worktree_add_commit_and_same_id_audit(self):
+        wt=self.worktree()
+        for name in ('memo_cli/domain.py','memo_cli/repository.py','memo_cli/storage.py',
+                     'tests/test_storage.py'):
+            (wt/name).write_text('verified_fixture = True\n')
+        self.event(worktree_grant())
+        cmd='git add memo_cli/domain.py memo_cli/repository.py memo_cli/storage.py tests/test_storage.py'
+        payload=self.host_request(wt,"/bin/zsh -lc '"+cmd+"'")
+        rid,r,a=self.request(payload=payload)
+        self.assertEqual(delegation_for(self.store,'w',r)['worktree'],str(wt))
+        self.store.answer('w',rid,a)
+        self.store.take_answer('w','owner',rid)
+        self.assertEqual(self.store.events('w')[-1]['kind'],'request.consumed')
+        self.assertEqual([x['body']['worktree'] for x in self.store.events('w')
+                          if x['kind']=='request.delegation_checked'][-2:], [str(wt),str(wt)])
+        # A real host would execute the approved command; the policy never runs it itself.
+        subprocess.run(['git','-C',str(wt),'add','memo_cli/domain.py','memo_cli/repository.py',
+                        'memo_cli/storage.py','tests/test_storage.py'],check=True)
+        rid,r,a=self.request(payload=self.host_request(wt,'git commit -m "Implement T1"'))
+        self.store.answer('w',rid,a)
+        commit_audit=[x['body'] for x in self.store.events('w')
+                      if x['kind']=='request.delegation_checked' and x['body']['operation']=='git_commit']
+        self.assertEqual(commit_audit[-1]['worktree'],str(wt))
+        self.assertIsNotNone(commit_audit[-1]['index_digest'])
+        self.store.take_answer('w','owner',rid)
+        self.assertNotEqual(policy._git_path(wt,'index'),self.root/'.git/index')
+
+    def test_go_worktree_file_write_and_verification(self):
+        wt=self.worktree();self.event(worktree_grant())
+        self.allow(payload={'tool':'Write','input':{'file_path':str(wt/'tests/new.py'),'content':'x'}})
+        self.allow(payload={'method':'item/fileChange/requestApproval',
+                    'observed_changes':[{'kind':{'type':'add'},'path':str(wt/'memo_cli/new.py')}],
+                    'params':{}})
+        self.allow(payload=self.host_request(wt,'python3 -m unittest discover -s tests'))
+        self.allow(payload={'tool':'Bash','input':{'command':f'git -C {wt} add tests/__init__.py'}})
+
+    def test_worktree_scope_escape_and_unknown_git_commands_rejected(self):
+        wt=self.worktree();self.event(worktree_grant())
+        (wt/'tests/link').symlink_to(self.root)
+        (wt/'secret.txt').write_text('secret')
+        for cmd in ('git add .','git add -A','git add ../tests/__init__.py',
+                    'git add tests/link/out','git add secret.txt',
+                    'git push origin main','git merge main','git worktree remove T1',
+                    'git add tests/__init__.py && git push origin main'):
+            with self.subTest(cmd=cmd):
+                rid,r,a=self.request(payload=self.host_request(wt,cmd))
+                with self.assertRaises(BridgeError):self.store.answer('w',rid,a)
+        for bad in (wt/'tests',self.root/'.dryforge/worktrees',self.root/'.git'):
+            with self.subTest(cwd=str(bad)):
+                rid,r,a=self.request(payload=self.host_request(bad,'git add tests/__init__.py'))
+                with self.assertRaises(BridgeError):self.store.answer('w',rid,a)
+
+    def test_fake_worktree_or_other_repo_not_delegated(self):
+        self.event(worktree_grant())
+        fake=self.root/'.dryforge/worktrees/FAKE'
+        fake.mkdir(parents=True)
+        (fake/'.git').write_text('gitdir: /tmp/another/.git/worktrees/FAKE\n')
+        rid,r,a=self.request(payload=self.host_request(fake,'git add tests/__init__.py'))
+        with self.assertRaises(BridgeError):self.store.answer('w',rid,a)
+        other=self.root/'independent'
+        subprocess.run(['git','init','-q',str(other)],check=True)
+        rid,r,a=self.request(payload=self.host_request(other,'git add tests/__init__.py'))
+        with self.assertRaises(BridgeError):self.store.answer('w',rid,a)
+
+    def test_worktree_git_pointer_change_rejected_before_callback_consumption(self):
+        wt=self.worktree();self.event(worktree_grant())
+        (wt/'tests/new.py').write_text('x')
+        rid,r,a=self.request(payload=self.host_request(wt,'git add tests/new.py'))
+        self.store.answer('w',rid,a)
+        original=(wt/'.git').read_text()
+        (wt/'.git').write_text('gitdir: /tmp/impostor/.git/worktrees/T1\n')
+        with self.assertRaises(BridgeError):self.store.take_answer('w','owner',rid)
+        (wt/'.git').write_text(original)
+
+    def test_worktree_commit_index_revalidated_at_consumption(self):
+        wt=self.worktree();self.event(worktree_grant())
+        (wt/'tests/new.py').write_text('x')
+        subprocess.run(['git','-C',str(wt),'add','tests/new.py'],check=True)
+        rid,r,a=self.request(payload=self.host_request(wt,'git commit -m "T1"'))
+        self.store.answer('w',rid,a)
+        (wt/'memo_cli/domain.py').write_text('more')
+        subprocess.run(['git','-C',str(wt),'add','memo_cli/domain.py'],check=True)
+        with self.assertRaises(BridgeError):self.store.take_answer('w','owner',rid)
 
     def test_old_mission_does_not_gain_authority(self):
         rid,r,a=self.request()
