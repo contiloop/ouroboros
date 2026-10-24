@@ -225,6 +225,19 @@ class CodexAdapter:
             answers = r.get('answers',{})
             require(set(answers) == {q['id'] for q in p.get('questions',[])},'answer keys do not match Codex question IDs')
             return {'answers':{k:{'answers':v if isinstance(v,list) else [v]} for k,v in answers.items()}}
+        if method == 'item/fileChange/requestApproval':
+            # Request callbacks may omit paths. Re-read the exact host item, never infer
+            # scope from the reason string or model-provided prose.
+            try:
+                thread = (await self.rpc.call('thread/read',{'threadId':target,'includeTurns':True}))['thread']
+                require(thread.get('id') == target,'file-change read-back thread mismatch')
+                for turn in thread.get('turns',[]):
+                    if turn.get('id') != p.get('turnId'): continue
+                    for item in turn.get('items',[]):
+                        if item.get('id') == p.get('itemId') and item.get('type') == 'fileChange' and item.get('status') == 'inProgress':
+                            payload['observed_changes'] = item.get('changes')
+            except (BridgeError,KeyError,TypeError):
+                pass  # Human route remains available; L1 cannot infer missing scope.
         if method in ('item/commandExecution/requestApproval','item/fileChange/requestApproval'):
             r = await self.relay('permission',payload)
             return {'decision':'accept' if r['action'] == 'allow' else 'decline'}

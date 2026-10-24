@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.3.9 (2026-10-24) — experimental scoped delegation
+
+- Let L1 approve exact local tool requests within an explicitly human-approved runtime policy.
+- Validate paths, exact verification argv, active Go/doc/session identity and policy version at
+  response recording and consumption. Preserve human provenance for grants and L1 provenance
+  for decisions; old missions remain human-only until opted in.
+- Add human-only grant/revoke events without changing the current mission goal, documents or
+  budgets. State schema 3 preserves this authority across optional skill-interface events.
+- Unknown commands, remote/destructive operations and permission expansion remain human-only.
+- Include real Git/SQLite and mock-host CLI tests; live model behavior remains unverified.
+- Bump plugin cache identity; restart/reconcile active controllers rather than silently hot-reload.
+
 ## Unreleased — experimental fork mission extension
 
 - Add optional persistent Claude SDK / Codex App Server workers, durable local messaging and

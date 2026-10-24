@@ -114,7 +114,10 @@ a private response file and calls `answer --request-id ... --response-file ...`.
 
 This example is not approval. Claude questions use `action: answer` plus `answers` keyed by original
 question text. L1 may answer only with explicit delegation and must preserve the decision in the
-mission ledger. Tool permission allow is human-only and exact-call only. Codex requestUserInput can
+mission ledger. Tool permission allow is exact-call only. It defaults to human review; with a
+separately human-approved runtime policy, L1 may approve matching local operations. See
+[delegated runtime approvals](../src/skills/mission/references/runtime-permissions.md) for the
+policy shape, grant/revoke events, eligibility hints and audit fields. Codex requestUserInput can
 also authorize app side effects; this adapter conservatively requires a human decision and an
 `answers` map keyed by actual question IDs. L1 can answer ordinary yielded product questions via
 ledger-bound messages. Permission expansion/MCP elicitation are declined, not silently supported.
@@ -186,3 +189,13 @@ This is original code using official interfaces, not vendored third-party bridge
 - [claude-bridge](https://github.com/michalekz/claude-bridge): stable addressing and durable messages
 - [codex-bridge](https://github.com/shadohead/codex-bridge): state-driven waits and explicit thread reuse
 - [Agent Bridge](https://github.com/creatornader/agent-bridge): delivery acknowledgment is not task completion
+
+## Updating an existing test session
+
+Installing the updated plugin does not grant execution authority to an old mission. Ask the human
+once for the actual scope, then record a `runtime_policy` event; do not rewrite the mission goal or
+fabricate approval. A live controller continues using the code it imported at startup. Stop it,
+reconcile the host/files/children, and explicitly resume the SAME host session on the updated
+code. Old callbacks expire; never replay an uncertain command without checking its effects.
+An unchanged local checkout path must not be deleted while the controller is active. Installing
+in a new plugin-cache version requires using the corresponding new script, not the old cached CLI.

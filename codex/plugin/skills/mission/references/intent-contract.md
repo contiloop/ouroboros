@@ -64,3 +64,12 @@ checkpoint/abort explicitly before amending. Never swap its approved WHAT mid-ru
 path cannot alter authority, budgets, workspace or mission identity and never resets consumed
 cycles or stalled counts. Those changes require a separately approved mission contract. A new
 intent is recorded with its previous contract and approval provenance, not erased into a summary.
+
+## Optional execution authority (not mission intent)
+
+A human can delegate scoped runtime approvals using the `runtime_policy` ledger event described
+in `runtime-permissions.md`. This attachment is separate from `delegated_actions` and cannot be
+created by L1, a worker, or a skill result. Record it after initialization, or while an existing
+cycle waits, without rewriting the approved WHAT/3-doc or resetting limits. L1 may then approve
+matching local operations on the human's behalf and record `principal: L1`. Generic mission/ready
+approval alone grants none of these powers. Existing human-only restrictions take precedence.

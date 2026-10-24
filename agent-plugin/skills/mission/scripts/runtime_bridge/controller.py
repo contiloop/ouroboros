@@ -15,7 +15,7 @@ def ledger_state(config, sid, path, cycle):
     workspace = Path(config['workspace'])
     require(p.is_relative_to(workspace/'.dryforge/mission'),'ledger belongs outside this workspace')
     state = json.loads(p.read_text(encoding='utf-8'))
-    require(state.get('schema_version') in (1,2),'unsupported ledger schema')
+    require(state.get('schema_version') in (1,2,3),'unsupported ledger schema')
     require(state['status'] == 'ACTIVE','mission is paused or complete')
     require(Path(state['contract']['workspace']).resolve() == workspace,'ledger workspace mismatch')
     c = state.get('cycle')
@@ -95,16 +95,64 @@ def prompt_for(config,body):
 
 
 def check_answer(store,wid,rid,response):
-    if response.get('principal') != 'L1' or response.get('action') == 'deny': return
-    req = next((r for r in store.pending(wid) if r['id'] == rid),None)
-    if not req: return  # Store.answer validates exact terminal retries.
-    require(req['kind'] == 'question' and req['message_id'],'L1 may not grant runtime permissions')
-    body = store.message(wid,req['message_id'])['body']; b = body.get('binding')
-    require(b,'probe questions require a human answer')
-    config = store.worker(wid)['config']
-    _,s,_ = ledger_state(config,body['session_id'],b['ledger'],b['cycle_id'])
+    """Validate L1 authority at record time AND immediately before host consumption."""
+    if response.get('principal') != 'L1' or response.get('action') == 'deny': return None
+    raw = store.db.execute('SELECT * FROM requests WHERE worker=? AND id=?',(wid,rid)).fetchone()
+    require(raw is not None,'unknown decision request')
+    req = dict(raw,body=json.loads(raw['body']))
+    if req['state'] == 'CONSUMED': return None  # Store checks exact replay; no host execution.
+    require(req['message_id'],'unbound/probe requests require a human')
+    message = store.message(wid,req['message_id'])
+    require(message['state'] == 'DISPATCHED','request has no live dispatched turn')
+    body = message['body']; b = body.get('binding')
+    require(b,'probe requests require a human')
+    w = store.worker(wid); config = w['config']
+    require(not w['stop'] and w['owner'] == req['owner'] and
+            w['session_id'] == req['session_id'] == body['session_id'],'stale request owner/session')
+    _,s,c = ledger_state(config,body['session_id'],b['ledger'],b['cycle_id'])
     require(digest(s['contract']) == b['intent_digest'],'intent changed while answering')
-    require('answer' in s['contract']['delegated_actions'] and 'answer' not in s['contract']['human_only'],'answer not delegated')
+    if req['kind'] == 'question':
+        require('answer' in s['contract']['delegated_actions'] and 'answer' not in s['contract']['human_only'],
+                'answer not delegated')
+        return None
+    require(response.get('action') == 'allow','not a delegated permission allow')
+    import runtime_permissions as policy_api
+    try:
+        authority = s.get('runtime_authority')
+        policy_api.require(isinstance(authority,dict) and authority.get('policy') is not None,
+                           'no human-approved runtime policy; ask the human')
+        policy_api.require(authority.get('approved_by') == 'human' and bool(authority.get('approval_ref')) and
+                           authority.get('mission_id') == b['mission_id'] and
+                           Path(authority.get('workspace','')).resolve() == Path(config['workspace']),
+                           'runtime policy identity/workspace mismatch')
+        policy_api.require(response.get('policy_digest') == policy_api.fingerprint(authority),
+                           'runtime policy changed or was not explicitly selected')
+        policy_api.require('runtime_permissions' not in s['contract']['human_only'], 'runtime permissions are human-only')
+        policy_api.require(c['stage'] == 'GO' and not c['pending'], 'delegated mutations require approved Go with no pending decision')
+        import mission_state
+        current_digest = mission_state.document_digest(Path(config['workspace'])/'.dryforge')
+        policy_api.require(current_digest == c['digest'] == c['approved_digest'], 'approved documents changed')
+        match = policy_api.classify(req['body'],config['workspace'],authority['policy'])
+        policy_api.require(match['operation'] not in s['contract']['human_only'], 'operation is human-only')
+        return dict(match, policy_digest=policy_api.fingerprint(authority),
+                    approval_ref=authority['approval_ref'], policy_event=authority['event_id'],
+                    mission_id=b['mission_id'], cycle_id=c['id'], intent_digest=b['intent_digest'],
+                    docs_digest=current_digest)
+    except (policy_api.PolicyError, OSError, ValueError) as exc:
+        raise BridgeError(str(exc)) from exc
+
+
+def delegation_for(store,wid,request):
+    """Read-only eligibility hint for L1; never an automatic approval."""
+    if request['kind'] != 'permission': return None
+    try:
+        msg = store.message(wid,request['message_id'])['body']; b = msg.get('binding')
+        require(b,'unbound/probe requests require a human')
+        _,s,_ = ledger_state(store.worker(wid)['config'],msg['session_id'],b['ledger'],b['cycle_id'])
+        response = {'principal':'L1','action':'allow','policy_digest':digest(s.get('runtime_authority'))}
+        return dict(eligible=True,**check_answer(store,wid,request['id'],response))
+    except (BridgeError,ValueError,KeyError,OSError,TypeError) as exc:
+        return {'eligible':False,'reason':str(exc)}
 
 
 async def serve(root,wid,basis=None,adapter_factory=None):
@@ -125,16 +173,18 @@ async def serve(root,wid,basis=None,adapter_factory=None):
             rid = store.request(wid,owner,current['id'] if current else None,kind,payload)
             try:
                 while True:
-                    row = next((x for x in store.pending(wid) if x['id'] == rid),None)
-                    response = store.take_answer(wid,owner,rid)
+                    try:
+                        response = store.take_answer(wid,owner,rid)
+                    except BridgeError as exc:
+                        # A revoked/stale delegated grant never reaches the host as accept.
+                        store.event(wid,'request.authorization_rejected',{'id':rid,'reason':str(exc)})
+                        return {'action':'deny','principal':'L1','basis':'Authorization no longer valid: '+str(exc)}
                     if response is not None:
                         if current and current['body'].get('binding'):
                             b = current['body']['binding']
                             _,s,_ = ledger_state(config,current['body']['session_id'],b['ledger'],b['cycle_id'])
                             require(digest(s['contract']) == b['intent_digest'],'mission changed during callback')
-                            if response['principal'] == 'L1' and response['action'] != 'deny':
-                                require(kind == 'question' and 'answer' in s['contract']['delegated_actions'] and
-                                        'answer' not in s['contract']['human_only'],'answer delegation changed')
+                            # Store.take_answer rechecks L1 authority against the live policy and artifacts.
                         return response
                     await asyncio.sleep(.15)
             finally:

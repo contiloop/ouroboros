@@ -120,7 +120,8 @@ replaced by a new skill result and no stale approval is reused. Completed missio
 
 Old state-schema-1 ledgers load without a migration command. On first successful extension use the
 state becomes schema 2, preventing older code from ignoring pending extension decisions. Normal
-missions without extensions remain schema 1. Envelope schema version 1 is separate from the ledger
+missions without extensions remain schema 1. A separately human-approved runtime policy uses
+state schema 3; extension events preserve it and cannot alter that execution authority. Envelope schema version 1 is separate from the ledger
 version; unknown versions are rejected. Do not downgrade an active ledger to bypass its checks.
 
 ## Adding a future Interview skill

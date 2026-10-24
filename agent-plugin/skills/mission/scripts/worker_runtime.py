@@ -15,7 +15,7 @@ import shutil
 import subprocess
 import sys
 import time
-from runtime_bridge.controller import prepare, serve, check_answer
+from runtime_bridge.controller import prepare, serve, check_answer, delegation_for
 from runtime_bridge.store import Store, BridgeError, controller_lock, identifier, require
 
 SCRIPTS = Path(__file__).resolve().parent
@@ -47,9 +47,12 @@ def status(store,wid):
     state = w['state']
     if state not in ('ERROR','STOPPED') and (age is None or age > 10):
         state = 'STARTING' if w['owner'] is None else 'UNREACHABLE'
+    pending = store.pending(wid)
+    for request in pending:
+        request['delegation'] = delegation_for(store,wid,request)
     return {'worker':wid,'backend':w['config']['backend'],'session_id':w['session_id'],
             'state':state,'recorded_state':w['state'],'heartbeat_age_seconds':age,'pid':w['pid'],
-            'error':w['error'],'pending':store.pending(wid),'context_headroom':'unknown',
+            'error':w['error'],'pending':pending,'context_headroom':'unknown',
             'children_quiescent':'unknown','deadline':w['config']['deadline']}
 
 
