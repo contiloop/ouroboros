@@ -186,13 +186,20 @@ class Store:
         with self.tx():
             self.own(wid,owner); m = self.message(wid,mid)
             require(m['owner'] == owner and m['state'] == 'DISPATCHED','stale result')
-            if state == 'TURN_COMPLETE':
-                require(not self.db.execute("SELECT 1 FROM requests WHERE worker=? AND message_id=? AND state IN ('PENDING','ANSWERED')",
-                                            (wid,mid)).fetchone(), 'live callbacks must settle before turn completion')
+            # Child callbacks can outlive their parent's host turn. Never expire
+            # a still-live L3 permission/question as a side effect of L2 yielding.
+            require(not self.unresolved(wid,mid),
+                    'cannot settle parent turn while child requests remain unresolved')
             self.db.execute('UPDATE messages SET state=?,result=? WHERE worker=? AND id=?',(state,dumps(result),wid,mid))
-            self.db.execute("UPDATE requests SET state='EXPIRED' WHERE worker=? AND message_id=? AND state IN ('PENDING','ANSWERED')",(wid,mid))
             self.db.execute("UPDATE workers SET state='IDLE' WHERE id=?",(wid,))
             self.event(wid,'turn.settled',{'id':mid,'state':state,'digest':digest(result)})
+
+    def unresolved(self, wid, mid):
+        """Callbacks still live for a dispatched parent, including ANSWERED
+        callbacks whose decision has not been consumed by the actual host."""
+        return [r['id'] for r in self.db.execute(
+            "SELECT id FROM requests WHERE worker=? AND message_id=? AND state IN ('PENDING','ANSWERED')",
+            (wid,mid))]
 
     def request(self, wid, owner, mid, kind, body):
         require(kind in ('question','permission'),'invalid request kind')

@@ -85,6 +85,27 @@ class StoreTests(unittest.TestCase):
     def test_answer_cannot_change(self):
         rid,r=self.request();self.s.answer('w',rid,r)
         with self.assertRaises(BridgeError):self.s.answer('w',rid,dict(r,action='deny'))
+    def test_parent_yield_preserves_outstanding_child_permission(self):
+        self.queue();self.s.claim('w','owner')
+        rid=self.s.request('w','owner','m','permission',
+                           {'method':'item/commandExecution/requestApproval',
+                            'params':{'threadId':'child'}})
+        self.assertEqual(self.s.unresolved('w','m'),[rid])
+        with self.assertRaisesRegex(BridgeError,'child requests remain unresolved'):
+            self.s.finish('w','owner','m',{'ok':True})
+        self.assertEqual(self.s.message('w','m')['state'],'DISPATCHED')
+        self.assertEqual(self.s.pending('w')[0]['id'],rid)
+        pending=self.s.pending('w')[0]
+        answer={'principal':'human','basis':'fixture only','session_id':'sid',
+                'request_digest':pending['fingerprint'],'action':'allow'}
+        self.s.answer('w',rid,answer)
+        with self.assertRaisesRegex(BridgeError,'child requests remain unresolved'):
+            self.s.finish('w','owner','m',{'ok':True})
+        self.assertEqual(self.s.take_answer('w','owner',rid),answer)
+        self.assertFalse(self.s.unresolved('w','m'))
+        self.s.finish('w','owner','m',{'ok':True})
+        self.assertEqual(self.s.message('w','m')['state'],'TURN_COMPLETE')
+
     def test_stale_callback_expires(self):
         rid,r=self.request();self.s.attach('w','new','fixture recovered')
         with self.assertRaises(BridgeError):self.s.answer('w',rid,r)

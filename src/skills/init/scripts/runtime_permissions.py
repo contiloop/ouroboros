@@ -55,13 +55,20 @@ def validate_policy(policy):
     if version >= 2:
         fields.add('go_worktrees')
     if version == 3:
-        fields.add('go_workflow')
+        fields.add('integration_branch' if 'integration_branch' in policy else 'go_workflow')
     require(set(policy) == fields, 'runtime policy has missing or unknown fields')
     if version >= 2:
         require(type(policy['go_worktrees']) is bool, 'go_worktrees must be an explicit boolean grant')
+    if version == 3 and 'integration_branch' in policy:
+        branch = policy['integration_branch']
+        require(nonempty(branch) and len(branch) <= 96 and
+                re.fullmatch(r'[A-Za-z0-9]+(?:[-_/][A-Za-z0-9]+)*',branch) and
+                '..' not in branch and '//' not in branch,
+                'integration_branch must name one explicit ordinary branch')
     ops, paths, commands = policy['operations'], policy['paths'], policy['verification_commands']
     require(isinstance(ops, list) and bool(ops) and all(isinstance(x, str) for x in ops)
-            and len(set(ops)) == len(ops) and set(ops) <= (OPERATIONS if version == 3 else BASE_OPERATIONS), 'invalid delegated operations')
+            and len(set(ops)) == len(ops) and set(ops) <= (BASE_OPERATIONS | {'git_merge'} if 'integration_branch' in policy
+                                       else OPERATIONS if version == 3 else BASE_OPERATIONS), 'invalid delegated operations')
     require(isinstance(paths, list) and bool(paths) and len(paths) <= 128, 'paths are required')
     for p in paths:
         relative_scope(p)
@@ -71,7 +78,10 @@ def validate_policy(policy):
         require(policy['trust_workspace_code'], 'worktree delegation requires explicit project-code trust')
         require(bool(set(ops) & OPERATIONS),
                 'worktree delegation requires a scoped operation')
-    if version == 3:
+    if 'git_merge' in ops:
+        require(version == 3 and policy['go_worktrees'],
+                'Git merge requires a separate human-approved v3 integration scope')
+    if version == 3 and 'go_workflow' in policy:
         from runtime_git import validate_workflow
         validate_workflow(policy)
     if set(ops) & ({'git_add', 'git_commit', 'verify'} | GO_OPERATIONS):
@@ -279,6 +289,10 @@ def classify(payload, workspace, policy):
             require(not (effective / '.git' / 'commondir').exists(), 'unexpected shared Git metadata')
             require(git_read(effective, 'rev-parse', '--show-toplevel').decode().strip() == str(effective),
                     'Git root mismatch')
+        if argv[1:2] == ['merge'] and 'integration_branch' in policy:
+            require(worktree is None, 'merges are delegated only from the approved root')
+            from runtime_merge import inspect_merge
+            return inspect_merge(root,argv,policy,git_read,_known_worktree,scoped_path,require)
         if argv[1:2] == ['add']:
             paths = argv[2:]
             if paths[:1] == ['--']:

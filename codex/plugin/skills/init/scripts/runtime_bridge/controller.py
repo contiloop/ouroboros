@@ -131,7 +131,10 @@ def check_answer(store,wid,rid,response):
         current_digest = mission_state.document_digest(Path(config['workspace'])/'.dryforge')
         policy_api.require(current_digest == c['digest'] == c['approved_digest'], 'approved documents changed')
         match = policy_api.classify(req['body'],config['workspace'],authority['policy'])
-        policy_api.require(match['operation'] not in s['contract']['human_only'], 'operation is human-only')
+        policy_api.require(match['operation'] not in s['contract']['human_only'] and
+                           not (match['operation'] == 'git_merge' and
+                                'merge' in s['contract']['human_only']),
+                           'operation is human-only')
         return dict(match, policy_digest=policy_api.fingerprint(authority),
                     approval_ref=authority['approval_ref'], policy_event=authority['event_id'],
                     mission_id=b['mission_id'], cycle_id=c['id'], intent_digest=b['intent_digest'],
@@ -223,6 +226,15 @@ async def serve(root,wid,basis=None,adapter_factory=None):
                     current = None; continue
                 async with asyncio.timeout(max(.01,min(config['turn_seconds'],config['deadline']-time.time()))):
                     result = await adapter.run(prompt,skill=skill,probe=body['kind'] == 'probe')
+                    # A parent turn may end while an L3 callback remains live.
+                    # Preserve message ownership until the host consumes all
+                    # outstanding decisions; never extend the original budget.
+                    outstanding = store.unresolved(wid,current['id'])
+                    if outstanding:
+                        store.event(wid,'turn.awaiting_child_callbacks',
+                                    {'message_id':current['id'],'count':len(outstanding)})
+                    while store.unresolved(wid,current['id']):
+                        await asyncio.sleep(.15)
                 require(result.get('session_id') == body['session_id'],'result from a different session')
                 store.finish(wid,owner,current['id'],result,'TURN_COMPLETE' if result['ok'] else 'TURN_FAILED')
                 current = None
