@@ -100,7 +100,7 @@ Invoke **`/ouroboros:init`** to discuss and refine intent, then **`/ouroboros:ap
 <details>
 <summary><strong>Codex · local plugin package</strong></summary>
 
-The marketplace descriptor is `.agents/plugins/marketplace.json` and the plugin package is `codex/plugin/`. Register this checkout through your Codex client's local marketplace flow; enable the **`ouroboros`** plugin and check for duplicate older skill names. Explicitly invoke `$init`, then `$approve` (or standalone `$ready`/`$go`) once the client reports them available.
+The marketplace descriptor is `.agents/plugins/marketplace.json` and the plugin package is `codex/plugin/`. Register this checkout through your Codex client's local marketplace flow; enable the **`ouroboros`** plugin and check for duplicate older skill names. Explicitly invoke `$ouroboros:init`, then `$ouroboros:approve` (or standalone `$ouroboros:ready`/`$ouroboros:go`) once the client reports them available.
 
 </details>
 

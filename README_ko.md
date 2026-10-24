@@ -100,7 +100,7 @@ claude --plugin-dir ~/ouroboros/claude
 <details>
 <summary><strong>Codex · 로컬 플러그인 패키지</strong></summary>
 
-`.agents/plugins/marketplace.json`이 `codex/plugin/` 패키지를 가리킵니다. 사용하는 Codex의 로컬 Marketplace 절차로 등록한 뒤 **`ouroboros`** 플러그인을 활성화하고 이전 스킬 이름이 중복되지 않는지 확인하세요. 스킬이 정상 표시되면 `$init` → `$approve` (독립 실행은 `$ready` → `$go`)를 명시적으로 실행합니다.
+`.agents/plugins/marketplace.json`이 `codex/plugin/` 패키지를 가리킵니다. 사용하는 Codex의 로컬 Marketplace 절차로 등록한 뒤 **`ouroboros`** 플러그인을 활성화하고 이전 스킬 이름이 중복되지 않는지 확인하세요. 스킬이 정상 표시되면 `$ouroboros:init` → `$ouroboros:approve` (독립 실행은 `$ouroboros:ready` → `$ouroboros:go`)를 명시적으로 실행합니다.
 
 </details>
 
