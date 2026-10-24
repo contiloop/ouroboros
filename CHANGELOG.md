@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.3.11 (2026-10-24) — ordinary caller interface and child request lifetime
+
+- Keep Mission identity and authority in the outer controller; Ready/Go use their ordinary
+  caller interface, and structured Codex questions use contract-bound question delegation.
+- Drain observed Codex child work and callbacks after parent turn completion, preserving live
+  request bindings without extra model turns; refuse successful settlement with open requests.
+- Add explicit policy v3 local Go creation/integration/cleanup, bound to branch, path and Git-state
+  scope. Old grants stay unchanged; cleanup preserves unmerged, dirty, untracked and ignored data.
+- Recognize exact approved Python verification argv with `-B` before `-m`.
+- Add actual local Git and controller/protocol regressions. These do not certify a complete live
+  Mission or Claude child-lifecycle behavior.
+
 ## v1.3.10 (2026-10-24) — bounded Go worktree permissions
 
 - Add a separately human-approved `go_worktrees` opt-in under runtime policy version 2;

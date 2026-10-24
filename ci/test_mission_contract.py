@@ -13,12 +13,13 @@ class MissionContractTest(unittest.TestCase):
         for s in ('one ready-go cycle','not** an','same L2 session','REUSE','SPAWN','migration','CONTINUE','REPLAN','ESCALATE','COMPLETE'):
             self.assertIn(s,t)
 
-    def test_ready_go_load_same_cycle_contract(self):
+    def test_ready_go_do_not_identify_their_decision_provider(self):
         for skill in ('ready','go'):
             t=(ROOT/f'src/skills/{skill}/SKILL.md').read_text()
-            self.assertIn('../mission/references/cycle-contract.md',t)
-            self.assertIn('same host session',t)
-            self.assertIn('explicit opt-in',t)
+            self.assertIn('## Caller interface',t)
+            self.assertNotIn('../mission/references/cycle-contract.md',t)
+            self.assertNotIn('Mission mode',t)
+            self.assertNotIn('L1',t)
 
     def test_go_lifecycle_preserves_original_dispatch(self):
         t=skill_text(ROOT/'src/skills/go/SKILL.md')

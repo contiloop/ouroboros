@@ -147,6 +147,12 @@ class GateTests(unittest.TestCase):
         p,skill=prompt_for(self.c,self.body())
         self.assertIn((SCRIPTS.parent.parent/'go/references/workflow.md').read_text(),p)
         self.assertEqual(skill['name'],'go')
+    def test_worker_prompt_does_not_expose_decision_provider(self):
+        from runtime_bridge.adapters import ROLE
+        prompt, _ = prompt_for(self.c,self.body())
+        for private in ('You are L2', 'L1', 'Decision provider', str(self.ledger), 'Mission: fixture'):
+            self.assertNotIn(private, ROLE + prompt)
+        self.assertNotIn('cycle-contract.md', prompt)
     def test_message_never_grants_go(self):
         p,skill=prompt_for(self.c,self.body('message'));self.assertIsNone(skill);self.assertIn('Do not start go',p)
     def test_explicit_go_records_start_not_success(self):
@@ -163,7 +169,7 @@ class CodexTests(unittest.IsolatedAsyncioTestCase):
         Path(self.c['runtime_root']).mkdir(parents=True);self.events=[];self.ids=[];self.replies=[]
         self.env=patch.dict(os.environ,{'OUROBOROS_FIXTURE_STATE':str(self.root/'host.json')});self.env.start()
         async def relay(kind,payload):
-            self.replies.append((kind,payload));return {'action':'allow','answers':{'q1':'A'}}
+            self.replies.append((kind,payload));return {'action':'answer' if kind == 'question' else 'allow','answers':{'q1':'A'}}
         self.relay=relay;self.a=self.make();await self.a.connect()
     def make(self,sid=None):return CodexAdapter(self.c,sid,lambda k,d:self.events.append((k,d)),self.ids.append,self.relay,
                  command=[sys.executable,'-B',str(ROOT/'ci/fixtures/fake_app_server.py')])
@@ -174,8 +180,30 @@ class CodexTests(unittest.IsolatedAsyncioTestCase):
     async def test_permission_request_is_correlated(self):
         self.assertTrue((await self.a.run('FIXTURE_PERMISSION'))['ok'])
         self.assertEqual(self.replies[0][1]['params']['threadId'],self.a.sid)
-    async def test_structured_question_is_conservative(self):
-        self.assertTrue((await self.a.run('FIXTURE_QUESTION'))['ok']);self.assertEqual(self.replies[0][0],'permission')
+    async def test_structured_question_uses_the_ordinary_question_interface(self):
+        self.assertTrue((await self.a.run('FIXTURE_QUESTION'))['ok']);self.assertEqual(self.replies[0][0],'question')
+    async def test_parent_result_waits_for_live_child_callback(self):
+        entered, answer = asyncio.Event(), asyncio.Event()
+        async def delayed(kind, payload):
+            entered.set()
+            await answer.wait()
+            return {'principal':'L1','action':'allow','basis':'fixture'}
+        self.a.relay = delayed
+        task = asyncio.create_task(self.a.run('FIXTURE_CHILD_AFTER_PARENT'))
+        try:
+            await asyncio.wait_for(entered.wait(), 3)
+            await asyncio.sleep(.05)
+            self.assertFalse(task.done(), 'parent completion must not settle live child work')
+            self.assertEqual(json.loads((self.root/'host.json').read_text())['turns'][0]['status'],'completed')
+            answer.set()
+            result = await asyncio.wait_for(task, 5)
+            self.assertTrue(result['ok'])
+            response = json.loads((self.root/'host.json').read_text())['child_response']['result']
+            self.assertEqual(response, {'decision':'accept'})
+        finally:
+            answer.set()
+            if not task.done(): task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
     async def test_missing_notice_recovered_from_state(self):
         self.assertTrue((await asyncio.wait_for(self.a.run('FIXTURE_DROP_NOTICE'),5))['ok'])
     async def test_disconnect_not_success_or_replayed(self):
@@ -300,6 +328,12 @@ class CliTests(unittest.TestCase):
         self.assertEqual(self.call('wait','--id','m','--timeout','5')['message']['state'],'TURN_COMPLETE')
         self.call('stop');self.state({'STOPPED'})
     def test_delegated_git_callback_real_cli_roundtrip(self):
+        self.delegated_roundtrip('FIXTURE_GIT_ADD')
+
+    def test_completed_parent_keeps_child_delegation_live_through_controller(self):
+        self.delegated_roundtrip('FIXTURE_CHILD_AFTER_PARENT')
+
+    def delegated_roundtrip(self, fixture):
         # Real controller/SQLite/CLI, deterministic non-model host; consent is a fixture.
         sid=self.start()['session_id']
         target=self.project/'tests/__init__.py';target.parent.mkdir();target.write_text('')
@@ -315,10 +349,13 @@ class CliTests(unittest.TestCase):
         s=mission_state.apply(s,dict(id='grant',op='runtime_policy',actor='human',mission_id='delegate-fixture',
              cycle_id='c1',expected_revision=0,expected_policy_digest=digest(None),policy=policy,
              approval_ref='FIXTURE-GRANT',basis='fixture local Git delegation'))
-        state_path.write_text(json.dumps(s));prompt=self.root/'task.txt';prompt.write_text('FIXTURE_GIT_ADD')
+        state_path.write_text(json.dumps(s));prompt=self.root/'task.txt';prompt.write_text(fixture)
         self.call('send','--id','delegated','--kind','message','--ledger',str(state_path),'--cycle','c1','--text-file',str(prompt))
         req=self.state({'WAITING'})['pending'][0]
         self.assertTrue(req['delegation']['eligible'])
+        if fixture == 'FIXTURE_CHILD_AFTER_PARENT':
+            self.assertEqual(json.loads((self.root/'host.json').read_text())['turns'][0]['status'], 'completed')
+            self.assertEqual(self.call('result','--id','delegated')['state'], 'DISPATCHED')
         response=dict(principal='L1',action='allow',basis='fixture approved scope',session_id=sid,
                       request_digest=req['fingerprint'],policy_digest=req['delegation']['policy_digest'])
         response_path=self.root/'response.json';response_path.write_text(json.dumps(response))
@@ -326,7 +363,10 @@ class CliTests(unittest.TestCase):
         result=self.call('wait','--id','delegated','--timeout','5')['message']
         self.assertEqual(result['state'],'TURN_COMPLETE')
         self.assertEqual(result['session_id'],sid)
-        self.assertIn('accept',result['result']['text'])
+        if fixture == 'FIXTURE_GIT_ADD':
+            self.assertIn('accept',result['result']['text'])
+        else:
+            self.assertEqual(json.loads((self.root/'host.json').read_text())['child_response']['result'], {'decision':'accept'})
         events=self.call('events','--full')['events']
         self.assertTrue(any(e['kind']=='request.delegation_checked' and e['body']['phase']=='consume' for e in events))
         self.call('stop');self.state({'STOPPED'})

@@ -8,12 +8,12 @@ import os
 from pathlib import Path
 from .store import BridgeError, require
 
-ROLE = '''You are Ouroboros L2, a persistent cycle worker. L1 owns mission intent and the next cycle.
-Execute exactly one assigned ready-go cycle. Preserve real decision provenance. A yielded turn is
-not approval, and a completed turn is not mission success. AskUserQuestion is relayed to the
-caller where supported. Otherwise yield the exact question; the next answer uses the same session.
-Never mutate the controller mailbox or run worker_runtime.py yourself. L3 task/reviewer agents
-remain governed by the existing go rules. Do not reuse an implementer as its independent reviewer.
+ROLE = '''Work with the caller through the ordinary Ready and Go procedures in this same session.
+Ask questions through the available question tool, or return the exact question and wait for an
+answer. Request execution permission through the host's normal tools. A yielded turn is not
+approval. Finish the requested work and report its evidence before taking a new assignment.
+Use the existing task-agent and independent-review rules. Do not reuse an implementer as its
+independent reviewer. Do not edit the runtime's private state or approval records.
 Load authorized procedure files and references; loading files is not a native slash invocation.
 '''
 
@@ -104,8 +104,9 @@ class ClaudeAdapter:
 
 class Rpc:
     """One reader, correlated replies and concurrent pending callbacks. Newline JSON stdio."""
-    def __init__(self, process, handler):
+    def __init__(self, process, handler, observe=None):
         self.process, self.handler = process, handler
+        self.observe = observe
         self.pending, self.callbacks = {}, {}
         self.events = asyncio.Queue()
         self.serial = 0
@@ -157,6 +158,8 @@ class Rpc:
                         else: f.set_result(msg.get('result'))
                 elif 'method' in msg:
                     p = msg.get('params',{})
+                    if self.observe:
+                        self.observe(msg)
                     if msg['method'] == 'serverRequest/resolved':
                         item = self.callbacks.get((p.get('threadId'),str(p.get('requestId'))))
                         if item: item[0].cancel()
@@ -188,6 +191,33 @@ class CodexAdapter:
         self.config,self.sid,self.emit,self.bind,self.relay = config,sid,emit,bind,relay
         self.command = command or ['codex','app-server','--listen','stdio://']
         self.rpc = None; self.turn_id = None; self.root_id = None; self.stderr = None
+        self.children = set()
+
+    def observe(self, msg):
+        """Host lifecycle observations outlive the parent's model turn."""
+        method, p = msg['method'], msg.get('params', {})
+        item = p.get('item', {})
+        if (method in ('item/started', 'item/completed') and item.get('type') == 'subAgentActivity'
+                and p.get('threadId') in {self.sid, *self.children}):
+            child = item.get('agentThreadId')
+            if child and child != self.sid:
+                if item.get('kind') in ('started', 'interacted'):
+                    self.children.add(child)
+                elif item.get('kind') == 'completed':
+                    self.children.discard(child)
+        if method == 'turn/completed' and p.get('threadId') != self.sid:
+            self.children.discard(p.get('threadId'))
+
+    async def reconcile_children(self):
+        """Recover missed completion notifications using actual child turn state."""
+        for child in tuple(self.children):
+            thread = (await self.rpc.call('thread/read', {'threadId':child,'includeTurns':True}))['thread']
+            require(thread.get('id') == child and thread.get('sessionId') == self.root_id,
+                    'child reconciliation returned another session tree')
+            turns = thread.get('turns', [])
+            if (turns and turns[-1].get('status') in ('completed','failed','interrupted')
+                    and not any(t == child for t, _ in self.rpc.callbacks)):
+                self.children.discard(child)
 
     async def connect(self):
         p = Path(self.config['runtime_root'])/(self.config['worker']+'.codex.stderr.log')
@@ -195,7 +225,7 @@ class CodexAdapter:
         self.stderr = p.open('ab'); os.chmod(p,0o600)
         proc = await asyncio.create_subprocess_exec(*self.command,cwd=self.config['workspace'],
                stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=self.stderr,limit=16*1024*1024)
-        self.rpc = Rpc(proc,self.request)
+        self.rpc = Rpc(proc,self.request,self.observe)
         info = await self.rpc.call('initialize',{'clientInfo':{'name':'ouroboros_runtime','version':'0.1.0'}})
         self.emit('codex.initialized',info or {})
         await self.rpc.write({'method':'initialized','params':{}})
@@ -215,13 +245,16 @@ class CodexAdapter:
         if target != self.sid:
             t = (await self.rpc.call('thread/read',{'threadId':target}))['thread']
             require(t.get('id') == target and self.root_id and t.get('sessionId') == self.root_id,'request from another session tree')
+            self.children.add(target)
         else:
             require(not p.get('turnId') or self.turn_id in (None,p['turnId']),'request from a stale turn')
         payload = {'method':method,'rpc_id':msg['id'],'params':p}
         if method == 'item/tool/requestUserInput':
-            # May be an app side-effect approval, so structured inputs are human-only by default.
-            r = await self.relay('permission',payload)
+            # Native clarification is the same interface for every caller. MCP
+            # elicitation and execution permissions have distinct host methods.
+            r = await self.relay('question',payload)
             if r['action'] == 'deny': return {'answers':{}}
+            require(r['action'] == 'answer', 'question requires an answer response')
             answers = r.get('answers',{})
             require(set(answers) == {q['id'] for q in p.get('questions',[])},'answer keys do not match Codex question IDs')
             return {'answers':{k:{'answers':v if isinstance(v,list) else [v]} for k,v in answers.items()}}
@@ -265,13 +298,17 @@ class CodexAdapter:
             'cwd':self.config['workspace'],'approvalPolicy':'on-request','sandboxPolicy':policy})
         self.turn_id = r['turn']['id']
         self.emit('codex.turn_bound',{'thread_id':self.sid,'turn_id':self.turn_id,'skill_input':skill})
+        completed = None
         try:
             while True:
                 observed = None
                 try:
                     msg = await asyncio.wait_for(self.rpc.events.get(),2)
                 except asyncio.TimeoutError:
-                    observed = await self.read_turn()
+                    if completed:
+                        await self.reconcile_children()
+                    else:
+                        observed = await self.read_turn()
                 else:
                     method,p = msg['method'],msg.get('params',{})
                     if method.startswith('bridge/'): raise BridgeError(p.get('error',method))
@@ -280,10 +317,18 @@ class CodexAdapter:
                         require(p.get('threadId') in (None,self.sid),'completion from another thread')
                         observed = await self.read_turn()  # notification is a wakeup, not authority
                 if observed and observed.get('status') in ('completed','failed','interrupted'):
-                    return {'ok':observed['status'] == 'completed','session_id':self.sid,
+                    completed = {'ok':observed['status'] == 'completed','session_id':self.sid,
                             'turn_id':self.turn_id,'status':observed['status'],
                             'text':'\n'.join(x.get('text','') for x in observed.get('items',[]) if x.get('type') == 'agentMessage'),
                             'error':observed.get('error')}
+                    self.emit('codex.parent_turn_completed', {'turn_id':self.turn_id,
+                              'pending_children':sorted(self.children)})
+                # Do not settle the controller message while its children still
+                # own live RPCs or can issue subsequent requests. The parent's
+                # model turn may finish normally; the transport drains children
+                # under the existing turn/lifetime budget, without a new prompt.
+                if completed and not self.children and not self.rpc.callbacks and self.rpc.events.empty():
+                    return dict(completed, children_quiescent=True)
         finally:
             self.turn_id = None
 

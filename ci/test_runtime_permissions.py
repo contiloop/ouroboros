@@ -96,6 +96,20 @@ class DelegationTests(unittest.TestCase):
                 'params':{'cwd':str(cwd),'command':command,'threadId':'sid',
                           'turnId':'turn-1','itemId':'item-1'}}
 
+    def test_question_answer_requires_live_delegated_intent_at_record_and_consume(self):
+        payload = {'method':'item/tool/requestUserInput', 'params':{'questions':[{'id':'q','question':'Format?'}]}}
+        rid = self.store.request('w','owner','m','question',payload)
+        req = next(x for x in self.store.pending('w') if x['id'] == rid)
+        response = dict(principal='L1', action='answer', answers={'q':'plain text'},
+                        basis='fixture intent', session_id='sid', request_digest=req['fingerprint'])
+        self.store.answer('w', rid, response)
+        self.s['contract']['delegated_actions'].remove('answer'); self.save()
+        with self.assertRaises(BridgeError): self.store.take_answer('w','owner',rid)
+        rid = self.store.request('w','owner','m','question',payload)
+        req = next(x for x in self.store.pending('w') if x['id'] == rid)
+        response['request_digest'] = req['fingerprint']
+        with self.assertRaises(BridgeError): self.store.answer('w',rid,response)
+
     def test_v1_or_v2_disabled_does_not_silently_gain_worktree_rights(self):
         wt=self.worktree()
         (wt/'tests/new.py').write_text('test = 1\n')
