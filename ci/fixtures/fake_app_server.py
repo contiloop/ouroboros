@@ -7,6 +7,7 @@ import sys
 p = Path(os.environ['OUROBOROS_FIXTURE_STATE'])
 state = json.loads(p.read_text()) if p.exists() else {'id':'fixture-thread','sessionId':'fixture-thread','turns':[]}
 pending = {}
+children = {}
 def emit(v): print(json.dumps(v),flush=True)
 def save(): p.write_text(json.dumps(state))
 def complete(t,notice=True,status='completed',text='fixture result'):
@@ -16,7 +17,14 @@ for line in sys.stdin:
     m = json.loads(line)
     if 'method' not in m:
         t = pending.pop(str(m['id']),None)
-        if t: complete(t,text='fixture accepted response: '+json.dumps(m))
+        if t and str(m['id']).startswith('child-request-'):
+            child = children['fixture-child']
+            child['turns'][0]['status'] = 'completed'
+            state['child_response'] = m; save()
+            emit({'method':'turn/completed','params':{'threadId':child['id'],'turn':child['turns'][0]}})
+            emit({'method':'item/completed','params':{'threadId':state['id'],'turnId':t['id'],
+                  'item':{'type':'subAgentActivity','kind':'completed','agentThreadId':child['id']}}})
+        elif t: complete(t,text='fixture accepted response: '+json.dumps(m))
         continue
     method,params,rid = m['method'],m.get('params',{}),m.get('id')
     if method == 'initialized': continue
@@ -24,7 +32,7 @@ for line in sys.stdin:
     if method == 'initialize': r = {'userAgent':'FIXTURE-NOT-CODEX'}
     elif method == 'thread/start': save(); r = {'thread':state}
     elif method == 'thread/resume': r = {'thread':{'id':'wrong'} if os.environ.get('FIXTURE_WRONG_ID') else state}
-    elif method == 'thread/read': r = {'thread':state}
+    elif method == 'thread/read': r = {'thread':children.get(params.get('threadId'),state)}
     elif method == 'turn/start':
         t = {'id':'turn-'+str(len(state['turns'])+1),'status':'inProgress','items':[]}
         state['turns'].append(t); save()
@@ -32,13 +40,27 @@ for line in sys.stdin:
         text = params['input'][0]['text']
         if 'FIXTURE_DISCONNECT' in text: os._exit(9)
         if 'FIXTURE_HANG' in text: continue
-        if 'FIXTURE_PERMISSION' in text or 'FIXTURE_QUESTION' in text:
+        if 'FIXTURE_CHILD_AFTER_PARENT' in text:
+            child = {'id':'fixture-child','sessionId':state['sessionId'],
+                     'turns':[{'id':'child-turn','status':'inProgress','items':[]}]}
+            children[child['id']] = child
+            emit({'method':'item/completed','params':{'threadId':state['id'],'turnId':t['id'],
+                  'item':{'type':'subAgentActivity','kind':'started','agentThreadId':child['id']}}})
+            complete(t,text='Parent returned while its child still needs an answer.')
+            key = 'child-request-'+t['id']; pending[key] = t
+            emit({'id':key,'method':'item/commandExecution/requestApproval','params':{
+                 'threadId':child['id'],'turnId':'child-turn','itemId':'child-item',
+                 'cwd':params['cwd'],'command':'git add tests/__init__.py'}})
+            continue
+        if any(x in text for x in ('FIXTURE_PERMISSION', 'FIXTURE_QUESTION', 'FIXTURE_GIT_ADD')):
             key = 'request-'+t['id']; pending[key] = t
             body = {'threadId':state['id'],'turnId':t['id'],'itemId':'fixture-item'}
             if 'FIXTURE_QUESTION' in text:
                 method = 'item/tool/requestUserInput'; body['questions'] = [{'id':'q1','question':'Fixture question?'}]
             else:
                 method = 'item/commandExecution/requestApproval'; body['command'] = 'fixture command (not executed)'
+                if 'FIXTURE_GIT_ADD' in text:
+                    body.update(command='git add tests/__init__.py', cwd=params['cwd'])
             emit({'id':key,'method':method,'params':body}); continue
         complete(t,notice='FIXTURE_DROP_NOTICE' not in text,status='failed' if 'FIXTURE_FAILURE' in text else 'completed'); continue
     else:

@@ -20,7 +20,7 @@ Claude needs the optional SDK. Install it explicitly in a Python environment you
 ```sh
 python3 -m venv ~/.venvs/ouroboros-runtime
 ~/.venvs/ouroboros-runtime/bin/python -m pip install \
-  -r ~/ouroboros/claude/skills/mission/scripts/runtime-requirements.txt
+  -r ~/ouroboros/claude/skills/init/scripts/runtime-requirements.txt
 ```
 
 Codex uses the Python standard library and an already installed/configured `codex` command.
@@ -28,7 +28,7 @@ The SDK pin is the inspected release, not a promise every host configuration has
 
 ```sh
 PY="$HOME/.venvs/ouroboros-runtime/bin/python"  # python3 is enough for Codex
-BRIDGE="$HOME/ouroboros/claude/skills/mission/scripts/worker_runtime.py"
+BRIDGE="$HOME/ouroboros/claude/skills/init/scripts/worker_runtime.py"
 PROJECT="/absolute/path/to/your/test-project"
 
 "$PY" "$BRIDGE" doctor --backend claude
@@ -50,7 +50,7 @@ Keep the Python environment and plugin checkout available while the controller r
 
 ## L1 integration
 
-The Mission skill loads [runtime-bridge.md](../src/skills/mission/references/runtime-bridge.md) only
+The Mission skill loads [runtime-bridge.md](../src/skills/init/references/runtime-bridge.md) only
 when this execution path is selected. Give L1 the Python executable, bridge path and workspace.
 L1 uses its ordinary shell tool for start/status/send/wait/answer, under existing host permissions.
 No listener or extra model supervisor is required.
@@ -114,10 +114,12 @@ a private response file and calls `answer --request-id ... --response-file ...`.
 
 This example is not approval. Claude questions use `action: answer` plus `answers` keyed by original
 question text. L1 may answer only with explicit delegation and must preserve the decision in the
-mission ledger. Tool permission allow is human-only and exact-call only. Codex requestUserInput can
-also authorize app side effects; this adapter conservatively requires a human decision and an
-`answers` map keyed by actual question IDs. L1 can answer ordinary yielded product questions via
-ledger-bound messages. Permission expansion/MCP elicitation are declined, not silently supported.
+mission ledger. Tool permission allow is exact-call only. It defaults to human review; with a
+separately human-approved runtime policy, L1 may approve matching local operations. See
+[delegated runtime approvals](../src/skills/init/references/runtime-permissions.md) for the
+policy shape, grant/revoke events, eligibility hints and audit fields. Codex requestUserInput uses
+`action: answer` and an `answers` map keyed by actual question IDs. The same contract-bound L1
+question authority applies as for Claude; human-only or out-of-intent decisions still go to the human. Permission expansion/MCP elicitation are declined, not silently supported.
 
 The same-user mailbox is not an adversarial security boundary. `principal: human` is a trusted
 record, not authentication. Never expose these commands as an untrusted remote service or accept
@@ -186,3 +188,55 @@ This is original code using official interfaces, not vendored third-party bridge
 - [claude-bridge](https://github.com/michalekz/claude-bridge): stable addressing and durable messages
 - [codex-bridge](https://github.com/shadohead/codex-bridge): state-driven waits and explicit thread reuse
 - [Agent Bridge](https://github.com/creatornader/agent-bridge): delivery acknowledgment is not task completion
+
+## Updating an existing test session
+
+Installing the updated plugin does not grant execution authority to an old mission. Ask the human
+once for the actual scope, then record a `runtime_policy` event; do not rewrite the mission goal or
+fabricate approval. A live controller continues using the code it imported at startup. Stop it,
+reconcile the host/files/children, and explicitly resume the SAME host session on the updated
+code. Old callbacks expire; never replay an uncertain command without checking its effects.
+An unchanged local checkout path must not be deleted while the controller is active. Installing
+in a new plugin-cache version requires using the corresponding new script, not the old cached CLI.
+
+### Delegating verified Go worktree operations (v1.3.10)
+
+When Go's task implementer is checked out in `.dryforge/worktrees/T1`, Codex reports that
+worktree as the command's `cwd`, while Git stores its index in the parent repository's
+`.git/worktrees/<name>/index` rather than `.git/index`. Delegated `git add`, `git commit -m`,
+file edits and exact approved test commands now recognize this case **only** for registered task
+worktrees tied to the mission repository. The exact workspace, operation and worktree ID are
+recorded at both authorization and consumption; a changed commit index is rejected.
+
+The earlier v1 policy was deliberately base-only. It does not silently gain worktree authority
+when v1.3.10 is installed. A human must explicitly authorize a **version 2** policy with
+`"go_worktrees": true` and the same bounded operations and paths, using a new `runtime_policy`
+event. See [scoped policy example](../src/skills/init/references/runtime-permissions.md).
+L1 may then approve exact Go worktree operations independently within that grant. An existing
+denied request is NOT automatically retried: reconcile the worktree first and have Codex issue a
+new request in the same L2 session. In-flight callbacks expire across controller replacement.
+
+A v2 grant does NOT authorize `git merge`. Version 3 can separately grant exact, pinned
+`git merge --no-ff <40-hex-SHA> -m <message>` operations from the clean approved base,
+after validating the registered task worktree, branch identity and complete allowed diff.
+This is a new HUMAN `runtime_policy` grant, never inferred from prior v1/v2 approval.
+Under the `integration_branch` policy shape, worktree add/remove and other integration
+commands remain human-reviewed. The separate `go_workflow` shape is described below. See [integration scope](../src/skills/init/references/runtime-permissions.md).
+Likewise, worktree support is not an end-to-end live Mission acceptance claim.
+
+
+### Ordinary caller interface and live children (v1.3.11)
+
+Ready/Go receive ordinary user goals, questions, approvals and results. Provider identity, private
+Mission state and cycle correlations stay in the outer controller. Audit records still identify
+L1 decisions accurately. No Mission-specific worker mode or impersonated human record is needed.
+Codex parent model-turn completion now leaves its message dispatched while observed children or
+callbacks are active. Child approvals retain their original binding; the transport waits within
+existing limits rather than requesting extra model turns. This behavior needs live host validation
+in addition to deterministic protocol tests; Claude child lifecycle is not certified here.
+
+Policy v3 can explicitly delegate local Go worktree creation, scoped task integration and safe
+cleanup. See the [exact commands and state guards](../src/skills/init/references/runtime-permissions.md).
+Existing v1/v2 grants remain unchanged. Cleanup refuses ignored evidence as well as ordinary
+untracked files; force removal is never delegated. Python `-B -m unittest` is recognized only when
+that exact argv appears in the human-approved policy.

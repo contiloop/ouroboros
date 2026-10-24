@@ -1,184 +1,113 @@
-<div align="center">
-
 # ⟲ Ouroboros
 
-### Keep the intent. Close the loop.
+Talk through what you want. Hand over the work when you are ready.
 
-**An intent-driven, three-level development harness.**  
-From a human goal to a verified result — one `ready → go` cycle at a time.
+Ouroboros keeps an agent, **L1**, in conversation with you while it manages development. You refine the goal together, approve the proposed scope, and let L1 run and review Ready–Go cycles until the agreed outcome is met. You can keep talking to L1 while it works.
 
-[![Lifecycle](https://img.shields.io/badge/lifecycle-READY%20%E2%86%92%20GO-7C3AED?style=for-the-badge)](#the-cycle)
-[![Agents](https://img.shields.io/badge/architecture-L1%20%2F%20L2%20%2F%20L3-0F766E?style=for-the-badge)](#architecture)
-[![Status](https://img.shields.io/badge/status-experimental-EAB308?style=for-the-badge)](#implementation-status)
-[![License](https://img.shields.io/badge/license-Apache--2.0-334155?style=for-the-badge)](LICENSE)
+[한국어](README_ko.md) · [日本語](README_ja.md) · [中文](README_zh.md)
 
-[**Get started**](#try-it) · [**Architecture**](#architecture) · [**Mission guide**](docs/MISSION.md) · [**한국어**](README_ko.md)
+## Start with a conversation
 
-</div>
+| Command | What happens |
+| --- | --- |
+| `/ouroboros:init` | Start talking with L1. Refine the outcome, completion criteria, constraints and decisions you want to delegate. The proposal remains editable; development cycles have not started. |
+| `/ouroboros:approve` | Approve the proposal you reviewed. L1 takes responsibility for planning cycles, answering worker questions, reviewing Ready documents, running Go and checking results. |
 
----
+For example, start with: “I want a local memo CLI that keeps my notes between runs. Help me work out the details.” Continue the conversation until the proposal matches your intent, then invoke `approve`.
 
-> [!IMPORTANT]
-> **Cycle success is not mission success.** Ouroboros keeps the human's approved intent at the top and uses observed evidence — not an agent's confidence — to choose what comes next.
+Approval is a handoff, not the end of the conversation. L1 incorporates further clarification within the agreed scope and discusses the impact of changes that need a new decision. It handles already delegated decisions without asking you to approve each cycle or routine tool request again.
 
-> [!WARNING]
-> **Experimental, not a turnkey autonomous service.** The repository includes skills, lifecycle contracts, and a tested local mission ledger. An optional [local runtime bridge](docs/RUNTIME.md) connects real Claude SDK sessions and Codex App Server threads. It does **not** auto-install dependencies/global hooks or establish live three-level acceptance. The host must actually support persistent workers, decision relay, and nested agents.
+## The cycle
 
-## Why Ouroboros?
+After the handoff, L1 manages the existing **Dryforge Ready and Go procedures**, packaged here as `ouroboros:ready` and `ouroboros:go`:
 
-A single coding session can satisfy its specification and still miss the user's ultimate goal. Ouroboros separates **long-lived intent**, **one complete development cycle**, and **short-lived execution contexts**. The outer loop asks whether each verified result actually advances the mission.
+1. **L1 creates an L2 agent session and requests Ready.** It supplies the cycle goal and relevant user intent. The Ready skill does not itself create the agent.
+2. **L2 follows Dryforge Ready.** It investigates existing solutions and prepares the specification, plan and handoff documents. L2 asks L1 its questions; L1 answers from the user's intent and delegated authority. Decisions lacking sufficient grounding or authority return to the user.
+3. **L1 reviews Ready and requests Go in the same L2 session.** It asks for revisions where needed, approves the actual documents when satisfactory, then hands Dryforge Go to the agent that retains the Ready context.
+4. **L2 carries out Go implementation and verification.** It works directly or creates L3 agents for scoped assignments as the procedure requires. It gathers tests and independent review and reports the result to L1.
+5. **L1 evaluates the result against the overall goal.** It requests corrections, chooses the next cycle or reports completion with evidence.
 
-<table>
-<tr><th>01 · INTENT</th><th>02 · CYCLE</th><th>03 · EXECUTION</th></tr>
-<tr><td><strong>L1 · Mission Orchestrator</strong><br/>Preserves the user's objective, constraints, and delegated decisions. Chooses the next cycle.</td><td><strong>L2 · Cycle Worker</strong><br/>Runs <code>ready → approval → go</code> in the <strong>same session</strong>, then reports its evidence.</td><td><strong>L3 · Task Agents</strong><br/>Research, implement, or independently review a bounded assignment. Resume only when safe.</td></tr>
-</table>
+Your `ouroboros:approve` hands responsibility to L1. The later Ready approval is L1's review of a particular cycle's documents. A finished cycle is not automatically a finished goal.
 
 ## Architecture
 
 ```mermaid
 flowchart TB
-    H([Human · final intent])
-    M["L1 · Mission Orchestrator<br/>Intent · authority · cycle evaluation"]
-    W["L2 · Cycle Worker<br/>SAME session: ready → approval → go"]
-    R["L3 · Researcher"]
-    I["L3 · Implementer(s)"]
-    V["L3 · Independent Reviewer"]
-    E{"Mission criteria met?"}
-    H <-->|"Human-only decisions"| M
-    M -->|"One approved cycle"| W
-    W --> R
-    W --> I
-    W --> V
-    R --> W
-    I --> W
-    V --> W
-    W -->|"Results · checks · commit · checkpoint"| M
-    M --> E
-    E -->|"No · continue / replan"| M
-    E -->|"Yes · evidence"| D([Complete])
+    U["You"]
+    L1["L1 agent<br/>Intent · answers · approvals · outcome evaluation"]
+    L2["L2 agent · same session<br/>Dryforge Ready → Dryforge Go<br/>Plan · implement · verify · delegate"]
+    L3["L3 agents<br/>Scoped research · implementation · independent review"]
+    U <-->|"Ongoing conversation"| L1
+    L1 -->|"Create session · request Ready<br/>Answer questions · approve and request Go"| L2
+    L2 -->|"Questions · Ready documents · Go results"| L1
+    L2 -->|"Create as needed · assign tasks"| L3
+    L3 -->|"Task results · review evidence"| L2
 ```
 
-**Decision boundary:** L1 can answer only within the authority the human delegated. It escalates unknown product policy, goal changes, merging, deployment, spending, destructive actions, and confidential disclosure as required. L2 does not autonomously begin another cycle.
+| Layer | Responsibility |
+| --- | --- |
+| **L1 — Your conversation partner and execution owner** | Understand and preserve your intent. Create L2, request Ready, answer questions, approve documents and request Go in the same L2 session. Evaluate results and select the next cycle. |
+| **L2 — The main agent running Dryforge Ready and Go** | Carry out one cycle in the same session, including direct implementation and verification. Exchange questions and approvals with L1, manage any L3 agents and own the cycle's result. |
+| **L3 — Task agents managed by L2** | Perform assigned research, implementation or review and return results to L2. Independent reviewers use a separate context from implementers. |
 
-## The cycle
+L2 also implements code. Under the existing Dryforge Go rules, it directly implements a single `MECHANICAL`/`NONE` task and delegates parallel or `RISKY` work to task agents. Direct implementation retains the required independent review. Keeping Ready and Go in the same session lets design context from Ready inform implementation decisions.
 
-| Boundary | Invariant |
-| :-- | :-- |
-| **READY → GO** | Same real L2 host session from the first question through Spec/Plan approval, implementation, and handoff. Approval is bound to the exact documents. |
-| **L2 → L1** | L2 reports requirements satisfied, commands and exit codes, branch/commit, outstanding issues, and reusable checkpoint. |
-| **Next cycle** | L1 evaluates the *mission*, then chooses **REUSE** (verified session + enough context) or **SPAWN** (fresh session + explicit handoff). |
-| **L3 work** | **RESUME** for the *same task* when contract, context, and workspace match; otherwise **SPAWN + handoff**. **FRESH_REVIEW** never reuses an implementer's session. |
-| **State** | A new worker reads prior decisions, harness, commit, and cycle archive. A new clone does not automatically contain ignored `.dryforge/` state. No `migration` is required just to replace a worker. |
+L1 fills the ordinary user's role for L2. L2 creates and manages its task agents; L1 does not directly manage individual L3 agents.
 
-### Research before reinventing
+Ready, Go and their task agents use the ordinary caller interface. They do not need a special workflow based on whether the caller is a person or L1. Routing, delegated authority and approval records belong to the outer runtime.
 
-Ouroboros keeps the earlier **LANDSCAPE** stage: look for existing products, projects, plugins and libraries **before** choosing an implementation approach. A conditional read-only research agent can use available public code search and documentation tools; L2 rechecks decisive primary evidence.
-
-- **LANDSCAPE:** compare *reuse / extend / build*; stop on coverage, evidence, and decision stability.
-- **ELICIT:** agree on intent and consequential choices; never treat a search result as the user's preference.
-- **PLAN:** investigate the selected implementation's mechanism; mark claims `VERIFIED`, `UNVERIFIED`, or `RULED_OUT` for a specific version/route.
-- **GO:** run an approved, bounded feasibility experiment when an important capability remains unknown. A negative result stops dependent work.
-
-**Recommended MCPs (Optional):** [Grep MCP](https://mcp.grep.app) for public code search and [Context7 MCP](https://mcp.context7.com/mcp) for library/API documentation. They are configured in the host, **not auto-installed**, and neither is required. See [MCP setup](docs/RESEARCH_MCP_SETUP.md).
+Interviewing is part of L1's conversation with you. Its instructions can evolve without adding another agent or another user-facing stage. After a cycle, L1 can reuse a suitable worker session or start a fresh one with the accepted checkpoint.
 
 ## Try it
 
-<details open>
-<summary><strong>Claude Code · local plugin test</strong></summary>
+### Claude Code
+
+Load the plugin from a checkout containing the `init` and `approve` skills:
 
 ```bash
 git clone --depth 1 https://github.com/contiloop/ouroboros.git ~/ouroboros
-
 cd /path/to/your-project
 claude --plugin-dir ~/ouroboros/claude
 ```
 
-Invoke **`/ouroboros:mission`** explicitly. For a human-supervised single cycle, use `/ouroboros:ready`, then `/ouroboros:go`. If the host cannot provide the required session/relay/nesting capabilities, mission mode stops rather than pretending it ran.
+Use `/ouroboros:init`, talk through the proposal, then use `/ouroboros:approve`.
 
-</details>
+### Codex
 
-<details>
-<summary><strong>Codex · local plugin package</strong></summary>
+Register this checkout through Codex's local marketplace flow using `.agents/plugins/marketplace.json`, which points to `codex/plugin/`. Enable the `ouroboros` plugin, then select **`$ouroboros:init`** followed by **`$ouroboros:approve`** when the proposal is ready.
 
-The marketplace descriptor is `.agents/plugins/marketplace.json` and the plugin package is `codex/plugin/`. Register this checkout through your Codex client's local marketplace flow; enable the **`ouroboros`** plugin and check for duplicate older skill names. Explicitly invoke `$mission`, `$ready`, or `$go` once the client reports them available.
+### Other workflows and packages
 
-</details>
+For a single cycle you supervise directly, use `ouroboros:ready` followed by `ouroboros:go`. The `migration` skill onboards an existing project into the development workflow; replacing a worker does not require it.
 
-<details>
-<summary><strong>Mission prompt example</strong></summary>
+The repository also generates packages for Grok, Agent Plugins and Antigravity. Packaging support and live execution support are separate: the host must provide the sessions, task agents and decision relay needed for the workflow.
 
-```text
-Help me turn ChatGPT explanations from papers into properly linked
-Zotero notes and PDF highlights. First agree on observable success
-criteria, delegated decisions, and finite execution limits.
-Assign only one ready-go cycle at a time to a persistent worker.
-Review the actual evidence before choosing the next cycle.
-Do not change the final goal, merge, deploy, or spend money without approval.
-```
+**Optional research tools:** Grep MCP and Context7 MCP help with public code search and library documentation. Neither is required or automatically installed. See [MCP setup](docs/RESEARCH_MCP_SETUP.md).
 
-</details>
+## Current status
 
-## Implementation status
+Ouroboros is experimental. The implementation includes the conversation draft and approval handoff, cycle and permission checks, and an optional runtime bridge for Claude SDK and Codex App Server sessions. Automated checks cover state transitions, transport behavior and package consistency.
 
-| Included | Still required from the runtime / live tests |
-| :-- | :-- |
-| `mission`, `ready`, `go`, `migration` skills | Actual persistent L1/L2 sessions and L2→L3 spawning |
-| Decision/approval and session-lifecycle contracts; optional skill result interface | Authenticated decision relay, runtime authorization and budgets |
-| Mission ledger, persistent worker transport and question/permission relay | Live model behavior, evidence verification and interruption reconciliation |
-| LANDSCAPE research guidance and 5 platform packages | Live multi-cycle end-to-end acceptance in the chosen host |
+On Codex, live checks have confirmed discovery of the new commands and L1 handling a child approval after the parent turn ends. A complete fresh `init → approve → Ready–Go → final outcome` run is still unverified. Formal goal amendments currently commit at evaluated cycle boundaries; further conversation remains available during a cycle.
 
-Hooks are **observations**, never approvals. A process stop or successful command is not proof of mission completion. The ledger validates events provided to it; it cannot verify a human identity or the truth of tests by itself.
+## Guides and development
 
-### Persistent worker connection
+- [Conversation, handoff and cycle operation](docs/MISSION.md)
+- [Persistent sessions and runtime setup](docs/RUNTIME.md)
+- [Delegated execution scope](src/skills/init/references/runtime-permissions.md)
+- [Extending L1's understanding and decision inputs](docs/SKILL_INTERFACE.md)
 
-Use the optional [runtime bridge](docs/RUNTIME.md) when native worker tools are insufficient.
-It keeps the same L2 host session across turns, records message IDs, relays input requests and
-rejects stale Go approvals. Dependencies/authentication are user-managed. Transport tests use
-fixtures, not live models; a delivered message is never treated as completed mission work.
-
-### Source map
-
-```text
-src/skills/
-├── mission/             # L1 orchestration + ledger
-│   ├── SKILL.md
-│   ├── references/      # intent, cycle, host contracts
-│   └── scripts/mission_state.py
-├── ready/               # L2 intent discovery + LANDSCAPE
-├── go/                  # L2 implementation + L3 lifecycle
-└── migration/           # one-time project harness onboarding
-
-docs/                    # mission, research MCP setup
-platform/                # platform-specific manifest inputs
-claude/ · codex/ · grok/ · agent-plugin/ · antigravity/
-```
-
-### Optional skill extensions
-
-L1 can accept Interview, Research, or Evaluation results through a small **evidence + authority
-contract**: shared identity/status/evidence fields, with a skill-specific payload. A result may
-propose an intent change, but cannot approve or apply it. A changed mission goal requires L1 review
-and explicit human approval. This is **an interface for future skills, not an installed Interview
-skill or a working agent transport**. See [extension guide](docs/SKILL_INTERFACE.md).
-
-### Development checks
+`src/skills/` is the source of truth. It contains `init`, `approve`, `ready`, `go` and `migration`. The five platform packages are generated from it using `build/build.sh`.
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s ci -p 'test_*.py'
 bash build/build.sh
-# The reproducibility check requires the generated outputs to be committed:
+# Commit source and generated outputs before the clean-tree reproducibility check.
 python3 ci/verify.py
 ```
 
-The checks are **contract / ledger / package tests**, not proof of live Claude Code or Codex agent behavior. See [Mission guide](docs/MISSION.md) for acceptance criteria and limitations.
+## Credits and license
 
----
+Ouroboros builds on [Dryforge](https://github.com/prekuter/dryforge) by **prekuter** under [Apache-2.0](LICENSE). It is an independent fork. The original [English](README.upstream.md) and [Korean](README_ko.upstream.md) READMEs are preserved for reference.
 
-<details>
-<summary><strong>Credits · compatibility · license</strong></summary>
-
-Ouroboros builds on the original **Dryforge** project by **prekuter**, distributed under [Apache-2.0](LICENSE). The original source and historical README remain available in [upstream](https://github.com/prekuter/dryforge), [English snapshot](README.upstream.md), and [Korean snapshot](README_ko.upstream.md). This is an independent experimental fork, not an upstream release.
-
-The existing on-disk `.dryforge/` state path is deliberately retained for compatibility with prior cycles; **changing the public product/plugin name does not silently migrate user data**. Upstream historical version `1.3.8` is retained in manifests for now, not presented as an Ouroboros stable release.
-
-</details>
+Existing `.dryforge/` state paths and internal mission identifiers are retained for compatibility. The public `mission` command has been replaced by `init` and `approve`; existing run records are not reset by that change.

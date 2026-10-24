@@ -1,14 +1,19 @@
-# Mission mode: three levels, persistent cycles
+# Ouroboros init and approve: conversation, handoff, persistent cycles
 
-This fork adds an **experimental opt-in `mission` skill**, an L3 lifecycle policy, and a tested
-local state ledger. It includes an optional [runtime bridge](RUNTIME.md), but does **not** install global hooks,
-authenticate human approvals, or guarantee that an arbitrary host supports nested/resumable
-agents. Its live multi-agent acceptance test has not been run in the development sandbox.
+`ouroboros:init` starts the conversation with L1. Refine the goal, completion criteria and delegated
+scope together. `ouroboros:approve` hands that reviewed proposal to L1, which then manages ordinary
+Ready/Go cycles. The conversation stays open while work runs. Interview procedures can evolve
+independently of the lower tiers' ordinary caller interface.
+
+The package includes a local state ledger and optional [runtime bridge](RUNTIME.md). It does not
+install global hooks or authenticate approval records. Actual host support for persistent nested
+sessions must be checked. A complete fresh init-to-outcome live-model acceptance run is not yet
+certified; local state/transport tests are separate evidence.
 
 ## Architecture
 
 ```text
-Human <-> L1 Mission Orchestrator
+Human <-> L1 (init: discuss / approve: take responsibility)
              |
              | one cycle goal + delegated decisions
              v
@@ -33,17 +38,24 @@ review must never reuse/fork the implementer's context. No agent replacement req
 
 ## Try it
 
-Use this fork's generated plugin package, not the original upstream install. In a capable host,
-explicitly invoke `/ouroboros:mission` in Claude Code, or `$mission` in Codex.
-Example request:
+Use this fork's generated plugin package. In Claude Code:
 
-> Help me define the final outcome and delegated decisions. Use persistent ready-go workers.
-> Report each completed cycle before assigning the next. Do not merge or deploy without asking me.
+1. `/ouroboros:init` — open the conversation, refine intent and review the proposed delegation.
+2. `/ouroboros:approve` — approve the current reviewed proposal and hand cycle management to L1.
 
-The skill first obtains a human-approved intent contract and finite limits, then checks session,
-relay, nesting and skill-loading capabilities. Missing capability is a blocker, not silent
-single-agent fallback. Grep/Context7 remain optional; see [MCP setup](RESEARCH_MCP_SETUP.md).
-Keep ordinary `/ready` and `/go` for a single manually supervised cycle.
+In Codex explicitly select `$ouroboros:init`, then `$ouroboros:approve`, from this plugin once available. The old
+`mission` skill is no longer shipped. Ordinary `$ouroboros:ready`/`$ouroboros:go` remain available for a manually
+supervised single cycle. Internal `.dryforge/mission/` records are retained; do not reset old runs.
+
+Example: “Build a local memo CLI; help me work out what it should do.” Discuss the requirements
+with L1, inspect the proposal, then invoke approve. L1 performs Ready reviews, Go dispatch,
+result checks and cycle selection within that scope without asking for each step again. Actual
+human-only decisions still return to the human. Additional conversation remains possible at
+all times. Formal goal changes currently commit at evaluated cycle boundaries.
+
+Read-only project inspection can inform the discussion. Cycle workers do not start in DRAFT.
+After activation, missing host capability is a concrete blocker, not silent single-agent
+fallback. Grep/Context7 remain optional; see [MCP setup](RESEARCH_MCP_SETUP.md).
 
 ## What the runtime must supply
 
@@ -51,7 +63,7 @@ A host adapter must create actual sessions, retain IDs, route questions/answers 
 worker, explicitly load ready/go, enforce budgets/permissions, quiesce children, inspect evidence
 and reconcile filesystem state. Native tools can provide this in a capable agent host. The optional [runtime bridge](RUNTIME.md) supplies Claude SDK and Codex App Server operations.
 Use its actual CLI commands; a JSON ledger event alone neither spawns nor resumes a model. The runtime preflight and official sources are in
-[host-adapter.md](../src/skills/mission/references/host-adapter.md).
+[host-adapter.md](../src/skills/init/references/host-adapter.md).
 
 Hooks can supply observations. A stopped process/agent does not mean a successful cycle, and an
 approval of a spec does not authorize every tool call. No auto-go-on-stop hook is installed.
@@ -59,25 +71,29 @@ Do not submit approval events from untrusted hook output or from a child task's 
 
 ## Durable ledger (Python 3, standard library)
 
-The script is included in every platform's `skills/mission/scripts/` directory. From a repository
+The script is included in every platform's `skills/init/scripts/` directory. From a repository
 checkout (replace paths with your actual approved files):
 
 ```sh
-python3 src/skills/mission/scripts/mission_state.py init \
-  --state /project/.dryforge/mission/state.json --contract /project/approved-contract.json
-python3 src/skills/mission/scripts/mission_state.py digest --docs-dir /project/.dryforge
-python3 src/skills/mission/scripts/mission_state.py apply \
+python3 src/skills/init/scripts/mission_state.py draft \
+  --state /project/.dryforge/mission/state.json --contract /project/draft-contract.json
+python3 src/skills/init/scripts/mission_state.py digest --docs-dir /project/.dryforge
+python3 src/skills/init/scripts/mission_state.py apply \
   --state /project/.dryforge/mission/state.json --event /project/next-event.json
-python3 src/skills/mission/scripts/mission_state.py show --state /project/.dryforge/mission/state.json
+python3 src/skills/init/scripts/mission_state.py show --state /project/.dryforge/mission/state.json
 ```
 
 Do not run the example with invented approvals. The contract shape is documented in
-[intent-contract.md](../src/skills/mission/references/intent-contract.md).
+[intent-contract.md](../src/skills/init/references/intent-contract.md).
 Events carry `mission_id`, `id`, `op`, `actor`, `expected_revision`, and (during a cycle) `cycle_id`.
 L2 events additionally carry the recorded `session_id`. Operation fields follow the implementation
 and its behavioral fixtures in [test_mission_state.py](../ci/test_mission_state.py).
 
-Transitions are `start -> ready -> approve -> go -> result -> accept -> close -> evaluate`.
+The outer handoff is `DRAFT -> revise_draft (repeat) -> activate -> ACTIVE`.
+`show` reports the proposal digest; activation binds both intent and proposed execution scope to
+the actual human invocation. After activation, each inner cycle follows
+`start -> ready -> approve -> go -> result -> accept -> close -> evaluate`.
+The inner `approve` is L1 reviewing exact Ready documents, not another user handoff.
 `question/answer` does not grant go approval; `interrupt/resume` requires the same worker ID.
 `abort` requires a human and stopped children. `continue` resumes an evaluated, escalated mission
 only after a human decision; it cannot enlarge the cycle budget. A new budget needs an explicitly
@@ -111,3 +127,10 @@ fresh review, pause/recovery, budget/stall stops, persistence and five-platform 
 two/three-cycle tests are **not live Claude/Codex runs**. Before unattended use, demonstrate same-ID
 ready/go, actual L3 spawning and review, a relayed question, human-only escalation, L2 reuse and
 replacement, interruption recovery, and mission-level success evidence on the target host.
+
+## Delegated tool decisions
+
+L1 can be the decision provider for local tool permissions as well as cycle specs, within an
+explicit human-approved [runtime policy](../src/skills/init/references/runtime-permissions.md).
+This uses a `runtime_policy` event and state schema 3. It does not change the active Intent or
+Ready approval. Schema-1/2 ledgers remain readable and human-only until explicitly opted in.

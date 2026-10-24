@@ -1,185 +1,113 @@
-<div align="center">
-
 # ⟲ Ouroboros
 
-### 의도는 남기고, 개발은 순환한다.
+원하는 것을 함께 구체화하고, 준비가 되면 개발을 맡기세요.
 
-**사용자 Intent를 중심으로 움직이는 3계층 개발 Harness**  
-최종 목표부터 검증된 결과까지, 한 번에 하나의 `ready → go` 사이클.
+Ouroboros에서는 **L1**이 사용자와 계속 대화하면서 개발 전체를 맡습니다. 원하는 결과를 함께 다듬고 실행 범위를 승인하면, L1이 Ready–Go 사이클을 운영하고 결과를 검토하며 목표를 향해 진행합니다. 작업 중에도 L1과 계속 이야기할 수 있습니다.
 
-[![Lifecycle](https://img.shields.io/badge/lifecycle-READY%20%E2%86%92%20GO-7C3AED?style=for-the-badge)](#한-사이클의-규칙)
-[![Agents](https://img.shields.io/badge/architecture-L1%20%2F%20L2%20%2F%20L3-0F766E?style=for-the-badge)](#3계층-아키텍처)
-[![Status](https://img.shields.io/badge/status-experimental-EAB308?style=for-the-badge)](#현재-구현-범위)
-[![License](https://img.shields.io/badge/license-Apache--2.0-334155?style=for-the-badge)](LICENSE)
+[English](README.md) · [日本語](README_ja.md) · [中文](README_zh.md)
 
-[**시작하기**](#시작하기) · [**아키텍처**](#3계층-아키텍처) · [**Mission 가이드**](docs/MISSION.md) · [**English**](README.md)
+## 대화로 시작하기
 
-</div>
+| 명령 | 하는 일 |
+| --- | --- |
+| `/ouroboros:init` | L1과 대화를 시작합니다. 원하는 결과, 완료 기준, 제약과 위임할 판단을 함께 정리합니다. 초안은 계속 수정할 수 있으며, 아직 개발 사이클을 실행하지 않습니다. |
+| `/ouroboros:approve` | 검토한 내용을 승인하고 실행을 L1에 맡깁니다. 이후 L1이 사이클 선택, 작업자의 질문 응답, Ready 문서 승인, Go 실행과 결과 검토를 담당합니다. |
 
----
+예를 들어 “재실행해도 메모가 남는 로컬 메모 CLI를 만들고 싶어. 세부 내용을 같이 정리해줘”라고 시작할 수 있습니다. 대화하며 초안을 다듬고, 의도와 맞으면 `approve`로 인계합니다.
 
-> [!IMPORTANT]
-> **한 사이클의 성공은 최종 Mission의 완료를 뜻하지 않습니다.** Ouroboros는 사람에게서 승인받은 의도를 계속 유지하고, 실제 검증 증거에 따라 다음 사이클을 결정합니다.
+승인한 뒤에도 대화는 이어집니다. L1은 합의한 범위 안의 추가 설명을 작업에 반영하고, 새로운 판단이 필요한 변경은 영향을 설명하며 사용자와 조율합니다. 이미 위임받은 판단은 사이클이나 일상적인 도구 요청마다 다시 묻지 않고 처리합니다.
 
-> [!WARNING]
-> **실험적 확장 버전입니다.** 스킬·의사결정/세션 규칙·테스트된 로컬 상태 관리 코드는 포함하지만, 선택적 [실행 연결 계층](docs/RUNTIME.md)으로 실제 Claude SDK 세션·Codex App Server thread를 유지할 수 있습니다. 의존성·전역 Hook을 자동 설치하지 않으며, 실제 3계층 실행은 아직 별도 검증이 필요합니다. 실행 환경에서 지속 세션·질문 중계·중첩 에이전트를 지원해야 합니다.
+## Ready–Go 반복
 
-## 왜 Ouroboros인가?
+실행을 인계받은 L1은 기존 **Dryforge Ready·Go 절차**를 아래 흐름으로 운영합니다. 이 플러그인에서는 `ouroboros:ready`, `ouroboros:go`라는 이름으로 제공합니다.
 
-한 코딩 세션이 명세대로 코드를 작성했다고 해서 사용자의 최종 목표를 달성한 것은 아닙니다. Ouroboros는 **오래 유지해야 할 의도**, **한 개발 사이클의 맥락**, **짧게 쓰는 개별 작업 맥락**을 분리합니다. 각 사이클이 끝날 때마다 최종 의도에 가까워졌는지 다시 판단합니다.
+1. **L1이 L2 에이전트 세션을 만들고 Ready를 요청합니다.** 이번 사이클의 목표와 사용자 의도에 관한 맥락을 전달합니다. Ready 스킬 자체가 에이전트를 생성하는 것은 아닙니다.
+2. **L2가 Dryforge Ready 절차를 수행합니다.** 기존 해결책을 조사하고 요구사항·계획·인계 문서를 작성합니다. 궁금한 점은 L1에 묻고, L1이 사용자 의도와 위임 범위에 따라 답합니다. 판단 근거가 부족하거나 위임 범위를 벗어나는 결정만 사용자와 조율합니다.
+3. **L1이 Ready 결과를 검토하고 같은 L2에 Go를 요청합니다.** 문서가 부족하면 수정을 요청합니다. 충분하면 실제 내용을 승인한 뒤, Ready의 맥락을 가진 동일 L2 세션에 Dryforge Go를 맡깁니다.
+4. **L2가 Go의 구현·검증을 진행합니다.** 절차에 따라 직접 작업하거나 필요한 L3 에이전트를 생성해 개별 작업을 맡깁니다. 테스트와 독립 검토 결과를 취합해 L1에 보고합니다.
+5. **L1이 전체 목표에 비춰 결과를 평가합니다.** 보완을 요청하거나 다음 사이클을 선택하고, 목표를 충족하면 근거와 함께 완료를 보고합니다.
 
-<table>
-<tr><th>01 · INTENT</th><th>02 · CYCLE</th><th>03 · EXECUTION</th></tr>
-<tr><td><strong>L1 · Mission Orchestrator</strong><br/>최종 의도·제약·위임 권한을 유지하고 다음 사이클을 결정합니다.</td><td><strong>L2 · Cycle Worker</strong><br/><strong>동일 세션</strong>에서 <code>ready → 승인 → go</code>를 수행한 뒤 검증 결과를 보고합니다.</td><td><strong>L3 · Task Agents</strong><br/>제한된 조사·구현·독립 검토를 수행합니다. 안전할 때만 세션을 재개합니다.</td></tr>
-</table>
+사용자의 `ouroboros:approve`는 L1에 실행을 맡기는 승인입니다. 이후 사이클별 Ready 승인은 L1이 실제 문서를 보고 수행합니다. 한 사이클이 끝났다는 이유만으로 전체 목표가 완료됐다고 판단하지 않습니다.
 
-## 3계층 아키텍처
+## 구조
 
 ```mermaid
 flowchart TB
-    H([사용자 · 최종 의도])
-    M["L1 · Mission Orchestrator<br/>의도 · 위임 권한 · 결과 평가"]
-    W["L2 · Cycle Worker<br/>동일 세션: ready → 승인 → go"]
-    R["L3 · Researcher"]
-    I["L3 · Implementer(s)"]
-    V["L3 · Independent Reviewer"]
-    E{"최종 성공 기준을 충족했는가?"}
-    H <-->|"사용자 전용 결정"| M
-    M -->|"승인된 한 사이클"| W
-    W --> R
-    W --> I
-    W --> V
-    R --> W
-    I --> W
-    V --> W
-    W -->|"검증 증거 · 브랜치 · 체크포인트"| M
-    M --> E
-    E -->|"아니오 · 계속 / 재계획"| M
-    E -->|"예 · 증거 확인"| D([완료])
+    U["사용자"]
+    L1["L1 에이전트<br/>의도 이해 · 질문 응답 · 승인 · 결과 판단"]
+    L2["L2 에이전트 · 동일 세션<br/>Dryforge Ready → Dryforge Go<br/>계획 · 직접 구현 · 검증 · 작업 위임"]
+    L3["L3 에이전트들<br/>개별 조사 · 구현 · 독립 검토"]
+    U <-->|"계속되는 대화"| L1
+    L1 -->|"세션 생성 · Ready 요청<br/>질문 답변 · 승인 후 Go 요청"| L2
+    L2 -->|"질문 · Ready 문서 · Go 결과"| L1
+    L2 -->|"필요시 생성 · 개별 작업 지시"| L3
+    L3 -->|"작업 결과 · 검토 근거"| L2
 ```
 
-**판단 권한의 경계:** L1은 사람이 위임한 범위에서만 답하고 승인합니다. 목표 변경, 임의 정책 결정, 병합·배포·비용 지출·파괴적 작업·비공개 정보 공개는 필요한 승인 없이 수행하지 않습니다. L2는 자신의 다음 사이클을 독단적으로 만들지 않습니다.
+| 계층 | 담당 업무 |
+| --- | --- |
+| **L1 — 사용자의 대화 상대이자 실행 책임자** | 사용자 의도를 이해하고 유지합니다. L2를 생성해 Ready를 맡기고, 질문에 답하고, 문서를 승인한 뒤 같은 L2에 Go를 맡깁니다. 결과와 다음 사이클을 판단합니다. |
+| **L2 — Dryforge Ready·Go를 수행하는 메인 에이전트** | 한 세션에서 Ready부터 Go까지 수행하며 직접 코드를 구현하고 검증할 수 있습니다. L1과 질문·승인을 주고받고, 필요한 L3를 운영하며 사이클 결과를 책임집니다. |
+| **L3 — L2가 사용하는 개별 작업 에이전트** | L2가 맡긴 조사·구현·검토를 수행하고 L2에 결과를 돌려줍니다. 독립 검토자는 구현자와 별개의 맥락을 사용합니다. |
 
-## 한 사이클의 규칙
+구현은 L2도 담당합니다. 기존 Dryforge Go 규칙에 따라 단일 `MECHANICAL`/`NONE` 작업은 L2가 직접 구현하고, 병렬 작업이나 `RISKY` 작업은 하위 작업자에게 맡깁니다. 직접 구현할 때도 필요한 독립 검토는 유지합니다. Ready와 Go를 같은 세션에서 수행하는 것은 Ready에서 쌓은 설계 맥락을 구현 판단에 이어 쓰기 위해서입니다.
 
-| 경계 | 원칙 |
-| :-- | :-- |
-| **READY → GO** | 질문 → Spec/Plan/Handoff 승인 → 구현 → 인계까지 **동일한 실제 L2 세션**. 승인은 문서 내용에 연결됩니다. |
-| **L2 → L1** | 구현 범위, 실행 명령·종료 코드, 브랜치·커밋, 미해결 문제, 체크포인트를 보고합니다. |
-| **다음 사이클** | L1만 Mission 결과를 평가한 뒤 **REUSE**(재개 및 컨텍스트 확인) 또는 **SPAWN**(새 세션 + 명시적 인계)을 결정합니다. |
-| **L3 작업** | 같은 작업이고 계약·컨텍스트·작업 공간이 유효하면 **RESUME**. 아니면 **SPAWN + 인계**. 독립 검토는 항상 **FRESH_REVIEW**입니다. |
-| **상태** | 새 Worker는 기존 결정을 자동으로 기억하지 않습니다. 승인된 코드·Harness·작업 기록을 전달받습니다. 새 세션 때문에 `migration`을 다시 실행하지 않습니다. |
+L1은 L2에 대해 기존 사용자의 역할을 합니다. L3의 생성과 작업 관리는 L2가 맡으며, L1이 개별 L3를 직접 지휘하지 않습니다.
 
-### 먼저 조사하고, 그다음 구현한다
+Ready·Go와 그 아래 작업자는 일반적인 호출자 인터페이스를 사용합니다. 상대가 사람인지 L1인지에 따라 별도 절차를 적용할 필요가 없습니다. 요청 전달, 위임 범위 확인과 승인 기록은 바깥 실행 계층에서 관리합니다.
 
-기존 **LANDSCAPE** 단계도 그대로 포함합니다. L2는 유사한 제품·프로젝트·플러그인·라이브러리를 조사하며 필요하면 읽기 전용 L3 Researcher를 생성할 수 있습니다. 이후 중요한 출처를 직접 재검토하고 사용자 의도를 확정합니다.
+인터뷰는 사용자와 L1이 나누는 대화의 일부입니다. 향후 대화 절차를 개선해도 별도 에이전트나 사용자 단계를 추가할 필요는 없습니다. 사이클이 끝나면 L1은 상태가 적합한 작업자 세션을 재사용하거나, 검증된 결과를 새 작업자에게 인계합니다.
 
-- **LANDSCAPE:** 기존 솔루션 **재사용 / 확장 / 신규 개발** 비교, Coverage·Evidence·Decision Stability 기준으로 검색 종료
-- **ELICIT:** 중요한 요구사항과 선택을 승인받되, 검색 결과로 사용자의 의도를 대신하지 않음
-- **PLAN:** 선택한 기술의 API와 실제 구현 방법 조사; `VERIFIED / UNVERIFIED / RULED_OUT` 구분
-- **GO:** 핵심 기술이 불확실하면 승인된 작은 검증 실험부터 수행; 부정적 결과면 후속 구현 중단
+## 설치와 실행
 
-**권장 MCP (선택 설치, Optional):** [Grep MCP](https://mcp.grep.app)는 공개 소스 검색, [Context7 MCP](https://mcp.context7.com/mcp)는 라이브러리·API 문서 확인에 사용합니다. 실행 호스트에 연결하며 **자동 설치하지 않고 필수도 아닙니다**. [MCP 설정](docs/RESEARCH_MCP_SETUP.md)을 참고하세요.
+### Claude Code
 
-## 시작하기
-
-<details open>
-<summary><strong>Claude Code · 로컬 플러그인 테스트</strong></summary>
+`init`과 `approve` 스킬이 포함된 체크아웃에서 플러그인을 불러옵니다.
 
 ```bash
 git clone --depth 1 https://github.com/contiloop/ouroboros.git ~/ouroboros
-
 cd /path/to/your-project
 claude --plugin-dir ~/ouroboros/claude
 ```
 
-Mission은 **`/ouroboros:mission`**으로 명시적으로 실행합니다. 사람이 감독하는 단일 사이클은 `/ouroboros:ready` → `/ouroboros:go`를 사용할 수 있습니다. 실제 호스트가 필수 세션·중계·중첩 실행 기능을 제공하지 못하면 Mission 모드는 지원하는 척하지 않고 중단합니다.
+`/ouroboros:init`으로 대화한 뒤, 정리한 내용을 검토하고 `/ouroboros:approve`를 실행합니다.
 
-</details>
+### Codex
 
-<details>
-<summary><strong>Codex · 로컬 플러그인 패키지</strong></summary>
+`.agents/plugins/marketplace.json`을 사용하는 로컬 마켓플레이스 절차로 이 체크아웃을 등록합니다. 이 파일은 `codex/plugin/` 패키지를 가리킵니다. `ouroboros` 플러그인을 활성화한 뒤 **`$ouroboros:init`**을 선택하고, 초안을 검토한 후 **`$ouroboros:approve`**를 선택합니다.
 
-`.agents/plugins/marketplace.json`이 `codex/plugin/` 패키지를 가리킵니다. 사용하는 Codex의 로컬 Marketplace 절차로 등록한 뒤 **`ouroboros`** 플러그인을 활성화하고 이전 스킬 이름이 중복되지 않는지 확인하세요. 스킬이 정상 표시되면 `$mission`, `$ready`, `$go`를 명시적으로 실행합니다.
+### 다른 실행 방식과 패키지
 
-</details>
+사용자가 직접 감독하는 단일 사이클은 `ouroboros:ready` → `ouroboros:go`로 실행할 수 있습니다. `migration`은 기존 프로젝트에 개발 작업 구조를 구성하는 스킬이며, 작업자를 교체할 때마다 실행하지 않습니다.
 
-<details>
-<summary><strong>Zotero 자동화 Mission 요청 예시</strong></summary>
+Grok, Agent Plugins, Antigravity용 패키지도 생성합니다. 패키지 제공 여부와 실제 실행 지원은 구분해야 합니다. 실행 호스트가 필요한 지속 세션, 하위 에이전트와 의사결정 중계를 제공해야 합니다.
 
-```text
-ChatGPT와 논문을 읽다가 새로 배운 내용을 Zotero의 해당 논문에
-원문과 연결된 메모·하이라이트로 저장하는 도구를 만들고 싶어.
-먼저 최종 성공 기준과 위임할 결정, 실행 한도를 합의해줘.
-한 번에 한 ready-go 사이클만 지속 Worker에게 할당하고,
-실제 결과를 평가한 뒤 다음 사이클을 선택해줘.
-목표 변경, 병합, 배포, 비용 지출은 나에게 승인받아.
-```
+**선택적 조사 도구(Optional):** Grep MCP는 공개 코드 검색, Context7 MCP는 라이브러리 문서 확인에 사용할 수 있습니다. 필수 도구가 아니며 자동 설치하지 않습니다. [MCP 설정](docs/RESEARCH_MCP_SETUP.md)을 참고하세요.
 
-</details>
+## 현재 상태
 
-## 현재 구현 범위
+Ouroboros는 실험 단계입니다. 대화 초안과 실행 인계, 사이클·권한 검증, Claude SDK와 Codex App Server 세션을 연결하는 선택적 실행 계층이 구현돼 있습니다. 자동 검사는 상태 전이, 요청 전달과 패키지 정합성을 확인합니다.
 
-| 포함된 것 | 실행 호스트 및 실사용 검증이 필요한 것 |
-| :-- | :-- |
-| `mission`, `ready`, `go`, `migration` 스킬 | 실제 L1/L2 지속 세션과 L2의 L3 생성 |
-| 의도·승인·세션 생명주기 계약과 선택적 확장 스킬 인터페이스 | 권한 있는 의사결정 중계와 실행 한도 강제 |
-| Mission 상태 검증과 지속 Worker 연결·질문/권한 요청 중계 | 실제 모델 동작·검증 증거·중단 복원·외부 부수효과 검증 |
-| LANDSCAPE 조사 규칙, 5개 플랫폼 배포본 | Claude/Codex 실제 다중 사이클 종단간 테스트 |
+Codex에서는 새 명령의 인식과 부모 턴 종료 후 자식의 승인 요청을 L1이 처리하는 흐름을 실제로 확인했습니다. 새 세션에서 `init → approve → Ready–Go → 최종 목표 달성`까지 완주하는 검증은 아직 남아 있습니다. 현재 정식 목표 변경은 평가가 끝난 사이클 경계에서 반영하며, 사이클 도중에도 대화는 계속할 수 있습니다.
 
-Hook은 **상태 관측 수단**이지 승인이 아닙니다. 프로세스 종료나 명령 성공은 Mission 완료 증거가 아닙니다. 상태 스크립트는 주어진 기록을 검증할 뿐, 실제 사람의 신원이나 테스트 결과가 진짜인지 자체적으로 판별하지 못합니다.
+## 상세 문서와 개발
 
-### 지속 Worker 연결
+- [대화, 실행 인계와 사이클 운영](docs/MISSION.md)
+- [지속 세션과 실행 환경 설정](docs/RUNTIME.md)
+- [실행 권한 위임 범위](src/skills/init/references/runtime-permissions.md)
+- [L1의 의도 이해와 판단 입력 확장](docs/SKILL_INTERFACE.md)
 
-기본 에이전트 도구만으로 연결하기 어려우면 선택적 [실행 연결 계층](docs/RUNTIME.md)을
-사용합니다. 같은 L2 세션에 후속 지시를 보내고, 질문·도구 권한 요청을 중계하며,
-오래된 명세 승인은 거부합니다. 설치·인증은 사용자가 관리합니다. 모의 서버 테스트를
-실제 모델의 실행 성공으로 표현하거나, 메시지 전달을 Mission 완료로 간주하지 않습니다.
-
-### 소스 구조
-
-```text
-src/skills/
-├── mission/             # L1 오케스트레이션 + 상태 기록
-│   ├── SKILL.md
-│   ├── references/      # 의도·사이클·호스트 계약
-│   └── scripts/mission_state.py
-├── ready/               # L2 의도 확정 + LANDSCAPE
-├── go/                  # L2 구현 + L3 생명주기
-└── migration/           # 기존 프로젝트의 최초 Harness 구성
-
-docs/                    # Mission 및 MCP 설정 가이드
-platform/                # 플랫폼별 매니페스트 입력
-claude/ · codex/ · grok/ · agent-plugin/ · antigravity/
-```
-
-### 확장 스킬 연결 (선택)
-
-L1에는 나중에 Interview·Research·Evaluation 등 다양한 스킬을 연결할 수 있습니다.
-결과의 **공통 영역(상태·근거·미해결 사항)**만 표준화하고, 구체적인 내용은 각 스킬이
-정의합니다. 결과가 Mission Intent의 변경을 제안하더라도 **L1 검토와 실제 사용자 승인**
-없이는 반영하지 않습니다. 이 기능은 **향후 스킬을 위한 인터페이스**이지,
-Interview 스킬이나 실제 에이전트 실행기가 설치됐다는 뜻은 아닙니다.
-[스킬 연결 가이드](docs/SKILL_INTERFACE.md)를 참고하세요.
-
-### 테스트 및 검증
+원본은 `src/skills/`에 있습니다. `init`, `approve`, `ready`, `go`, `migration`을 포함하며, `build/build.sh`가 다섯 플랫폼용 패키지를 생성합니다.
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s ci -p 'test_*.py'
 bash build/build.sh
-# 배포본을 커밋해 깨끗한 작업 트리를 만든 뒤 재현성 검사:
+# 소스와 생성된 패키지를 커밋한 뒤 깨끗한 작업 트리에서 재현성을 검사합니다.
 python3 ci/verify.py
 ```
 
-현재 검증은 스킬 계약·로컬 상태 전이·패키지 정합성을 확인합니다. **실제 Claude Code나 Codex에서 3계층이 제대로 작동한다는 증거는 아닙니다.** 무인 실행 전 동일 세션 Ready/Go, L3 실행·독립 검토, 질문 중계, 세션 재사용·교체, 복원과 최종 목표 증거를 확인해야 합니다. 자세한 기준은 [Mission 가이드](docs/MISSION.md)에 있습니다.
+## 원저작자와 라이선스
 
----
+Ouroboros는 **prekuter**의 [Dryforge](https://github.com/prekuter/dryforge)를 기반으로 한 독립 Fork이며 [Apache-2.0](LICENSE)을 따릅니다. 원본 [영문](README.upstream.md)과 [한국어](README_ko.upstream.md) README는 참고용으로 보존합니다.
 
-<details>
-<summary><strong>원저작자 · 호환성 · 라이선스</strong></summary>
-
-Ouroboros는 **prekuter**의 오픈소스 프로젝트 **Dryforge**를 기반으로 한 독립 개발 Fork입니다. 원본 라이선스는 [Apache-2.0](LICENSE)이며, [원본 저장소](https://github.com/prekuter/dryforge), [영문 원본 README](README.upstream.md), [한국어 원본 README](README_ko.upstream.md)를 그대로 보존합니다. 원본의 공식 릴리스가 아닙니다.
-
-기존 기록 디렉터리 `.dryforge/`는 이전 사이클과의 호환을 위해 유지합니다. **공개 브랜드를 바꾸더라도 사용자 기록을 조용히 이동하거나 삭제하지 않습니다.** 매니페스트 버전 `1.3.8`은 원본 버전 계열의 개발용 표기이며 Ouroboros 안정 릴리스라는 뜻은 아닙니다.
-
-</details>
+기존 `.dryforge/` 기록 경로와 내부 mission 식별자는 호환성을 위해 유지합니다. 공개 `mission` 명령은 `init`과 `approve`로 바뀌었으며, 이 변경으로 기존 실행 기록을 초기화하지 않습니다.

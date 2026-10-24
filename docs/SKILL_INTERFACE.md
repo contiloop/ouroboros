@@ -80,10 +80,10 @@ The CLI uses the standard library only. From a checkout, with actual files suppl
 host/controller (the placeholder paths below are not authorizations):
 
 ```sh
-python3 src/skills/mission/scripts/skill_contract.py digest --json /project/approved-contract.json
-python3 src/skills/mission/scripts/skill_contract.py validate \
+python3 src/skills/init/scripts/skill_contract.py digest --json /project/approved-contract.json
+python3 src/skills/init/scripts/skill_contract.py validate \
   --request /project/request.json --result /project/result.json
-python3 src/skills/mission/scripts/mission_state.py apply \
+python3 src/skills/init/scripts/mission_state.py apply \
   --state /project/.dryforge/mission/state.json --event /project/next-event.json
 ```
 
@@ -120,7 +120,8 @@ replaced by a new skill result and no stale approval is reused. Completed missio
 
 Old state-schema-1 ledgers load without a migration command. On first successful extension use the
 state becomes schema 2, preventing older code from ignoring pending extension decisions. Normal
-missions without extensions remain schema 1. Envelope schema version 1 is separate from the ledger
+missions without extensions remain schema 1. A separately human-approved runtime policy uses
+state schema 3; extension events preserve it and cannot alter that execution authority. Envelope schema version 1 is separate from the ledger
 version; unknown versions are rejected. Do not downgrade an active ledger to bypass its checks.
 
 ## Adding a future Interview skill
@@ -149,6 +150,6 @@ The ledger is a trusted local consistency check, not a security sandbox. A malic
 can lie about `actor`, source checks or evidence. Keep writes and human-approval verification in the
 trusted runtime; never route raw hook or child-agent output straight to authority-bearing events.
 
-See the [runtime contract](../src/skills/mission/references/skill-interface.md),
-[validator](../src/skills/mission/scripts/skill_contract.py),
+See the [runtime contract](../src/skills/init/references/skill-interface.md),
+[validator](../src/skills/init/scripts/skill_contract.py),
 [behavior tests](../ci/test_skill_interface.py), and [Mission guide](MISSION.md).

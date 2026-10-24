@@ -1,8 +1,8 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "ouroboros",
-  "version": "1.3.8",
-  "description": "Intent-driven development orchestration: mission → ready → go, with evidence at every cycle.",
+  "version": "1.4.0",
+  "description": "Intent-driven development orchestration: init → approve → ready/go cycles, with evidence at every cycle.",
   "author": {
     "name": "contiloop"
   },
@@ -42,7 +42,7 @@
           "Write"
         ],
         "defaultPrompt": [
-          "Use Ouroboros mission to establish my intent and orchestrate verified development cycles.",
+          "Use Ouroboros init to discuss my intent, then approve the reviewed proposal for L1 to manage Ready/Go cycles.",
           "Use Ouroboros ready and go for a supervised development cycle."
         ],
         "brandColor": "#F59E0B"

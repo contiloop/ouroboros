@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-MODULE = ROOT / 'src/skills/mission/scripts/mission_state.py'
+MODULE = ROOT / 'src/skills/init/scripts/mission_state.py'
 spec = importlib.util.spec_from_file_location('mission_state', MODULE)
 m = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)

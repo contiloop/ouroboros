@@ -1,5 +1,58 @@
 # Changelog
 
+## v1.4.0 (2026-10-24) — init conversation and approve handoff
+
+- Replace the public mission skill with `ouroboros:init` for ongoing intent discussion and
+  `ouroboros:approve` for handing the reviewed proposal to L1's ordinary Ready/Go loop.
+- Add durable DRAFT/revise/activate transitions. No cycle execution or active tool authority
+  before activation; one human handoff binds exact intent and proposed execution scope.
+- Keep the user conversation open during execution and isolate the interview procedure for
+  future upgrades. Preserve independent Ready/Go review and caller-neutral lower tiers.
+- Retain existing mission ledgers and IDs. Repeated commands do not reset runs, refill budgets
+  or expand authority. Formal intent amendments still commit at evaluated cycle boundaries.
+- Regenerate all five platform packages with five explicit-invocation skills. State/CLI tests
+  verify handoff semantics; a complete fresh live-model loop remains unverified.
+- Preserve the separate v3 `integration_branch` grant for exact-commit merges without
+  granting worktree lifecycle operations. Reject mixed policy shapes.
+- Retain the outer callback drain and the contract-level human-only `merge` restriction.
+
+## v1.3.11 (2026-10-24) — ordinary caller interface and child request lifetime
+
+- Keep Mission identity and authority in the outer controller; Ready/Go use their ordinary
+  caller interface, and structured Codex questions use contract-bound question delegation.
+- Drain observed Codex child work and callbacks after parent turn completion, preserving live
+  request bindings without extra model turns; refuse successful settlement with open requests.
+- Add explicit policy v3 local Go creation/integration/cleanup, bound to branch, path and Git-state
+  scope. Old grants stay unchanged; cleanup preserves unmerged, dirty, untracked and ignored data.
+- Recognize exact approved Python verification argv with `-B` before `-m`.
+- Add actual local Git and controller/protocol regressions. These do not certify a complete live
+  Mission or Claude child-lifecycle behavior.
+
+## v1.3.10 (2026-10-24) — bounded Go worktree permissions
+
+- Add a separately human-approved `go_worktrees` opt-in under runtime policy version 2;
+  existing version-1 grants remain base-only and cannot silently expand on upgrade.
+- Permit scoped Git staging, local commits, file edits and exact verification commands from
+  registered `.dryforge/worktrees/<task-id>` checkouts of the approved repository.
+- Validate Git's worktree registry, linked `.git` pointer, common metadata and effective index;
+  reject foreign checkout, traversal, symlink, unapproved paths and dangerous commands.
+- Bind delegated callback consumption to the **same reviewed operation and index digest**, fixing
+  a record/consume gap where an additional in-scope file could be staged after an L1 approval.
+- Keep worktree creation, removal, task-branch merging and remote/destructive commands human-only;
+  real model end-to-end behavior remains unverified.
+
+## v1.3.9 (2026-10-24) — experimental scoped delegation
+
+- Let L1 approve exact local tool requests within an explicitly human-approved runtime policy.
+- Validate paths, exact verification argv, active Go/doc/session identity and policy version at
+  response recording and consumption. Preserve human provenance for grants and L1 provenance
+  for decisions; old missions remain human-only until opted in.
+- Add human-only grant/revoke events without changing the current mission goal, documents or
+  budgets. State schema 3 preserves this authority across optional skill-interface events.
+- Unknown commands, remote/destructive operations and permission expansion remain human-only.
+- Include real Git/SQLite and mock-host CLI tests; live model behavior remains unverified.
+- Bump plugin cache identity; restart/reconcile active controllers rather than silently hot-reload.
+
 ## Unreleased — experimental fork mission extension
 
 - Add optional persistent Claude SDK / Codex App Server workers, durable local messaging and
