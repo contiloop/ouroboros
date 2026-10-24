@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.3.11 (2026-10-24) — live callback lifetime and optional scoped integration
+
+- Preserve live nested L3 permission/question requests after the parent L2 turn yields;
+  keep the parent dispatched until actual callback consumption or original bounded timeout.
+- Recognize `python3 -B -m unittest` as an eligible verification entrypoint **only**
+  when that exact command was human-granted in the runtime policy.
+- Add optional policy v3 `git_merge`, separately granted by a human for one named
+  destination branch. Require a pinned commit from a registered clean Dryforge task worktree,
+  an ancestor base, clean root and scoped addition/modification-only diff; no blanket merges.
+- Existing v1/v2 authorizations remain unchanged. Worktree add/remove, branch deletion,
+  forced integration and remote operations are still outside delegation.
+- Add real-Git negative/positive tests and callback-lifecycle regressions. Authenticated
+  live Codex/Claude E2E, resumed T1/T2 integration and child quiescence remain unverified.
+
 ## v1.3.10 (2026-10-24) — bounded Go worktree permissions
 
 - Add a separately human-approved `go_worktrees` opt-in under runtime policy version 2;
