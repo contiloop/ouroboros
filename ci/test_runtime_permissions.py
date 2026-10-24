@@ -344,6 +344,105 @@ class DelegationTests(unittest.TestCase):
             rid,r,a=self.request(cmd)
             with self.assertRaises(BridgeError):self.store.answer('w',rid,a)
 
+    def test_exact_python_dash_b_verification_requires_explicit_argv(self):
+        g=grant();g['verification_commands'].append(
+            ['python3','-B','-m','unittest','discover','-s','tests'])
+        self.event(g)
+        self.allow('python3 -B -m unittest discover -s tests')
+        for command in ('python3 -B -c print(1)',
+                        'python3 -I -m unittest discover -s tests',
+                        'python3 -B -m pip install x'):
+            rid,r,a=self.request(command)
+            with self.subTest(command=command),self.assertRaises(BridgeError):
+                self.store.answer('w',rid,a)
+
+    def prepare_v3_merge(self):
+        (self.root/'.gitignore').write_text('.dryforge/\n')
+        subprocess.run(['git','-C',str(self.root),'add','.gitignore'],check=True)
+        wt=self.worktree()
+        subprocess.run(['git','-C',str(wt),'branch','-m','dryforge/c1-T1'],check=True)
+        (wt/'memo_cli/domain.py').write_text('verified=True\n')
+        subprocess.run(['git','-C',str(wt),'add','memo_cli/domain.py'],check=True)
+        subprocess.run(['git','-C',str(wt),'-c','user.name=Fixture',
+                        '-c','user.email=fixture@example.invalid',
+                        'commit','-qm','task implementation'],check=True)
+        sha=subprocess.run(['git','-C',str(wt),'rev-parse','HEAD'],
+                           check=True,capture_output=True,text=True).stdout.strip()
+        branch=subprocess.run(['git','-C',str(self.root),'symbolic-ref','--short','HEAD'],
+                              check=True,capture_output=True,text=True).stdout.strip()
+        g=dict(worktree_grant(),version=3,integration_branch=branch)
+        g['operations']=list(g['operations'])+['git_merge']
+        return wt,sha,g
+
+    def test_exact_registered_go_commit_merge_requires_new_human_v3_scope(self):
+        wt,sha,g=self.prepare_v3_merge()
+        self.event(g)
+        self.allow(payload=self.host_request(self.root,
+            f'git merge --no-ff {sha} -m "Merge T1"'))
+        # Approval is a decision, not proof the actual Git command ran.
+        self.assertFalse(subprocess.run(['git','-C',str(self.root),'merge-base',
+            '--is-ancestor',sha,'HEAD']).returncode == 0)
+        checks=[e['body'] for e in self.store.events('w') if
+                e['kind']=='request.delegation_checked' and
+                e['body']['operation']=='git_merge']
+        self.assertEqual([x['phase'] for x in checks],['record','consume'])
+        self.assertEqual(checks[-1]['merge_task_worktree'],str(wt))
+
+    def test_v3_policy_shapes_cannot_mix_or_expand_legacy_operations(self):
+        g = dict(worktree_grant(), version=3, integration_branch='main')
+        policy.validate_policy(g)
+        with self.assertRaises(policy.PolicyError):
+            policy.validate_policy(dict(g, go_workflow={
+                'base_branch':'main', 'branch_prefix':'dryforge/'}))
+        for operation in ('git_worktree_add', 'git_worktree_remove', 'git_branch_delete'):
+            with self.subTest(operation=operation), self.assertRaises(policy.PolicyError):
+                policy.validate_policy(dict(g, operations=g['operations'] + [operation]))
+
+    def test_contract_human_only_merge_blocks_both_v3_shapes(self):
+        wt, sha, legacy = self.prepare_v3_merge()
+        self.store.finish('w', 'owner', 'm', {'ok':True})
+        self.s['contract']['human_only'].append('merge')
+        self.save()
+        body = prepare(self.config, 'sid', 'message', 'fixture continuation', self.path, 'c1')
+        self.store.enqueue('w', 'merge-restricted', body)
+        self.store.claim('w', 'owner')
+        workflow = dict(legacy)
+        workflow['go_workflow'] = {'base_branch':workflow.pop('integration_branch'),
+                                   'branch_prefix':'dryforge/'}
+        for g in (legacy, workflow):
+            with self.subTest(shape=sorted(g)):
+                self.event(g)
+                rid = self.store.request('w', 'owner', 'merge-restricted', 'permission',
+                    self.host_request(self.root, f'git merge --no-ff {sha} -m "Merge T1"'))
+                request = next(r for r in self.store.pending('w') if r['id'] == rid)
+                answer = dict(principal='L1', action='allow', basis='fixture task',
+                              session_id='sid', request_digest=request['fingerprint'],
+                              policy_digest=policy.fingerprint(self.s['runtime_authority']))
+                with self.assertRaisesRegex(BridgeError, 'human-only'):
+                    self.store.answer('w', rid, answer)
+
+    def test_merge_revoked_or_head_changed_after_record_cannot_execute(self):
+        wt,sha,g=self.prepare_v3_merge();self.event(g)
+        rid,r,a=self.request(payload=self.host_request(self.root,
+            f'git merge --no-ff {sha} -m "Merge T1"'))
+        self.store.answer('w',rid,a)
+        (self.root/'README.md').write_text('base moved\n')
+        subprocess.run(['git','-C',str(self.root),'add','README.md'],check=True)
+        subprocess.run(['git','-C',str(self.root),'-c','user.name=Fixture',
+                        '-c','user.email=fixture@example.invalid',
+                        'commit','-qm','base moved'],check=True)
+        with self.assertRaises(BridgeError):self.store.take_answer('w','owner',rid)
+
+    def test_even_v3_does_not_delegate_worktree_removal_or_force_merge(self):
+        wt,sha,g=self.prepare_v3_merge();self.event(g)
+        for cmd in (f'git merge --no-ff {sha} -m "Merge T1" --strategy=ours',
+                    f'git merge --abort',
+                    f'git worktree remove {wt}',
+                    f'git worktree add {wt}'):
+            with self.subTest(cmd=cmd):
+                rid,r,a=self.request(payload=self.host_request(self.root,cmd))
+                with self.assertRaises(BridgeError):self.store.answer('w',rid,a)
+
     def test_network_and_permission_expansion_not_delegated(self):
         self.event(grant())
         for method in ('item/tool/requestUserInput','item/permissions/requestApproval','mcpServer/elicitation/request'):

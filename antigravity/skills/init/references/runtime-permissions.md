@@ -38,6 +38,13 @@ verified Go task worktrees; `false` denies them. Updating an existing live Missi
 new human `runtime_policy` event with the revised object and the current authority digest.
 This changes execution scope, not Mission Intent or Ready approval.
 
+**Version 3 adds optional task-branch integration**, but only when a NEW human policy
+grant lists `git_merge`, sets `go_worktrees: true`, and pins the
+`integration_branch` (for example `main`). No version-1 or version-2 policy
+automatically acquires merge authority. A current Go cannot infer that its
+human-approved file-edit scope includes branch integration.
+
+
 `trust_workspace_code` is an explicit acknowledgement, not a security check. Git can run configured
 filters/hooks; tests and package scripts execute project code and may have side effects. An exact
 argv/cwd match does NOT prove all effects remain local. Use delegation only in a trusted checkout,
@@ -51,7 +58,8 @@ This same-user runtime cannot sandbox malicious L1/L2 code or authenticate a JSO
 | `git_add` | Existing explicit files within approved paths; optional `--`; no bulk `.`, globs, force, options, deletions or pathspec magic. Works at the base or a verified Go task worktree root if v2 opted in. |
 | `git_commit` | Only `git commit -m <message>`; every staged path must be an allowed addition/modification in the **effective worktree index**. No amend, deletion, signing/config flags, rebase or merge. |
 | `workspace_edit` | Claude Write/Edit/MultiEdit with an absolute path, or Codex file changes re-read from the exact host item; add/update only, no move/delete. |
-| `verify` | Exact approved argv from recognized unittest/pytest/compileall or package-test entrypoints, in the workspace root. No arbitrary shell, install, publish or interpreter `-c`. |
+| `verify` | Exact approved argv from recognized unittest/pytest/compileall or package-test entrypoints, including literal `python3 -B -m unittest ...` when that exact argv was granted. No arbitrary shell, install, publish or interpreter `-c`. |
+| `git_merge` (v3 only) | At the clean approved base root, exactly `git merge --no-ff <full-40-character-commit-SHA> -m <message>`. The pinned commit must be the current HEAD of one registered `dryforge/...` Go task branch, with a clean tracked worktree and the base HEAD as ancestor. Only allowed file additions/modifications with normal modes; no deletions, renames, submodules, symlinks or merge strategies. |
 
 Command callbacks require the host-observed root cwd (base or eligible worktree), or explicit
 `git -C /absolute/root` selecting that exact root.
@@ -73,6 +81,39 @@ Metadata `.git`, `.dryforge`, `.claude`, `.codex`, `.agents`, symlinks and paren
 ordinary file-write grants. Git's own index/commit updates are permitted only through matching Git
 commands, never arbitrary writes into `.git`. Network/permission expansion, tool elicitation and
 unknown operations remain human-only/denied under the existing adapter rules.
+
+## Exact-commit integration compatibility (policy v3)
+
+Version 3 accepts two separate shapes: `integration_branch` for exact-commit integration,
+and `go_workflow` for the lifecycle grant below. They cannot be combined. Existing grants
+retain their original scope; neither shape implies consent to the other.
+
+Version 2 grants **staging and local commits within registered task worktrees**, not merges.
+Version 3 may separately delegate `git_merge` using a human grant such as the following
+illustrative object (**not a grant or recommendation to approve unknown project code**):
+
+```json
+{
+  "version": 3,
+  "operations": ["git_add", "git_commit", "workspace_edit", "verify", "git_merge"],
+  "paths": ["memo_cli", "tests"],
+  "verification_commands": [["python3", "-B", "-m", "unittest", "discover", "-s", "tests"]],
+  "trust_workspace_code": true,
+  "go_worktrees": true,
+  "integration_branch": "main"
+}
+```
+
+The L1 must review the exact pinned merge commit and independent pre-merge evidence, not
+approve every possible future merge. The validator rechecks the **same merge source, current
+base HEAD, registered task identity and file delta** at decision recording and consumption.
+Merge execution, hook effects, conflicts and task results must still be observed separately.
+A granted scope does not authorize `git worktree add/remove`, branch deletion, force/rebase,
+remote push or deployment. Worktree removal in particular needs genuine child-writer
+quiescence evidence; unknown child state is not permission to delete. These remain
+human-reviewed. A delegated merge is also denied when the original human contract
+explicitly lists `merge` as forbidden. Never represent this as a fully unattended Go
+workflow or as a new authorization to change Mission Intent.
 
 ## Optional local Go lifecycle (policy v3)
 
@@ -140,6 +181,12 @@ delegated this exact scope. Conversely, matching paths do not authorize remote p
 any change to the final goal. Record refusals as `action: deny`, not an invented human approval.
 The host receives only its ordinary exact-call `accept`/allow response. Never use accept-for-session,
 exec-policy/network amendments, bypass modes or persistent permission updates.
+
+A completed parent host turn must not settle while a child callback remains `PENDING` or
+`ANSWERED`; the controller retains its dispatched owner and waits within the ORIGINAL
+turn/lifetime limit for host consumption. Timeout/disconnection stays uncertain and must be
+reconciled, not silently treated as approval. This does not prove a child without any
+observable callback is quiescent.
 
 The runtime checks the active mission/cycle/session, unchanged intent, approved document digest,
 no unresolved decision, current grant and exact host operation both at answer storage and just

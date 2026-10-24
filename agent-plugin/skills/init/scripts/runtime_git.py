@@ -81,7 +81,7 @@ def ancestor(root, older, newer):
 
 
 def classify_lifecycle(argv, root, policy):
-    require(policy['version'] == 3 and policy['go_workflow'] is not None,
+    require(policy['version'] == 3 and policy.get('go_workflow') is not None,
             'Go lifecycle requires an explicit policy v3 grant')
     workflow = policy['go_workflow']
     base, prefix = workflow['base_branch'], workflow['branch_prefix']

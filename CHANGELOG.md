@@ -12,6 +12,9 @@
   or expand authority. Formal intent amendments still commit at evaluated cycle boundaries.
 - Regenerate all five platform packages with five explicit-invocation skills. State/CLI tests
   verify handoff semantics; a complete fresh live-model loop remains unverified.
+- Preserve the separate v3 `integration_branch` grant for exact-commit merges without
+  granting worktree lifecycle operations. Reject mixed policy shapes.
+- Retain the outer callback drain and the contract-level human-only `merge` restriction.
 
 ## v1.3.11 (2026-10-24) — ordinary caller interface and child request lifetime
 
