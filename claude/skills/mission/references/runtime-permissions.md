@@ -66,15 +66,36 @@ Names alone and nested/foreign worktrees are not enough. The same relative path 
 mixing multiple worktrees/base roots are not delegated. Permission logs record which actual
 worktree was authorized; L1 still assesses the task's reason for making the change.
 
-This grants **Git staging and local commits within already registered task worktrees**;
-`git worktree add/remove`, `git merge`, rebase, base-branch integration and destructive Git
-operations are NOT automatically delegated. Go may still need a human decision for those
-operations until separately reviewed, bounded policies exist. Never treat this fix as proof
-of a fully unattended Go workflow.
+Versions 1 and 2 never grant worktree lifecycle or integration. Version 3 optionally adds the
+following narrowly scoped operations. This is a new explicit grant, not an upgrade of old consent.
+Never treat policy support as proof of a fully unattended Go workflow.
 Metadata `.git`, `.dryforge`, `.claude`, `.codex`, `.agents`, symlinks and parent traversal are not
 ordinary file-write grants. Git's own index/commit updates are permitted only through matching Git
 commands, never arbitrary writes into `.git`. Network/permission expansion, tool elicitation and
 unknown operations remain human-only/denied under the existing adapter rules.
+
+## Optional local Go lifecycle (policy v3)
+
+Retain every v2 field, set `version: 3`, and add `go_workflow` with the exact approved
+`base_branch` and `branch_prefix`, for example `{"base_branch":"main","branch_prefix":"dryforge/"}`.
+Use `go_workflow: null` when no lifecycle is delegated. Select only the actually approved additions
+in `operations`; `go_worktrees: true` and project-code trust are required for lifecycle grants.
+
+| Operation | Exact command and verified state |
+| --- | --- |
+| `git_worktree_add` | `git worktree add -b <new-task-branch> <pool-child> <base-branch-or-current-SHA>`; new branch under prefix, absent destination, clean named base. |
+| `git_merge` | `git merge --no-ff <task-branch-or-SHA> -m <message>`; uniquely registered clean task, current base ancestor, nonempty A/M-only diff of regular files in approved paths. |
+| `git_worktree_remove` | `git worktree remove <pool-child>`; registered task under prefix, already merged, no tracked, untracked **or ignored** data to lose. |
+| `git_branch_delete` | `git branch -d <task-branch>`; approved prefix, merged into base, not checked out anywhere. |
+
+Run these from the base checkout. Force, reset, rebase, arbitrary branches, divergent integration,
+remote operations and direct metadata edits remain outside this policy. Preserve task evidence
+before cleanup; a retained evidence directory correctly prevents delegated removal. State checked
+at approval includes base/task commits and base index; consumption rechecks the entire snapshot.
+A mismatch requires a new decision. Git hooks remain trusted project code, not sandboxed effects.
+
+Python verification may include `-B` before `-m`; the complete argv must still be explicitly
+listed in the grant. Recognizing this flag does not add it to any existing command grant.
 
 ## Record or revoke authority
 

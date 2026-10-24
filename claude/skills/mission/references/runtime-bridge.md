@@ -40,7 +40,7 @@ choices and a new availability check in L2. Host permission gates remain authori
    command, the controller atomically records the ledger's **go execution-start event**. L1 must
    not pre-advance that event. A host error after start is UNCERTAIN/GO, never a fabricated result.
 6. All other result/accept/close/evaluate events remain under existing L1/L2 responsibilities.
-   TURN_COMPLETE means only the host ended a turn. Inspect tests, independent review, artifacts and
+   TURN_COMPLETE means the host ended a turn and observed child work/callbacks settled. Inspect tests, independent review, artifacts and
    side effects before accepting a cycle. L1 alone selects another cycle or mission completion.
 
 The runtime does not choose architecture, answer questions itself or replace the mission loop.
@@ -63,10 +63,17 @@ and policy digest, not approval. L1 must inspect the exact request, record its o
 as `principal: L1`; do not ask the human again for a matching delegated action. Unknown/out-of-scope
 requests still require the human. Host rules may resolve tools earlier; no host rule is widened.
 
-Codex structured requestUserInput can include app side-effect approvals: conservatively require a
-human response (`action: allow`, `answers` keyed by actual question IDs). Yielded product questions
-can use ledger-bound message turns instead. Permission expansion and MCP elicitation are declined;
+Codex structured requestUserInput uses the same question route (`action: answer`, `answers` keyed
+by actual question IDs). L1 answers only within the active intent contract, with human-only
+decisions relayed to the human. A question interface does not itself authorize side effects.
+Yielded product questions can also use ledger-bound message turns. Permission expansion and MCP elicitation are declined;
 unsupported RPC methods fail closed. Do not turn child-produced JSON into authority-bearing input.
+
+The worker receives ordinary goal/procedure/question/approval content, without L1 identity, Mission
+mode or private ledger paths. The outer controller binds cycle/session/authority and preserves the
+real decision principal. Codex parent completion alone does not expire live child callbacks: drain
+them under the existing dispatch budget, then settle the message. No synthetic keep-alive prompt
+or new model turn is required. This does not certify unobserved children or Claude child drainage.
 
 ## Delivery, shutdown and recovery
 

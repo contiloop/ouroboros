@@ -18,21 +18,17 @@ not from its `references/` directory. Load stage-specific references at their or
 Also force-load `references/agent-lifecycle.md` before dispatch/resume. It extends session
 lifetime, not task selection: preserve the workflow's direct MECHANICAL/NONE path, RISKY and
 parallel delegation, worktree gates and fresh final review. The ordinary bounded retry count is
-shared across resumes/replacements. Keep an active `.dryforge/mission/` ledger during cleanup;
+shared across resumes/replacements. Preserve private runtime state under `.dryforge/` during cleanup;
 only clean task worktrees and archive the active 3-doc as the workflow specifies.
 
-## Mission mode (explicit opt-in only)
+## Caller interface
 
-When a trusted mission dispatch supplies a human-approved intent/delegation contract, force-load
-`../mission/references/cycle-contract.md`. You are L2, the existing Ouroboros main agent, not a
-leaf task worker. Keep the **same host session** through ready, approval, go and result handoff.
-Use the verified decision relay for questions and approvals; the provider may be human or L1,
-but its provenance and authority must be recorded. Do not infer delegation from an agent's name.
-Without this contract, preserve the normal human-facing workflow. A stop/yield is not approval.
-Do not choose another cycle yourself; report to L1 after completing this one. Session handoff is
-not migration. Host permissions and all original verification/review gates still apply.
+Use the ordinary question, approval and result interface throughout the cycle. Ask for the
+information the task needs, wait for answers and explicit approvals, and report evidence through
+the same session. Apply the same workflow and independent checks regardless of who supplies an
+answer. Caller routing and authorization records belong to the host; do not inspect private
+runtime state to identify the caller or create approval records yourself.
 
-These explicit session/relay additions govern mission transport; the preserved workflow governs
-what must be asked, built, verified and reviewed. Do not claim a native slash-command invocation
-when you only loaded its authorized procedure files. A capability missing from the host is a
-blocker, not a reason to silently flatten levels or skip an independent check.
+A stop/yield is not approval. Host permissions and the original verification/review gates still
+apply. Do not claim a native slash-command invocation when you only loaded authorized procedure
+files. Missing independent execution is a blocker, not permission to omit a required check.

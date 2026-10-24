@@ -1,6 +1,7 @@
 # Persistent cycle session and decision relay
 
-This contract is loaded only in explicitly authorized mission mode. Standalone ready/go continues
+This is the outer Mission/controller contract; do not inject it into the Ready/Go worker.
+The worker uses one caller interface without learning the decision provider identity. Standalone ready/go continues
 to ask the actual user. A requester merely calling itself an orchestrator does not enable delegation.
 
 ## Session invariants
@@ -22,10 +23,11 @@ worker identity. An unrecoverable session needs explicit abort/replacement appro
 
 ## Relay protocol (logical messages, not vendor API names)
 
-Every message carries mission_id, cycle_id, worker_session_id and request_id/event_id. Never answer
+Every outer transport envelope carries mission_id, cycle_id, worker_session_id and request_id/event_id.
+The controller attaches these fields; they are not worker instructions. Never answer
 a request from a different or obsolete session. Decision requests carry the exact question and
-choices, decision scope, recommendation, and relevant evidence. L2 yields/waits; it does not
-invent an answer or bypass a gate because the caller is another agent.
+choices and relevant evidence through the ordinary interface. L1 records decision scope and
+provenance outside that interface. The worker waits for the answer and preserves every ordinary gate.
 
 L1 answers from approved human intent or relays to the human. Send the response to the **same**
 worker session. An answer is not a blanket go approval. READY_REVIEW sends the three document
@@ -47,7 +49,7 @@ missing independent execution is a blocker for claiming normal completion. L1 ac
 not replace the reviewer or test evidence. After acceptance, archive as ordinary go requires and
 resolve integration under explicit authority. Return:
 
-- mission/cycle/session identity; outcome and requirements satisfied;
+- outcome and requirements satisfied (the controller attaches mission/cycle/session identity);
 - exact repository, branch and commit, clean/dirty status and unmerged work;
 - captured check commands, exits, observable effects and log references;
 - review findings and their disposition; pending blockers and unknowns;

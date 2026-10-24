@@ -71,13 +71,11 @@ def prompt_for(config,body):
         return ('Read-only capability probe, not mission work. Do not implement, install or approve anything. '
                 'Report only observed host behavior.\n'+body['text'],None)
     b = body['binding']; root = Path(config['skills_root'])
-    prompt = (f'Authorized cycle dispatch. Actual host session: {body["session_id"]}.\n'
-              f'Mission: {b["mission_id"]}; cycle: {b["cycle_id"]}; ledger: {b["ledger"]}.\n'
-              f'Workspace: {config["workspace"]}.\n'
-              f'Read the original approved intent/decisions and {root/"mission/references/cycle-contract.md"}.\n'
-              'Do not invent human approval. Do not write runtime/mission approval records yourself.\n'
-              'Ask clarifying questions through the available host tool or yield them in your response. '
-              'The caller will answer in this same session. A prose answer is not go approval.\n')
+    # Identity, delegation, ledger and transport correlation belong to the outer
+    # controller. Ready/Go receive the same caller interface in either mode.
+    prompt = (f'Workspace: {config["workspace"]}.\n'
+              'Ask clarifying questions through the available host tool or return the exact question. '
+              'Continue in this same session when the caller answers. An answer does not start Go.\n')
     skill = None
     if kind in ('ready','go'):
         entry = root/kind/'SKILL.md'; workflow = root/kind/'references/workflow.md'
@@ -88,7 +86,7 @@ def prompt_for(config,body):
                    +entry.read_text()+'\n\n'+workflow.read_text()+'\n')
         skill = {'name':kind,'path':str(entry)}
         if kind == 'ready': prompt += '\nStop at READY_REVIEW; return document paths and digest. Do not run go in this turn.\n'
-        else: prompt += f'Check document digest {b["docs_digest"]} before implementing. The controller recorded execution start, not completion.\n'
+        else: prompt += f'The approved document digest is {b["docs_digest"]}. Check it before implementing.\n'
     else:
         prompt += '\nContinue only the current phase. Do not start go or another cycle from this message.\n'
     return prompt+'\nCaller input:\n'+body['text'],skill
@@ -170,7 +168,8 @@ async def serve(root,wid,basis=None,adapter_factory=None):
         def bind(sid): store.bind(wid,owner,sid)
 
         async def relay(kind,payload):
-            rid = store.request(wid,owner,current['id'] if current else None,kind,payload)
+            origin = current
+            rid = store.request(wid,owner,origin['id'] if origin else None,kind,payload)
             try:
                 while True:
                     try:
@@ -180,9 +179,9 @@ async def serve(root,wid,basis=None,adapter_factory=None):
                         store.event(wid,'request.authorization_rejected',{'id':rid,'reason':str(exc)})
                         return {'action':'deny','principal':'L1','basis':'Authorization no longer valid: '+str(exc)}
                     if response is not None:
-                        if current and current['body'].get('binding'):
-                            b = current['body']['binding']
-                            _,s,_ = ledger_state(config,current['body']['session_id'],b['ledger'],b['cycle_id'])
+                        if origin and origin['body'].get('binding'):
+                            b = origin['body']['binding']
+                            _,s,_ = ledger_state(config,origin['body']['session_id'],b['ledger'],b['cycle_id'])
                             require(digest(s['contract']) == b['intent_digest'],'mission changed during callback')
                             # Store.take_answer rechecks L1 authority against the live policy and artifacts.
                         return response

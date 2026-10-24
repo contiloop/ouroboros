@@ -117,10 +117,9 @@ question text. L1 may answer only with explicit delegation and must preserve the
 mission ledger. Tool permission allow is exact-call only. It defaults to human review; with a
 separately human-approved runtime policy, L1 may approve matching local operations. See
 [delegated runtime approvals](../src/skills/mission/references/runtime-permissions.md) for the
-policy shape, grant/revoke events, eligibility hints and audit fields. Codex requestUserInput can
-also authorize app side effects; this adapter conservatively requires a human decision and an
-`answers` map keyed by actual question IDs. L1 can answer ordinary yielded product questions via
-ledger-bound messages. Permission expansion/MCP elicitation are declined, not silently supported.
+policy shape, grant/revoke events, eligibility hints and audit fields. Codex requestUserInput uses
+`action: answer` and an `answers` map keyed by actual question IDs. The same contract-bound L1
+question authority applies as for Claude; human-only or out-of-intent decisions still go to the human. Permission expansion/MCP elicitation are declined, not silently supported.
 
 The same-user mailbox is not an adversarial security boundary. `principal: human` is a trusted
 record, not authentication. Never expose these commands as an untrusted remote service or accept
@@ -220,3 +219,20 @@ new request in the same L2 session. In-flight callbacks expire across controller
 This release does NOT automatically authorize `git worktree add/remove`, merging task branches,
 rebase or force operations. Those still require a separate human decision or future bounded policy.
 Likewise, worktree support is not an end-to-end live Mission acceptance claim.
+
+
+### Ordinary caller interface and live children (v1.3.11)
+
+Ready/Go receive ordinary user goals, questions, approvals and results. Provider identity, private
+Mission state and cycle correlations stay in the outer controller. Audit records still identify
+L1 decisions accurately. No Mission-specific worker mode or impersonated human record is needed.
+Codex parent model-turn completion now leaves its message dispatched while observed children or
+callbacks are active. Child approvals retain their original binding; the transport waits within
+existing limits rather than requesting extra model turns. This behavior needs live host validation
+in addition to deterministic protocol tests; Claude child lifecycle is not certified here.
+
+Policy v3 can explicitly delegate local Go worktree creation, scoped task integration and safe
+cleanup. See the [exact commands and state guards](../src/skills/mission/references/runtime-permissions.md).
+Existing v1/v2 grants remain unchanged. Cleanup refuses ignored evidence as well as ordinary
+untracked files; force removal is never delegated. Python `-B -m unittest` is recognized only when
+that exact argv appears in the human-approved policy.

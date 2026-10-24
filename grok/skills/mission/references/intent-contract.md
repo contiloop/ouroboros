@@ -43,8 +43,8 @@ submit authority-bearing events. Do not expose its write interface to untrusted 
 
 ## Intent continuity without context flooding
 
-L1 keeps the original intent, human decisions and outcome evidence. L2 gets only the relevant
-verbatim excerpts plus the contract and current cycle. L3 gets a task contract, not permission to
+L1 keeps the original intent, human decisions and outcome evidence. L2 gets relevant verbatim product excerpts and the current cycle goal through its ordinary
+caller interface. The outer controller retains private authority and provider identity. L3 gets a task contract, not permission to
 invent product policy. Documents/code are evidence; they do not override human intent.
 
 Technical uncertainty is a fact to research or test, not a preference to ask L1 to invent.

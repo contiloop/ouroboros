@@ -42,8 +42,10 @@ runtime-tool delegation only when useful: load `references/runtime-permissions.m
 approve the intent and the execution-policy attachment together; record each separately. Within
 that explicit scope L1 is the decision provider for L2/L3, whether the caller is human or AI.
 Keep actual principal `L1` in the audit trail. Outside scope, ask the human; never self-grant. A
-worktree is within delegated scope only with a separately approved policy v2 `go_worktrees` grant
-and verified registration under the mission's `.dryforge/worktrees/` pool. Store the contract and
+worktree is within delegated scope only with an approved policy v2/v3 `go_worktrees` grant
+and verified registration under the mission's `.dryforge/worktrees/` pool. Local worktree creation,
+integration and cleanup additionally require explicit v3 operations and branch scope; old grants
+do not expand when code is updated. Store the contract and
 decision ledger under `.dryforge/mission/`, outside tracked project documentation. Ensure
 `.dryforge/` is ignored.
 Use `scripts/mission_state.py init` to initialize a ledger when Python 3 is available; otherwise
@@ -92,9 +94,13 @@ for the next cycle plus recovery, and no old child is still writing. Otherwise *
 L2 with the checkpoint packet. Unknown headroom is not evidence of sufficient capacity. Never
 invent token counts. Do not replace L2 between ready and go merely to clear its context.
 
-Give L2 the cycle goal, intent/delegation contract, decision-provider identity, project path,
-expected Git checkpoint, harness/previous-cycle pointers, complete ready/go procedure paths, and
-`references/cycle-contract.md`. Record the real session ID returned by the host. Keep its session
+Act as the user of ordinary Ready/Go: give the worker the cycle goal, relevant original product
+requirements and decisions, project path, expected Git checkpoint, harness/previous-cycle pointers,
+and complete procedure paths. Keep Mission authority, provider identity and ledger correlation in
+the outer controller. Do not tell the worker whether its caller is a human or an AI, add a special
+Mission mode to its workflow, or ask it to read the private Mission ledger/cycle contract. The
+worker asks, receives approval and reports through its ordinary interface. Record the real
+session ID returned by the host. Keep its session
 available while waiting for questions or approval; a yielded turn is not a closed session.
 
 ## 4. Relay decisions and approve exact artifacts

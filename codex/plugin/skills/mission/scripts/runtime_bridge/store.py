@@ -186,6 +186,9 @@ class Store:
         with self.tx():
             self.own(wid,owner); m = self.message(wid,mid)
             require(m['owner'] == owner and m['state'] == 'DISPATCHED','stale result')
+            if state == 'TURN_COMPLETE':
+                require(not self.db.execute("SELECT 1 FROM requests WHERE worker=? AND message_id=? AND state IN ('PENDING','ANSWERED')",
+                                            (wid,mid)).fetchone(), 'live callbacks must settle before turn completion')
             self.db.execute('UPDATE messages SET state=?,result=? WHERE worker=? AND id=?',(state,dumps(result),wid,mid))
             self.db.execute("UPDATE requests SET state='EXPIRED' WHERE worker=? AND message_id=? AND state IN ('PENDING','ANSWERED')",(wid,mid))
             self.db.execute("UPDATE workers SET state='IDLE' WHERE id=?",(wid,))
@@ -229,7 +232,11 @@ class Store:
                     self.event(wid,'request.delegation_checked',dict(authorization,request_id=rid,phase='record'))
             else:
                 require(action in ('answer','deny'),'invalid question response')
-                if action == 'answer': require(isinstance(response.get('answers'),dict) and response['answers'],'answers required')
+                if action == 'answer':
+                    require(isinstance(response.get('answers'),dict) and response['answers'],'answers required')
+                    if response['principal'] == 'L1':
+                        from .controller import check_answer
+                        check_answer(self,wid,rid,response)
             self.db.execute("UPDATE requests SET state='ANSWERED',response=?,response_digest=? WHERE id=?",(dumps(response),digest(response),rid))
             self.event(wid,'request.answered',{'id':rid,'principal':response['principal'],'basis':response['basis']})
 
