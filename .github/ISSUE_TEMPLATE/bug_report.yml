@@ -1,5 +1,5 @@
 name: Bug report
-description: Something went wrong while using Dryforge.
+description: Something went wrong while using Ouroboros.
 body:
   - type: textarea
     id: what-happened
@@ -18,11 +18,11 @@ body:
       label: Agent and version
       placeholder: e.g. Claude Code 2.1.0
   - type: input
-    id: dryforge-version
+    id: ouroboros-version
     attributes:
-      label: Dryforge version
+      label: Ouroboros version
   - type: input
     id: command
     attributes:
       label: Command
-      placeholder: e.g. /ready
+      placeholder: e.g. /ouroboros:init or $ouroboros:init

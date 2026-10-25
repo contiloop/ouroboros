@@ -38,7 +38,7 @@ review must never reuse/fork the implementer's context. No agent replacement req
 
 ## Try it
 
-Use this fork's generated plugin package. In Claude Code:
+Use Ouroboros's generated plugin package. In Claude Code:
 
 1. `/ouroboros:init` — open the conversation, refine intent and review the proposed delegation.
 2. `/ouroboros:approve` — approve the current reviewed proposal and hand cycle management to L1.

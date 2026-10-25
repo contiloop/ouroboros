@@ -2,7 +2,7 @@
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "ouroboros",
   "version": "1.4.1",
-  "description": "Intent-driven development orchestration: init → approve → ready/go cycles, with evidence at every cycle.",
+  "description": "An AI orchestrator that turns user intent into development cycles and reviews progress toward the goal.",
   "author": {
     "name": "contiloop"
   },

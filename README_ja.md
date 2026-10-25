@@ -8,10 +8,10 @@ Ouroboros では **L1** がユーザーとの対話を続けながら開発全�
 
 ## 使い方
 
-| コマンド | 動作 |
-| --- | --- |
-| `/ouroboros:init` | L1 との対話を開始し、目標、完了条件、制約、委任する判断を整理します。草案は修正可能で、開発サイクルはまだ始まりません。 |
-| `/ouroboros:approve` | 確認した内容を承認し、実行を L1 に引き継ぎます。L1 が Ready の文書確認と承認、Go の実行、結果の評価、次のサイクルの選択を担当します。 |
+| Codex | Claude Code | 動作 |
+| --- | --- | --- |
+| `$ouroboros:init` | `/ouroboros:init` | L1 との対話を開始し、目標、完了条件、制約、委任する判断を整理します。草案は修正可能で、開発サイクルはまだ始まりません。 |
+| `$ouroboros:approve` | `/ouroboros:approve` | 確認した内容を承認し、実行を L1 に引き継ぎます。L1 が Ready の文書確認と承認、Go の実行、結果の評価、次のサイクルの選択を担当します。 |
 
 承認後も補足や相談を続けられます。L1 は合意した範囲内で判断し、すでに委任された作業の承認を毎回求めません。目標や権限を変える内容は、影響を確認してユーザーと調整します。
 
@@ -39,4 +39,4 @@ Grep MCP と Context7 MCP は任意（Optional）の調査ツールです。[MCP
 
 ## 原著作者とライセンス
 
-Ouroboros は **prekuter** による [Dryforge](https://github.com/prekuter/dryforge) を基にした独立フォークで、[Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0) に従います。既存の `.dryforge/` 記録は維持します。公開 `mission` コマンドは `init` と `approve` に置き換わりましたが、既存の実行記録はリセットしません。
+Ouroboros は **prekuter** による [Dryforge](https://github.com/prekuter/dryforge) を基にした独立プロジェクトで、[Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0) に従います。既存の `.dryforge/` 記録は維持します。公開 `mission` コマンドは `init` と `approve` に置き換わりましたが、既存の実行記録はリセットしません。

@@ -1,7 +1,7 @@
 {
   "name": "ouroboros",
   "version": "1.4.1",
-  "description": "Intent-driven development orchestration: init → approve → ready/go cycles, with evidence at every cycle.",
+  "description": "An AI orchestrator that turns user intent into development cycles and reviews progress toward the goal.",
   "author": {
     "name": "contiloop"
   },
@@ -31,8 +31,8 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Ouroboros",
-    "shortDescription": "Intent first. One verified cycle at a time.",
-    "longDescription": "A three-level intent-driven development harness with persistent ready-go workers.",
+    "shortDescription": "Understand intent. Drive work to completion.",
+    "longDescription": "Ouroboros keeps L1 in conversation with you, delegates development cycles, answers worker questions and reviews results against your goal.",
     "developerName": "contiloop",
     "category": "Productivity",
     "capabilities": [
@@ -40,8 +40,8 @@
       "Write"
     ],
     "defaultPrompt": [
-      "Use Ouroboros init to discuss my intent, then approve the reviewed proposal for L1 to manage Ready/Go cycles.",
-      "Use Ouroboros ready and go for a supervised development cycle."
+      "Use Ouroboros init to discuss my goal, then approve the reviewed scope for L1 to manage execution.",
+      "Use Ouroboros to review progress toward my goal and decide the next development cycle."
     ],
     "brandColor": "#F59E0B"
   }

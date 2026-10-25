@@ -8,10 +8,10 @@ Ouroboros에서는 **L1**이 사용자와 계속 대화하면서 개발 전체�
 
 ## 대화로 시작하기
 
-| 명령 | 하는 일 |
-| --- | --- |
-| `/ouroboros:init` | L1과 대화를 시작합니다. 원하는 결과, 완료 기준, 제약과 위임할 판단을 함께 정리합니다. 초안은 계속 수정할 수 있으며, 아직 개발 사이클을 실행하지 않습니다. |
-| `/ouroboros:approve` | 검토한 내용을 승인하고 실행을 L1에 맡깁니다. 이후 L1이 사이클 선택, 작업자의 질문 응답, Ready 문서 승인, Go 실행과 결과 검토를 담당합니다. |
+| Codex | Claude Code | 하는 일 |
+| --- | --- | --- |
+| `$ouroboros:init` | `/ouroboros:init` | L1과 대화를 시작합니다. 원하는 결과, 완료 기준, 제약과 위임할 판단을 함께 정리합니다. 초안은 계속 수정할 수 있으며, 아직 개발 사이클을 실행하지 않습니다. |
+| `$ouroboros:approve` | `/ouroboros:approve` | 검토한 내용을 승인하고 실행을 L1에 맡깁니다. 이후 L1이 사이클 선택, 작업자의 질문 응답, Ready 문서 승인, Go 실행과 결과 검토를 담당합니다. |
 
 예를 들어 “재실행해도 메모가 남는 로컬 메모 CLI를 만들고 싶어. 세부 내용을 같이 정리해줘”라고 시작할 수 있습니다. 대화하며 초안을 다듬고, 의도와 맞으면 `approve`로 인계합니다.
 
@@ -114,6 +114,6 @@ python3 ci/verify.py
 
 ## 원저작자와 라이선스
 
-Ouroboros는 **prekuter**의 [Dryforge](https://github.com/prekuter/dryforge)를 기반으로 한 독립 Fork이며 [Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0)을 따릅니다. 원본 [영문](README.upstream.md)과 [한국어](README_ko.upstream.md) README는 참고용으로 보존합니다.
+Ouroboros는 **prekuter**의 [Dryforge](https://github.com/prekuter/dryforge)에서 가져온 코드와 절차를 포함하는 독립 프로젝트이며 [Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0)을 따릅니다. 원본 [영문](README.upstream.md)과 [한국어](README_ko.upstream.md) README는 참고용으로 보존합니다.
 
 기존 `.dryforge/` 기록 경로와 내부 mission 식별자는 호환성을 위해 유지합니다. 공개 `mission` 명령은 `init`과 `approve`로 바뀌었으며, 이 변경으로 기존 실행 기록을 초기화하지 않습니다.

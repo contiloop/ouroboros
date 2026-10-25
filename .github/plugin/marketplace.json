@@ -10,7 +10,7 @@
   "plugins": [
     {
       "name": "ouroboros",
-      "description": "Intent-driven development orchestration: init → approve → ready/go cycles, with evidence at every cycle.",
+      "description": "An AI orchestrator that turns user intent into development cycles and reviews progress toward the goal.",
       "version": "1.4.1",
       "author": {
         "name": "contiloop"

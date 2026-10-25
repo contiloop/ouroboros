@@ -8,10 +8,10 @@
 
 ## 使用流程
 
-| 命令 | 作用 |
-| --- | --- |
-| `/ouroboros:init` | 开始与 L1 对话，明确目标、完成标准、约束和委托的决策。草案可以继续修改，此时尚未启动开发循环。 |
-| `/ouroboros:approve` | 批准已审阅的方案，将执行交给 L1。此后由 L1 审阅并批准 Ready 文档、推进 Go、核验结果和选择下一轮工作。 |
+| Codex | Claude Code | 作用 |
+| --- | --- | --- |
+| `$ouroboros:init` | `/ouroboros:init` | 开始与 L1 对话，明确目标、完成标准、约束和委托的决策。草案可以继续修改，此时尚未启动开发循环。 |
+| `$ouroboros:approve` | `/ouroboros:approve` | 批准已审阅的方案，将执行交给 L1。此后由 L1 审阅并批准 Ready 文档、推进 Go、核验结果和选择下一轮工作。 |
 
 批准后仍可补充说明和讨论。L1 在约定范围内作出判断，不会为已经委托的每个步骤重复请求批准。涉及目标或权限变化时，L1 会说明影响并与你协调。
 
@@ -39,4 +39,4 @@ Grep MCP 和 Context7 MCP 是可选（Optional）调查工具。参见 [MCP 设�
 
 ## 来源与许可证
 
-Ouroboros 是基于 **prekuter** 的 [Dryforge](https://github.com/prekuter/dryforge) 开发的独立分支，遵循 [Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0)。保留现有 `.dryforge/` 记录。公开 `mission` 命令已替换为 `init` 和 `approve`，但不会因此重置已有运行记录。
+Ouroboros 是基于 **prekuter** 的 [Dryforge](https://github.com/prekuter/dryforge) 开发的独立项目，遵循 [Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0)。保留现有 `.dryforge/` 记录。公开 `mission` 命令已替换为 `init` 和 `approve`，但不会因此重置已有运行记录。

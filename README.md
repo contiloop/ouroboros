@@ -8,10 +8,10 @@ Ouroboros keeps an agent, **L1**, in conversation with you while it manages deve
 
 ## Start with a conversation
 
-| Command | What happens |
-| --- | --- |
-| `/ouroboros:init` | Start talking with L1. Refine the outcome, completion criteria, constraints and decisions you want to delegate. The proposal remains editable; development cycles have not started. |
-| `/ouroboros:approve` | Approve the proposal you reviewed. L1 takes responsibility for planning cycles, answering worker questions, reviewing Ready documents, running Go and checking results. |
+| Codex | Claude Code | What happens |
+| --- | --- | --- |
+| `$ouroboros:init` | `/ouroboros:init` | Start talking with L1. Refine the outcome, completion criteria, constraints and decisions you want to delegate. The proposal remains editable; development cycles have not started. |
+| `$ouroboros:approve` | `/ouroboros:approve` | Approve the proposal you reviewed. L1 takes responsibility for planning cycles, answering worker questions, reviewing Ready documents, running Go and checking results. |
 
 For example, start with: “I want a local memo CLI that keeps my notes between runs. Help me work out the details.” Continue the conversation until the proposal matches your intent, then invoke `approve`.
 
@@ -114,6 +114,6 @@ python3 ci/verify.py
 
 ## Credits and license
 
-Ouroboros builds on [Dryforge](https://github.com/prekuter/dryforge) by **prekuter** under [Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0). It is an independent fork. The original [English](README.upstream.md) and [Korean](README_ko.upstream.md) READMEs are preserved for reference.
+Ouroboros builds on [Dryforge](https://github.com/prekuter/dryforge) by **prekuter** under [Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0). Ouroboros is maintained as an independent project; its source includes code and procedures derived from Dryforge. The original [English](README.upstream.md) and [Korean](README_ko.upstream.md) READMEs are preserved for reference.
 
 Existing `.dryforge/` state paths and internal mission identifiers are retained for compatibility. The public `mission` command has been replaced by `init` and `approve`; existing run records are not reset by that change.
