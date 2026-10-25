@@ -8,7 +8,9 @@ import os
 from pathlib import Path
 from .store import BridgeError, require
 
-ROLE = '''Work with the caller through the ordinary Ready and Go procedures in this same session.
+ROLE = '''Follow the caller's explicitly selected procedure: Migration, Ready or Go.
+Keep Ready and its subsequent Go in this same session. Migration is separate preparation:
+finish its documentation and independent review here; start later Ready/Go in a fresh session.
 Ask questions through the available question tool, or return the exact question and wait for an
 answer. Request execution permission through the host's normal tools. A yielded turn is not
 approval. Finish the requested work and report its evidence before taking a new assignment.

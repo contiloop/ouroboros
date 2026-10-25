@@ -29,6 +29,8 @@ Ouroboros에서는 **L1**이 사용자와 계속 대화하면서 개발 전체�
 
 사용자의 `ouroboros:approve`는 L1에 실행을 맡기는 승인입니다. 이후 사이클별 Ready 승인은 L1이 실제 문서를 보고 수행합니다. 한 사이클이 끝났다는 이유만으로 전체 목표가 완료됐다고 판단하지 않습니다.
 
+기존 코드베이스에 프로젝트 문서와 작업 규칙을 처음 마련해야 한다면, L1이 승인된 범위에서 **Dryforge Migration**(`ouroboros:migration`)을 먼저 맡길 수 있습니다. 질문에 답하고 실제 문서와 독립 검토 결과를 확인한 뒤, 수락한 문서를 별도 승인 범위에 따라 커밋합니다. Migration 자체는 문서만 작성하며 제품 코드 구현이나 커밋을 하지 않습니다. 이후 새 작업자 세션에서 Ready–Go를 시작합니다. 새 프로젝트나 이미 준비된 프로젝트는 이 단계를 건너뜁니다. [Migration 운영 절차](src/skills/init/references/migration-orchestration.md)
+
 ## 구조
 
 ```mermaid

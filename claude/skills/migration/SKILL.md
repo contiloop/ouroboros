@@ -27,6 +27,13 @@ migration is a **one-time conversion**, not a task runner. It writes documentati
 After it finishes, commit the harness and clear the session before running `ready` → `go`:
 migration is an independent piece of work, and a fresh session keeps the task-level dialogue clean.
 
+Use the ordinary caller interface for questions, document review and results. The caller may
+provide already established intent and decisions; ask for missing information rather than
+repeating settled questions. Return the generated/updated document paths, completion marker,
+independent review and observed check evidence for acceptance. Do not start Ready/Go in this
+Migration session. A later explicit request to checkpoint accepted documentation is separate
+from Migration itself, which performs no commits or branch operations.
+
 ## Core principles (apply throughout)
 
 - **The harness is durable project memory, not ground truth.** It is the project's discipline and

@@ -1,6 +1,6 @@
 {
   "name": "ouroboros",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Intent-driven development orchestration: init → approve → ready/go cycles, with evidence at every cycle.",
   "author": {
     "name": "contiloop"

@@ -22,6 +22,13 @@ choices and a new availability check in L2. Host permission gates remain authori
 
 ## One cycle over one session
 
+For approved existing-project preparation, first record `start` with `kind: migration`, then
+`send --kind migration --id <id> --ledger <state.json> --cycle <id> --text-file <goal>`.
+This loads the complete bundled Migration SKILL.md and follows its reference-loading rules.
+Continue questions and corrections in that session using `message`. Record result/acceptance
+and checkpoint explicitly; the runtime does not manufacture them from a completed turn.
+Follow `migration-orchestration.md`, then create a fresh session for the development flow below.
+
 1. `send --kind probe --id <id> --text-file <path>` tests read-only session/relay/task-agent
    capabilities. Do not fabricate the mission ledger's capability booleans from a text response.
 2. After actual capability checks, L1 records the existing ledger `start` event with the observed
@@ -35,11 +42,16 @@ choices and a new availability check in L2. Host permission gates remain authori
    in the mission ledger as well as the mailbox. A final prose question yields a turn; answer via
    `send --kind message` to the same worker. This is not permission to start go.
 5. L1 reads the actual three docs, records `ready` and legitimate `approve` in the existing ledger.
+   With runtime policy v4, L1 then records `bind_runtime` with the cycle's concrete branch,
+   task-worktree map and archive under the human grant. Queued Go rechecks that binding too.
    `send --kind go` checks identity, cycle, active mission, unresolved questions and exact approved
    document digest at enqueue and dispatch. Immediately before sending this explicitly approved
    command, the controller atomically records the ledger's **go execution-start event**. L1 must
    not pre-advance that event. A host error after start is UNCERTAIN/GO, never a fabricated result.
 6. All other result/accept/close/evaluate events remain under existing L1/L2 responsibilities.
+   Use `rework` followed by `send --kind message` to request corrections in the same L2 before
+   acceptance. After acceptance, continue cleanup/integration with ordinary messages in that
+   session; do not create a replacement worker or start another Go for this finishing phase.
    TURN_COMPLETE means the host ended a turn and observed child work/callbacks settled. Inspect tests, independent review, artifacts and
    side effects before accepting a cycle. L1 alone selects another cycle or mission completion.
 

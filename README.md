@@ -29,6 +29,8 @@ After the handoff, L1 manages the existing **Dryforge Ready and Go procedures**,
 
 Your `ouroboros:approve` hands responsibility to L1. The later Ready approval is L1's review of a particular cycle's documents. A finished cycle is not automatically a finished goal.
 
+For an existing codebase that needs initial project documentation, L1 can first assign **Dryforge Migration** (`ouroboros:migration`) within the approved scope. L1 answers its questions, reviews the documents and independent review, and arranges the accepted checkpoint. Migration writes documentation; it does not implement product code or commit by itself. Ready–Go then starts in a fresh worker session. New or already prepared projects skip this step. [Migration operation](src/skills/init/references/migration-orchestration.md)
+
 ## Architecture
 
 ```mermaid

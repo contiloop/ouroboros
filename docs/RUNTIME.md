@@ -50,10 +50,18 @@ Keep the Python environment and plugin checkout available while the controller r
 
 ## L1 integration
 
-The Mission skill loads [runtime-bridge.md](../src/skills/init/references/runtime-bridge.md) only
+The init/approve workflow loads [runtime-bridge.md](../src/skills/init/references/runtime-bridge.md) only
 when this execution path is selected. Give L1 the Python executable, bridge path and workspace.
 L1 uses its ordinary shell tool for start/status/send/wait/answer, under existing host permissions.
 No listener or extra model supervisor is required.
+
+For existing-project cycles, policy v4 separates the final integration branch from the cycle
+feature branch and L3 task branches/worktrees. The human grants operation/path/branch scope once;
+L1 narrows it to exact cycle targets with `bind_runtime` after Ready review. Result corrections
+return the same L2 to GO through `rework`; accepted cleanup/integration preserves the approved
+document identity in the pinned archive. See the [v4 policy and event contract](../src/skills/init/references/runtime-permissions.md#cycle-workflow-policy-v4).
+Older grants do not acquire these rights automatically. Protected metadata and unsupported
+commands still use ordinary host controls; a v4 grant is not proof of unattended E2E execution.
 
 A small read-only capability probe can test the connection before cycle assignment:
 
@@ -240,3 +248,14 @@ cleanup. See the [exact commands and state guards](../src/skills/init/references
 Existing v1/v2 grants remain unchanged. Cleanup refuses ignored evidence as well as ordinary
 untracked files; force removal is never delegated. Python `-B -m unittest` is recognized only when
 that exact argv appears in the human-approved policy.
+
+## L1-managed Migration (v1.4.1)
+
+The runtime accepts `send --kind migration` for an explicitly assigned Migration preparation
+cycle. It loads the existing skill, relays questions and requires evidence-backed result review.
+The ledger verifies the actual documentation digest at result recording, acceptance and closure.
+Read [Migration orchestration](../src/skills/init/references/migration-orchestration.md) for
+setup, events, policy boundaries, checkpointing and the mandatory fresh Ready session.
+Existing contracts do not gain preparation authority on upgrade; active Migration grants use
+schema 4. Local Git/SQLite/CLI regressions verify these boundaries; a complete authenticated
+Migration → Ready → Go model run has not been certified.

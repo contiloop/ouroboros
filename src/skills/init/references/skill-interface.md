@@ -97,7 +97,7 @@ reviewed proposal. The extension cannot supply that approval.
 `scripts/skill_contract.py` at the init skill root validates the envelope; `scripts/mission_state.py`
 records `skill_request`, `skill_result`, `skill_review`, `skill_approve`, `skill_commit`, and
 `skill_cancel` through its existing `apply` command. Only a trusted controller may write that ledger.
-The first successful extension event upgrades state schema 1 to 2 (or preserves schema 3 for runtime grants); old ledgers remain readable,
+The first successful extension event upgrades state schema 1 to 2 (or preserves a later schema for runtime grants/Migration); old ledgers remain readable,
 while old runtimes reject schema 2 instead of ignoring pending extension decisions. Do not downgrade.
 
 These checks enforce record consistency, **not authentication or semantic truth**. `actor: human`

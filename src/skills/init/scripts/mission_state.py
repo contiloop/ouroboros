@@ -18,7 +18,7 @@ import tempfile
 from pathlib import Path
 
 CAPABILITIES = ('persistent_session', 'decision_relay', 'nested_agents', 'explicit_procedure_loading')
-DELEGATED = {'answer', 'approve_ready', 'accept_result', 'complete'}
+DELEGATED = {'answer', 'approve_ready', 'accept_result', 'complete', 'migration'}
 HUMAN_ONLY = {'merge', 'deploy', 'spend', 'delete', 'disclose'}
 
 
@@ -58,7 +58,7 @@ def init_state(contract: dict) -> dict:
     require(set(actions) <= DELEGATED, 'unsupported delegated authority')
     for key in ('max_cycles', 'max_stalled_cycles'):
         require(type(contract.get(key)) is int and contract[key] > 0, f'{key} must be a positive integer')
-    return dict(schema_version=1, revision=0, contract=copy.deepcopy(contract), status='ACTIVE',
+    return dict(schema_version=4 if 'migration' in actions else 1, revision=0, contract=copy.deepcopy(contract), status='ACTIVE',
                 cycle=None, cycles=[], workers=[], stalled=0, events=[])
 
 
@@ -94,6 +94,15 @@ def document_digest(directory: Path) -> str:
         data = (directory / name).read_bytes()
         h.update(name.encode() + b'\0' + str(len(data)).encode() + b'\0' + data)
     return h.hexdigest()
+
+
+def migration_digest(workspace: Path, paths: list) -> str:
+    """Bind review to actual documentation and marker bytes, never to a worker summary."""
+    from migration_artifacts import artifact_digest
+    try:
+        return artifact_digest(workspace, paths)
+    except ValueError as exc:
+        raise ContractError(str(exc)) from exc
 
 
 def l3_action(*, role: str, same_task: bool, same_contract: bool, same_workspace: bool,
@@ -140,9 +149,11 @@ def _runtime_api():
 def apply(state: dict, event: dict) -> dict:
     """Pure transaction: reject invalid input without changing the supplied state."""
     require(isinstance(state, dict) and type(state.get('schema_version')) is int
-            and state['schema_version'] in (1, 2, 3), 'unsupported state schema')
+            and state['schema_version'] in (1, 2, 3, 4, 5), 'unsupported state schema')
     require('extensions' not in state or state['schema_version'] >= 2, 'extensions require state schema 2 or later')
-    require('runtime_authority' not in state or state['schema_version'] == 3, 'runtime authority requires state schema 3')
+    require('runtime_authority' not in state or state['schema_version'] >= 3, 'runtime authority requires state schema 3 or later')
+    require(not (state.get('cycle') or {}).get('runtime_binding') or state['schema_version'] >= 5,
+            'cycle bindings require state schema 5 or later')
     require(isinstance(event, dict), 'event must be an object')
     e = copy.deepcopy(event)
     text(e.get('id'), 'event ID')
@@ -190,11 +201,14 @@ def apply(state: dict, event: dict) -> dict:
         policy = s['draft_runtime_policy']
         draft_state(s['contract'], policy)  # Validate the attached execution scope again.
         s['contract'] = approved['contract']
+        s['schema_version'] = max(s['schema_version'], approved['schema_version'])
         s['status'] = 'ACTIVE'
         if policy is not None:
             s['runtime_authority'] = dict(version=1, revision=1,
                 mission_id=contract['mission_id'], workspace=contract['workspace'],
                 policy=copy.deepcopy(policy), approved_by='human', approval_ref=e['approval_ref'], event_id=e['id'])
+            if policy['version'] == 4:
+                s['schema_version'] = max(5, s['schema_version'])
         del s['draft_runtime_policy']
     elif op == 'runtime_policy':
         # Separate execution authority: may grant/revoke while a tool callback is waiting.
@@ -220,7 +234,9 @@ def apply(state: dict, event: dict) -> dict:
             mission_id=s['contract']['mission_id'], workspace=s['contract']['workspace'],
             policy=copy.deepcopy(policy), approved_by='human', approval_ref=e['approval_ref'],
             event_id=e['id'])
-        s['schema_version'] = 3  # Older runtimes reject instead of losing/reinterpreting grants.
+        s['schema_version'] = max(3, s['schema_version'])
+        if policy is not None and policy['version'] == 4:
+            s['schema_version'] = max(5, s['schema_version'])
     elif extension:
         api = _skill_api()
         try:
@@ -232,11 +248,22 @@ def apply(state: dict, event: dict) -> dict:
     elif op == 'start':
         require(e['actor'] == 'L1', 'L1 assigns cycles')
         require(c is None, 'previous cycle has not been evaluated')
+        kind = e.get('kind', 'development')
+        require(kind in {'development', 'migration'}, 'unknown cycle kind')
+        if kind == 'migration':
+            authority(s, e, 'migration')
+            text(e.get('need_ref'), 'evidence that the existing project needs migration')
+            require(not e.get('reuse'), 'migration needs its own fresh session')
+            require(not any(x.get('kind') == 'migration' and x['stage'] != 'ABORTED'
+                            for x in s['cycles']), 'migration already completed')
+            s['schema_version'] = max(4, s['schema_version'])
         if 'extensions' in s:
             require(not _skill_api().pending(s), 'resolve or explicitly cancel pending skill work before a cycle')
         require(len(s['cycles']) < s['contract']['max_cycles'], 'cycle budget exhausted')
         require(s['stalled'] < s['contract']['max_stalled_cycles'], 'progress budget exhausted')
         cid, sid = text(e.get('cycle_id'), 'cycle ID'), text(e.get('session_id'), 'worker session')
+        require(not any(x.get('kind') == 'migration' and x['session_id'] == sid
+                        for x in s['cycles']), 'start Ready in a fresh session after migration')
         require(cid not in [x['id'] for x in s['cycles']], 'duplicate cycle ID')
         caps = e.get('capabilities')
         require(isinstance(caps, dict) and all(caps.get(k) is True for k in CAPABILITIES),
@@ -251,10 +278,13 @@ def apply(state: dict, event: dict) -> dict:
         s['cycle'] = dict(id=cid, session_id=sid, stage='READY', goal=text(e.get('goal'), 'cycle goal'),
                           checkpoint_ref=text(e.get('checkpoint_ref'), 'checkpoint'), pending={},
                           decisions=[], digest=None, approved_digest=None)
+        if kind == 'migration':
+            s['cycle'].update(kind=kind, stage='MIGRATION', need_ref=e['need_ref'])
     elif op == 'ready':
         require(e['actor'] == 'L2' and c['stage'] in {'READY','READY_REVIEW','APPROVED'}, 'not in ready')
         require(re.fullmatch('[0-9a-f]{64}', text(e.get('digest'), '3-doc digest')), 'invalid digest')
         c.update(stage='READY_REVIEW', digest=e['digest'], approved_digest=None)
+        c.pop('runtime_binding', None)  # Changed Ready needs a new explicit target assignment.
     elif op == 'approve':
         authority(s, e, 'approve_ready')
         require(c['stage'] == 'READY_REVIEW' and not c['pending'], 'ready review or answers pending')
@@ -265,8 +295,58 @@ def apply(state: dict, event: dict) -> dict:
         require(e['actor'] == 'L2' and c['stage'] == 'APPROVED', 'go requires approval')
         require(not c['pending'] and e.get('digest') == c['approved_digest'], 'stale approval or pending answer')
         c['stage'] = 'GO'
+    elif op == 'bind_runtime':
+        authority(s, e, 'approve_ready')
+        require(e['actor'] == 'L1' and c['stage'] in {'APPROVED', 'GO'} and not c['pending'],
+                'L1 assigns targets after Ready approval')
+        require(c.get('kind') != 'migration' and not c.get('runtime_binding'), 'cycle already bound or is migration')
+        a = s.get('runtime_authority')
+        require(isinstance(a, dict) and a.get('approved_by') == 'human' and a.get('approval_ref') and
+                a.get('mission_id') == s['contract']['mission_id'] and
+                a.get('workspace') == s['contract']['workspace'], 'no matching human runtime grant')
+        api = _runtime_api()
+        require(e.get('policy_digest') == api.fingerprint(a), 'stale runtime grant')
+        require('runtime_permissions' not in s['contract']['human_only'], 'runtime permissions are human-only')
+        try:
+            api.validate_policy(a['policy'])
+            from runtime_cycle import create_binding
+            root = Path(s['contract']['workspace']).resolve(strict=True)
+            require(document_digest(root/'.dryforge') == c['digest'] == c['approved_digest'], 'approved documents changed')
+            c['runtime_binding'] = create_binding(root, a, c, e.get('targets'))
+        except (ValueError, OSError) as exc:
+            raise ContractError(str(exc)) from exc
+        c['decisions'].append(e); s['schema_version'] = max(5, s['schema_version'])
+    elif op == 'bind_tasks':
+        authority(s, e, 'approve_ready')
+        require(e['actor'] == 'L1' and c['stage'] == 'GO' and not c['pending'] and c.get('runtime_binding'),
+                'L1 adds repair tasks only during a bound Go')
+        a = s.get('runtime_authority'); api = _runtime_api()
+        require(isinstance(a, dict) and a.get('approved_by') == 'human' and a.get('approval_ref') and
+                a.get('mission_id') == s['contract']['mission_id'] and a.get('workspace') == s['contract']['workspace'] and
+                e.get('policy_digest') == api.fingerprint(a), 'stale or missing runtime grant')
+        require('runtime_permissions' not in s['contract']['human_only'], 'runtime permissions are human-only')
+        try:
+            api.validate_policy(a['policy'])
+            require(a['policy']['version'] == 4, 'task assignment needs a v4 grant')
+            from runtime_cycle import extend_tasks
+            root = Path(s['contract']['workspace']).resolve(strict=True)
+            require(document_digest(root/'.dryforge') == c['approved_digest'], 'approved documents changed')
+            c['runtime_binding'] = extend_tasks(root, a, c, e.get('tasks'))
+        except (ValueError, OSError) as exc:
+            raise ContractError(str(exc)) from exc
+        c['decisions'].append(e); s['schema_version'] = max(5, s['schema_version'])
+    elif op == 'rework':
+        authority(s, e, 'accept_result')
+        require(c.get('kind') != 'migration' and c['stage'] == 'RESULT_REVIEW' and not c['pending'],
+                'rework follows development result review')
+        require(e.get('digest') == c['approved_digest'], 'rework cannot change the approved contract')
+        text(e.get('feedback_ref'), 'specific result corrections')
+        c.setdefault('prior_results', []).append(c.pop('result'))
+        c['stage'] = 'GO'; c['decisions'].append(e)
+        s['schema_version'] = max(5, s['schema_version'])
     elif op == 'question':
-        require(e['actor'] == 'L2' and c['stage'] in {'READY','READY_REVIEW','APPROVED','GO','RESULT_REVIEW'},
+        require(e['actor'] == 'L2' and c['stage'] in {'READY','READY_REVIEW','APPROVED','GO','RESULT_REVIEW',
+                                                   'MIGRATION','MIGRATION_REVIEW','ACCEPTED'},
                 'not a decision point')
         rid = text(e.get('request_id'), 'request ID')
         require(rid not in c['pending'] and not any(d.get('request_id') == rid for d in c['decisions']),
@@ -280,9 +360,16 @@ def apply(state: dict, event: dict) -> dict:
         text(e.get('answer'), 'answer')
         c['decisions'].append(e); del c['pending'][rid]
     elif op == 'result':
-        require(e['actor'] == 'L2' and c['stage'] == 'GO' and not c['pending'], 'go is not ready to finish')
+        migration = c.get('kind') == 'migration'
+        require(e['actor'] == 'L2' and c['stage'] in
+                ({'MIGRATION', 'MIGRATION_REVIEW'} if migration else {'GO'}) and not c['pending'],
+                'work is not ready to finish')
         require(e.get('blockers') == [] and e.get('children_quiescent') is True, 'blockers or live children')
-        require(e.get('digest') == c['approved_digest'], 'result uses a different approved contract')
+        if migration:
+            current = migration_digest(Path(s['contract']['workspace']), e.get('paths'))
+            require(e.get('digest') == current, 'migration artifacts changed')
+        else:
+            require(e.get('digest') == c['approved_digest'], 'result uses a different approved contract')
         checks = e.get('checks')
         require(isinstance(checks, list) and bool(checks), 'missing captured checks')
         for check in checks:
@@ -294,16 +381,37 @@ def apply(state: dict, event: dict) -> dict:
         require(isinstance(review, dict) and review.get('independent') is True, 'independent review missing')
         text(review.get('evidence_ref'), 'review evidence')
         text(e.get('result_ref'), 'result evidence')
-        require(re.fullmatch('[0-9a-f]{40,64}', text(e.get('commit'), 'commit')), 'invalid commit')
-        c.update(stage='RESULT_REVIEW', result=e)
+        if migration:
+            c.update(stage='MIGRATION_REVIEW', result=e, digest=current, approved_digest=None)
+        else:
+            require(re.fullmatch('[0-9a-f]{40,64}', text(e.get('commit'), 'commit')), 'invalid commit')
+            c.update(stage='RESULT_REVIEW', result=e)
     elif op == 'accept':
         authority(s, e, 'accept_result')
-        require(c['stage'] == 'RESULT_REVIEW' and not c['pending'], 'result acceptance is premature')
+        require(c['stage'] in {'RESULT_REVIEW', 'MIGRATION_REVIEW'} and not c['pending'], 'result acceptance is premature')
+        if c.get('kind') == 'migration':
+            current = migration_digest(Path(s['contract']['workspace']), c['result']['paths'])
+            require(e.get('digest') == current == c['digest'], 'migration review is stale')
+            c['approved_digest'] = current
         c['stage'] = 'ACCEPTED'; c['decisions'].append(e)
     elif op == 'close':
-        require(e['actor'] == 'L2' and c['stage'] == 'ACCEPTED', 'accept before archiving/closing')
+        require(e['actor'] == 'L2' and c['stage'] == 'ACCEPTED' and not c['pending'], 'accept and resolve questions before archiving/closing')
         require(e.get('children_quiescent') is True, 'children still running')
-        text(e.get('archive_ref'), 'archive'); text(e.get('checkpoint_ref'), 'checkpoint')
+        if c.get('kind') == 'migration':
+            require(migration_digest(Path(s['contract']['workspace']), c['result']['paths']) ==
+                    c['approved_digest'], 'accepted migration artifacts changed')
+            text(e.get('handoff_ref'), 'migration handoff and committed harness evidence')
+        else:
+            text(e.get('archive_ref'), 'archive')
+            if c.get('runtime_binding'):
+                root = Path(s['contract']['workspace'])
+                archive = c['runtime_binding']['archive_dir']
+                require(e['archive_ref'] == archive, 'archive does not match the cycle binding')
+                require(not any((root/'.dryforge'/name).exists() for name in ('handoff.md','spec.md','plan.md')),
+                        'active documents remain after archiving')
+                from runtime_cycle import approved_documents
+                require(approved_documents(root, c) == c['approved_digest'], 'archived documents changed')
+        text(e.get('checkpoint_ref'), 'checkpoint')
         c.update(stage='EVALUATION', checkpoint=e)
     elif op == 'evaluate':
         require(e['actor'] in {'L1', 'human'} and c['stage'] == 'EVALUATION', 'decision provider evaluates a closed cycle')
@@ -345,6 +453,8 @@ def apply(state: dict, event: dict) -> dict:
         text(e.get('event'), 'host event'); text(e.get('reference'), 'host evidence reference')
     else:
         raise ContractError(f'unknown operation: {op}')
+    if s['status'] != 'DRAFT' and 'migration' in s['contract']['delegated_actions']:
+        s['schema_version'] = max(4, s['schema_version'])
     s['revision'] += 1
     s['events'].append(dict(id=e['id'], fingerprint=fingerprint, revision=s['revision'], event=e))
     return s
@@ -407,9 +517,13 @@ def main() -> int:
     act=sub.add_parser('apply');act.add_argument('--state',type=Path,required=True);act.add_argument('--event',type=Path,required=True)
     show=sub.add_parser('show');show.add_argument('--state',type=Path,required=True)
     digest=sub.add_parser('digest');digest.add_argument('--docs-dir',type=Path,required=True)
+    migration=sub.add_parser('migration-digest');migration.add_argument('--workspace',type=Path,required=True)
+    migration.add_argument('--paths-file',type=Path,required=True)
     args=p.parse_args()
     try:
         if args.command=='digest': print(document_digest(args.docs_dir));return 0
+        if args.command=='migration-digest':
+            print(migration_digest(args.workspace,json.loads(args.paths_file.read_text(encoding='utf-8'))));return 0
         if args.command in ('init', 'draft'):
             policy = json.loads(args.policy.read_text(encoding='utf-8')) if args.command == 'draft' and args.policy else None
             s=initialize(args.state,json.loads(args.contract.read_text(encoding='utf-8')),

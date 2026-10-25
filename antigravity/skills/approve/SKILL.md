@@ -31,7 +31,9 @@ only under its existing authority; never silently replace its L2 session.
 ## Take responsibility for execution
 
 Force-load the complete `../init/references/orchestration.md` and follow it now. Its paths resolve
-from the init skill root. L1 selects a cycle, invokes ordinary Ready on L2, answers its questions,
+from the init skill root. For an existing project needing Migration within the approved scope,
+load `../init/references/migration-orchestration.md` and complete that preparation first.
+Otherwise start Ready directly. L1 selects a cycle, invokes ordinary Ready on L2, answers its questions,
 reviews the actual documents, approves them when warranted and invokes Go in the same L2 session.
 L1 checks actual outcomes, requests corrections and chooses the next cycle until the approved
 outcome is met or a real boundary needs the human. Preserve all independent review/test gates.

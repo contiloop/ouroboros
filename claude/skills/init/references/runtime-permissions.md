@@ -5,6 +5,20 @@ workflow based on whether its caller is human or AI. L1 may decide within human-
 it must not pretend its decision was made by the human. This is an optional execution-policy
 attachment, not a change to mission intent, a new agent, or an automatic allow engine.
 
+## Migration preparation and checkpoint
+
+An explicitly Migration-authorized intent can use the same human runtime policy for base-workspace
+`workspace_edit` requests affecting only AGENTS.md, CLAUDE.md, docs Markdown and .gitignore. Both
+intent and the exact policy must cover the action; a matching path alone grants nothing. Pending
+product decisions block delegated mutations. This preparation uses intent rather than nonexistent
+Ready documents. It does not delegate product-code changes, verification commands or Git writes.
+
+After L1 accepts the actual Migration artifact digest, a separate checkpoint request can delegate
+`git_add`/`git_commit` only for reviewed documentation within that policy. Recheck the artifact
+bytes and index before consuming the answer. Migration itself never commits. Protected `.dryforge`
+marker/backup callbacks retain their existing host/human requirements. See
+[migration-orchestration.md](migration-orchestration.md) for the complete flow.
+
 ## One human grant, individual L1 decisions
 
 Discuss the concrete workspace, paths, operations and trusted project code once. A human can
@@ -138,6 +152,98 @@ A mismatch requires a new decision. Git hooks remain trusted project code, not s
 Python verification may include `-B` before `-m`; the complete argv must still be explicitly
 listed in the grant. Recognizing this flag does not add it to any existing command grant.
 
+## Cycle workflow (policy v4)
+
+Use v4 when delegating the existing-project Dryforge flow. V3's `base_branch` is the checkout
+where task worktrees start and land; it does **not** also describe the final integration target.
+Setting it to `main` blocks task creation after ordinary Go moves to a feature branch.
+
+V4 separates three roles:
+
+| Role | Human grant | L1 selection for one cycle |
+| --- | --- | --- |
+| Final integration | Exact `integration_branch`, e.g. `main` | Captured starting commit; final merge requires accepted result and unchanged target |
+| Cycle branch | `cycle_branch_prefix`, e.g. `dryforge/` | Exact `cycle_branch`, e.g. `dryforge/statistics` |
+| L3 tasks | `task_branch_prefix`, e.g. `dryforge/task-` and the registered worktree pool | Exact task-ID → branch map, e.g. `T1` → `dryforge/task-words` |
+
+Example attachment, **not consent**; retain the actual approved paths and verification argv:
+
+```json
+{
+  "version": 4,
+  "operations": ["workspace_edit", "git_add", "git_commit", "verify", "git_checkout",
+                 "git_worktree_add", "git_merge", "git_worktree_remove", "git_branch_delete"],
+  "paths": ["textstats", "tests", "README.md", "AGENTS.md", "CLAUDE.md", "docs", ".gitignore"],
+  "verification_commands": [["python3", "-B", "-m", "unittest", "discover", "-v"]],
+  "trust_workspace_code": true,
+  "go_worktrees": true,
+  "go_workflow": {
+    "integration_branch": "main",
+    "cycle_branch_prefix": "dryforge/",
+    "task_branch_prefix": "dryforge/task-"
+  }
+}
+```
+
+After Ready approval, L1 records `bind_runtime` with the normal event identity/revision,
+`actor: L1`, `basis`, the current authority `policy_digest`, and these `targets`:
+
+```json
+{
+  "cycle_branch": "dryforge/statistics",
+  "tasks": {"T1": "dryforge/task-words", "T2": "dryforge/task-lines"},
+  "archive_dir": ".dryforge/001"
+}
+```
+
+Choose these from the reviewed plan and ordinary Go branch convention, then give L2 the concrete
+branch/path instructions through its normal caller interface. No private ledger or provider
+identity is added to L2's prompt. This is **target selection within the grant**, not a new human
+approval or a grant by L1. Bind once before implementation, at APPROVED (or GO only for an
+unstarted, reconciled attempt). The checkout and any already-created feature branch must still
+equal the integration starting commit. Task branches/worktrees and the archive must be absent.
+Greenfield may select the integration branch itself as the cycle branch; an inline-only cycle
+uses an empty task map. Prefixes may overlap, but the selected branches cannot have two roles.
+If an in-scope correction needs another L3 task, L1 may record `bind_tasks` during GO with
+`basis`, current `policy_digest` and a `tasks` map containing only new IDs/branches. This extends
+the task assignment within the same grant; it cannot replace an existing target, change the
+cycle branch/archive, or expand the spec. New branches and worktrees must still be absent.
+
+The v4 runtime permits only assigned targets. `git checkout -b <cycle>` starts a new feature;
+`git worktree add -b <task> .dryforge/worktrees/<ID> <cycle-or-current-SHA>` starts a task.
+Registered worktree file edits/commits must also match the bound ID and branch. Task merges land
+on the cycle branch. Disjoint sibling task changes may merge after another sibling has landed;
+overlapping divergent changes require reconciliation. Normal worktree/branch removal still
+requires clean, already-merged state. No force, reset, push, fetch or permission expansion is added.
+
+Result rejection is `rework` (L1, `basis`, `feedback_ref`, approved `digest`): RESULT_REVIEW → GO
+in the **same L2**, retaining the contract and prior result evidence. Send a normal correction
+message; do not dispatch a new initial Go. A changed spec needs a new Ready review, not `rework`.
+RESULT_REVIEW itself does not permit implementation writes. After `accept`, only granted
+verification, checkout, merge and cleanup operations are eligible; further code edits/commits
+need result rework before acceptance, rather than silently changing an accepted result.
+
+After acceptance, `git checkout <integration>` and `git merge --no-ff <cycle-or-SHA> -m <message>`
+require the exact accepted feature commit and the unchanged integration tip. This final merge
+does not require the feature to masquerade as a registered L3 worktree. Deleting the feature
+branch requires it to be merged and no longer checked out. `human_only: merge` still forbids
+delegated merges, even when a policy lists `git_merge`.
+
+The binding pins the archive destination. After acceptance, approval checks read the original
+three-document bytes from the active location or that exact archive, including during the move.
+Conflicting copies, modified bytes and missing documents fail closed. `close` requires all three
+documents archived and absent from the active root. This preserves approval identity; it does
+not add general `.dryforge` editing, shell `mv`/`mkdir`, or status-marker permissions. Those
+operations still follow the host's ordinary controls. No claim of fully unattended archival is
+implied by a Git lifecycle grant.
+
+The controller rechecks the grant, binding, stage, decisions, accepted result and Git snapshot
+when recording **and consuming** an allow. New decisions invalidate queued allows. A new cycle
+needs a new binding under the same grant; it does not inherit the previous cycle's task map.
+V1–V3 remain unchanged. A human-approved v4 policy or a cycle binding uses ledger schema 5 so
+older runtimes cannot silently reinterpret the new state. Do not relabel an existing v3 grant
+as v4; changing its scope still requires the actual human approval path.
+
 ## Record or revoke authority
 
 Use `scripts/mission_state.py apply --state <state.json> --event <event.json>` through the trusted
@@ -159,7 +265,9 @@ the Intent contract, approved 3-doc, session ID, stage, consumed budget or pause
 has a new revision/event ID, so revoke-and-regrant does not revive an old queued approval. Human-
 only restrictions in the contract (`runtime_permissions` or a named operation) take precedence.
 The first runtime-policy event upgrades the ledger to schema 3; old code rejects it. Skill-interface
-events preserve schema 3 and cannot grant runtime authority. Schema-1/2 missions still load.
+events preserve that version or later and cannot grant runtime authority. Schema-1/2 missions still load.
+Migration-authorized active runs use at least schema 4 (schema 5 with v4 policies or cycle bindings);
+applying or revoking a policy never downgrades them.
 
 ## Decide on the pending request
 

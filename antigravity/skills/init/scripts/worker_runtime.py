@@ -95,7 +95,7 @@ def parser():
         if name in ('resume','__serve'): s.add_argument('--basis')
         if name == 'resume': s.add_argument('--reconciled',action='store_true')
         if name == 'send':
-            s.add_argument('--id',required=True); s.add_argument('--kind',choices=('probe','ready','go','message'),required=True)
+            s.add_argument('--id',required=True); s.add_argument('--kind',choices=('probe','ready','go','migration','message'),required=True)
             s.add_argument('--text-file',type=Path,required=True); s.add_argument('--ledger',type=Path); s.add_argument('--cycle')
         if name == 'answer':
             s.add_argument('--request-id',required=True); s.add_argument('--response-file',type=Path,required=True)

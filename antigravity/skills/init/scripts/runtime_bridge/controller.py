@@ -15,7 +15,7 @@ def ledger_state(config, sid, path, cycle):
     workspace = Path(config['workspace'])
     require(p.is_relative_to(workspace/'.dryforge/mission'),'ledger belongs outside this workspace')
     state = json.loads(p.read_text(encoding='utf-8'))
-    require(state.get('schema_version') in (1,2,3),'unsupported ledger schema')
+    require(state.get('schema_version') in (1,2,3,4,5),'unsupported ledger schema')
     require(state['status'] == 'ACTIVE','execution requires ACTIVE state; approve the draft or reconcile the existing run')
     require(Path(state['contract']['workspace']).resolve() == workspace,'ledger workspace mismatch')
     c = state.get('cycle')
@@ -28,17 +28,28 @@ def binding(config,sid,path,cycle,kind):
     p,state,c = ledger_state(config,sid,path,cycle)
     b = {'ledger':str(p),'cycle_id':cycle,'mission_id':state['contract']['mission_id'],
          'intent_digest':digest(state['contract'])}
+    if kind == 'migration':
+        require(c.get('kind') == 'migration' and c['stage'] in ('MIGRATION','MIGRATION_REVIEW'),
+                'not an assigned migration')
+        require('migration' in state['contract']['delegated_actions'] and
+                'migration' not in state['contract']['human_only'], 'migration not delegated')
     if kind == 'ready': require(c['stage'] in ('READY','READY_REVIEW','APPROVED'),'not a ready phase')
     if kind == 'go':
         require(c['stage'] == 'APPROVED' and not c['pending'],'go needs explicit ready approval and resolved questions')
         d = mission_state.document_digest(Path(config['workspace'])/'.dryforge')
         require(d == c['digest'] == c['approved_digest'],'documents changed since approval')
         b['docs_digest'] = d
+        a = state.get('runtime_authority') or {}
+        if (a.get('policy') or {}).get('version') == 4:
+            from runtime_cycle import validate_binding
+            validate_binding(Path(config['workspace']), a['policy'], c)
+            require(c['runtime_binding']['policy_digest'] == digest(a), 'cycle binding uses a stale runtime grant')
+            b['runtime_binding_digest'] = digest(c['runtime_binding'])
     return b
 
 
 def prepare(config,sid,kind,text,ledger=None,cycle=None):
-    require(kind in ('probe','ready','go','message'),'unknown input kind')
+    require(kind in ('probe','ready','go','migration','message'),'unknown input kind')
     require(isinstance(text,str) and bool(text.strip()),'nonempty text required')
     body = {'kind':kind,'text':text,'session_id':sid}
     if kind != 'probe':
@@ -77,15 +88,20 @@ def prompt_for(config,body):
               'Ask clarifying questions through the available host tool or return the exact question. '
               'Continue in this same session when the caller answers. An answer does not start Go.\n')
     skill = None
-    if kind in ('ready','go'):
+    if kind in ('ready','go','migration'):
         entry = root/kind/'SKILL.md'; workflow = root/kind/'references/workflow.md'
-        require(entry.is_file() and workflow.is_file(),'authorized procedure files missing')
+        require(entry.is_file() and (kind == 'migration' or workflow.is_file()),'authorized procedure files missing')
         prompt += (f'Execute the full authorized {kind} procedure below, including required references. '
                    f'Relative paths resolve from {entry.parent}, not the current working directory. '
                    'Procedure loading is not proof of a native slash-command invocation.\n\n'
-                   +entry.read_text()+'\n\n'+workflow.read_text()+'\n')
+                   +entry.read_text()+'\n\n'+(workflow.read_text() if kind != 'migration' else '')+'\n')
         skill = {'name':kind,'path':str(entry)}
         if kind == 'ready': prompt += '\nStop at READY_REVIEW; return document paths and digest. Do not run go in this turn.\n'
+        elif kind == 'migration':
+            prompt += ('\nPerform the existing migration procedure, including its independent review. '
+                       'Return all generated/updated documentation paths, completion marker, review and check evidence. '
+                       'Wait for the caller to review the result. Do not start Ready or Go in this session. '
+                       'Migration writes documentation; it does not implement product code or commit the harness.\n')
         else: prompt += f'The approved document digest is {b["docs_digest"]}. Check it before implementing.\n'
     else:
         prompt += '\nContinue only the current phase. Do not start go or another cycle from this message.\n'
@@ -126,11 +142,37 @@ def check_answer(store,wid,rid,response):
         policy_api.require(response.get('policy_digest') == policy_api.fingerprint(authority),
                            'runtime policy changed or was not explicitly selected')
         policy_api.require('runtime_permissions' not in s['contract']['human_only'], 'runtime permissions are human-only')
-        policy_api.require(c['stage'] == 'GO' and not c['pending'], 'delegated mutations require approved Go with no pending decision')
         import mission_state
-        current_digest = mission_state.document_digest(Path(config['workspace'])/'.dryforge')
-        policy_api.require(current_digest == c['digest'] == c['approved_digest'], 'approved documents changed')
-        match = policy_api.classify(req['body'],config['workspace'],authority['policy'])
+        if authority['policy']['version'] == 4 and c.get('kind') != 'migration':
+            policy_api.require((c.get('runtime_binding') or {}).get('policy_digest') == policy_api.fingerprint(authority),
+                               'cycle binding uses a stale runtime grant')
+        match = policy_api.classify(req['body'],config['workspace'],authority['policy'],cycle=c)
+        if c.get('kind') == 'migration':
+            from migration_artifacts import documentation_path
+            policy_api.require('migration' in s['contract']['delegated_actions'] and
+                               'migration' not in s['contract']['human_only'], 'migration not delegated')
+            policy_api.require(not c['pending'], 'resolve pending migration decisions first')
+            policy_api.require(match.get('worktree') is None, 'migration uses the base workspace')
+            if c['stage'] in ('MIGRATION','MIGRATION_REVIEW'):
+                policy_api.require(match['operation'] == 'workspace_edit', 'migration only delegates documentation edits')
+                current_digest = None  # Approved intent governs preparation; no Ready documents exist yet.
+            else:
+                policy_api.require(c['stage'] == 'ACCEPTED' and match['operation'] in ('git_add','git_commit'),
+                                   'only explicit harness checkpointing follows migration acceptance')
+                current_digest = mission_state.migration_digest(Path(config['workspace']),c['result']['paths'])
+                policy_api.require(current_digest == c['approved_digest'], 'accepted migration artifacts changed')
+                policy_api.require(set(match['paths']) <= set(c['result']['paths']), 'checkpoint includes unreviewed files')
+            policy_api.require(all(documentation_path(p) for p in match['paths']), 'outside migration documentation')
+        else:
+            policy_api.require(c['stage'] in ('GO','ACCEPTED') and not c['pending'],
+                               'delegated mutations require Go or accepted cleanup with no pending decision')
+            if c['stage'] == 'ACCEPTED':
+                policy_api.require(match['operation'] in ('git_checkout','git_merge','git_worktree_remove',
+                                                         'git_branch_delete','verify'),
+                                   'accepted results allow cleanup/integration/verification, not implementation')
+            from runtime_cycle import approved_documents
+            current_digest = approved_documents(Path(config['workspace']), c)
+            policy_api.require(current_digest == c['digest'] == c['approved_digest'], 'approved documents changed')
         policy_api.require(match['operation'] not in s['contract']['human_only'] and
                            not (match['operation'] == 'git_merge' and
                                 'merge' in s['contract']['human_only']),
@@ -138,7 +180,10 @@ def check_answer(store,wid,rid,response):
         return dict(match, policy_digest=policy_api.fingerprint(authority),
                     approval_ref=authority['approval_ref'], policy_event=authority['event_id'],
                     mission_id=b['mission_id'], cycle_id=c['id'], intent_digest=b['intent_digest'],
-                    docs_digest=current_digest)
+                    docs_digest=current_digest, stage=c['stage'],
+                    runtime_binding_digest=digest(c.get('runtime_binding')),
+                    decision_digest=digest(c.get('decisions')),
+                    result_digest=digest(c.get('result')))
     except (policy_api.PolicyError, OSError, ValueError) as exc:
         raise BridgeError(str(exc)) from exc
 

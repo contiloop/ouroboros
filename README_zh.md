@@ -27,6 +27,8 @@
 
 Ready、Go 及其下层代理使用普通调用者接口，不必根据上层是人还是 L1 改变流程。访谈属于用户与 L1 的对话，不是额外的代理或使用阶段。
 
+如果现有代码库尚需建立项目文档，L1 可以在已批准的范围内先安排 **Dryforge Migration**（`ouroboros:migration`），回答问题、审阅文档与独立审查结果，并另行提交已接受的文档。之后在新的工作会话中开始 Ready–Go。Migration 本身只编写文档，不实现产品代码，也不自行提交。新项目或已完成准备的项目跳过此步骤。[运行说明](src/skills/init/references/migration-orchestration.md)
+
 ## 安装与当前状态
 
 按[英文安装说明](README.md#try-it)加载插件。Claude Code 使用 `/ouroboros:init` → `/ouroboros:approve`，Codex 使用 `$ouroboros:init` → `$ouroboros:approve`。需要亲自监督单轮开发时，也可以直接使用 `ready` 和 `go`。

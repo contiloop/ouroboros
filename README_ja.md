@@ -27,6 +27,8 @@ Ouroboros では **L1** がユーザーとの対話を続けながら開発全�
 
 Ready・Go とその作業者は、呼び出し元が人間か L1 かによって手順を変えません。インタビューは L1 との対話の一部であり、別のエージェントや追加の利用手順ではありません。
 
+既存コードベースにプロジェクト文書を初めて整備する必要がある場合、L1 は承認された範囲で **Dryforge Migration**（`ouroboros:migration`）を依頼できます。質問への回答、文書と独立レビューの確認、受け入れた文書の別途コミットを経て、新しい作業セッションで Ready–Go を開始します。Migration 自体は文書を作成し、製品コードの実装やコミットは行いません。新規または整備済みのプロジェクトでは省略します。[運用手順](src/skills/init/references/migration-orchestration.md)
+
 ## インストールと現在の状態
 
 [英語のセットアップ手順](README.md#try-it)に従ってプラグインを読み込みます。Claude Code では `/ouroboros:init` → `/ouroboros:approve`、Codex では `$ouroboros:init` → `$ouroboros:approve` を使います。直接監督する単一サイクルには `ready` と `go` も利用できます。

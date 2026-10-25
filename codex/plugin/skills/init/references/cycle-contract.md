@@ -64,7 +64,21 @@ migration just because L2 is new.
 
 ## Ledger event flow
 
+Existing-project preparation can use an explicitly delegated Migration assignment:
+`start(kind=migration) → result → accept → close → evaluate`. Load
+`migration-orchestration.md` for the exact event fields, documentation digest and checkpoint.
+It has no Ready/Go or three-document archive. Questions and interruption recovery retain the
+same Migration worker; subsequent Ready must use a fresh session. Preparation counts against
+the existing cycle budget and cannot silently broaden runtime authority.
+
 `start → ready → approve → go → result → accept → close → evaluate`
+
+With runtime policy v4, insert L1's `bind_runtime` between `approve` and `go`: it narrows the
+human grant to an integration tip, cycle branch, exact task branches/worktrees and archive.
+It never changes the granted operations or paths. For a rejected development result,
+`result → rework → result` returns the same L2 to GO under the unchanged approved documents;
+record feedback and retain earlier results. `rework` uses delegated `accept_result` authority.
+After acceptance, archive/integration questions can still be answered before `close`.
 
 `question → answer` can pause ready or go. `interrupt → resume` restores the same session after
 reconciliation; `abort` is a human-authorized exceptional exit. `observe` records notifications

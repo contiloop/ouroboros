@@ -11,7 +11,7 @@ validates recorded state and authority, not model behavior or human identity.
 - **L1 / Mission Orchestrator (you):** understand the human's intent, preserve its constraints,
   answer within delegated authority, evaluate outcomes, and select the next cycle. Do not absorb
   raw task logs or implement the cycle yourself to hide a missing worker capability.
-- **L2 / Cycle Worker:** the existing Ouroboros main agent. One assignment is **one ready-go cycle**.
+- **L2 / Cycle Worker:** the Dryforge main agent. One development assignment is **one ready-go cycle**.
   The same L2 session must span questions, ready approval, go, result approval, and handoff.
   It may receive another cycle only after reporting back and L1's evaluation. It is **not** an
   autonomous sector owner allowed to invent its own successive cycles.
@@ -76,6 +76,13 @@ when these cannot be reconciled without integration, request the required approv
 
 ## 3. Assign or reuse L2
 
+Before the first Ready, determine whether this is an existing codebase without an established
+Dryforge project harness. If the approved scope includes that preparation, load
+`references/migration-orchestration.md`: assign ordinary Migration to a fresh worker, answer
+questions, review its documentation and independent review, then checkpoint the accepted result.
+Start Ready in a **different fresh session**. Do not migrate new projects, already prepared
+projects, or each newly spawned worker. A Migration receipt is not result acceptance.
+
 Start one cycle at a time per working repository. Select **REUSE** only at a completed, evaluated
 cycle boundary: the host confirms the same session is resumable, context headroom is sufficient
 for the next cycle plus recovery, and no old child is still writing. Otherwise **SPAWN** a fresh
@@ -104,6 +111,13 @@ Approve the exact combined content digest, not merely their paths or a summary. 
 again. If the host cannot invoke manual-only skills programmatically, use its supported explicit
 user-invocation/authorized-procedure-loading path or stop; never claim an invocation that failed.
 
+For a v4 runtime grant, record `bind_runtime` after approval and before Go. Keep final integration,
+the cycle branch and each task branch/worktree distinct (`runtime-permissions.md`). Select exact
+targets from the reviewed plan within the human's grant and send the concrete names to the same
+L2 through its ordinary caller interface. Selecting targets does not amend the grant or require
+the human to approve each branch. Never interpret a v3 `base_branch: main` as permission to use
+any feature branch automatically.
+
 ## 5. Evaluate, then loop
 
 L2 runs go with its original dispatch, tests, integration and independent-review gates. It may
@@ -115,6 +129,14 @@ Inspect the result and captured evidence, not just DONE. Accept within delegated
 let the same L2 finish archiving, checkpointing and quiescing children. Receive a compact packet:
 cycle outcome, requirement coverage, commit/branch, check commands/results, archive/harness paths,
 accepted concerns, unresolved facts, and safe session-reuse status. Keep raw logs on disk.
+
+If the implementation needs correction within the same approved spec, record `rework` with
+specific feedback and the approved digest, then send a correction message to that same L2.
+The ledger returns RESULT_REVIEW to GO and retains the previous result. Require fresh result
+evidence before acceptance. After acceptance, implementation writes stop; only the authorized
+archive, verification, integration and cleanup remain. Under v4, the pinned archive preserves
+the document identity for subsequent Git decisions. Close and evaluate only after L2 reports
+the actual final checkpoint; then choose the next cycle and its new binding.
 
 Choose **CONTINUE**, **REPLAN**, **ESCALATE**, or **COMPLETE**, with evidence and a reason. CONTINUE
 and REPLAN return to step 2; only L1 chooses the next cycle. Enforce cycle/stall/time/cost limits

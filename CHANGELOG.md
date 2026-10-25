@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased — cycle-aware runtime delegation
+
+- Separate the human runtime grant from L1's exact per-cycle branch/worktree/archive bindings.
+  Policy v4 distinguishes final integration, cycle feature branches and L3 task branches;
+  old policies retain their scope. Additional in-scope repair tasks are assigned by L1.
+- Keep the same L2 through result rework, acceptance and cleanup. Recheck phase, decisions,
+  exact targets, Git state and the approved document bytes at callback recording and consumption.
+- Preserve approval identity after the three documents move to the pinned archive. Final
+  integration requires the accepted feature commit and unchanged integration target.
+- Add real local Git/SQLite regressions through sibling-task merges, rework, cleanup, final
+  integration and the next Ready. These use synthetic host callbacks/consent, not live model E2E.
+  General protected-metadata and unsupported-command permissions remain host-controlled.
+
+## v1.4.1 (2026-10-24) — L1-managed Migration preparation
+
+- Let L1 assign the existing Dryforge Migration procedure, relay questions, review actual
+  documentation and independent-review evidence, and checkpoint an accepted result.
+- Add explicit migration assignments, real artifact digests, stale-review guards and a fresh
+  session requirement before subsequent Ready/Go. Preserve interruption and budget rules.
+- Add `worker_runtime.py send --kind migration` with ordinary caller semantics. Existing runtime
+  policy scopes remain unchanged; Migration only delegates eligible documentation edits and
+  separately requested, accepted-document checkpoints. Protected metadata remains protected.
+- Migration-authorized active runs use schema 4; existing runs remain readable without gaining
+  new authority. Add local files/Git/SQLite/CLI regressions; full live model execution is unverified.
+
 ## v1.4.0 (2026-10-24) — init conversation and approve handoff
 
 - Replace the public mission skill with `ouroboros:init` for ongoing intent discussion and

@@ -15,6 +15,7 @@ import subprocess
 BASE_OPERATIONS = {'git_add', 'git_commit', 'workspace_edit', 'verify'}
 GO_OPERATIONS = {'git_worktree_add', 'git_merge', 'git_worktree_remove', 'git_branch_delete'}
 OPERATIONS = BASE_OPERATIONS | GO_OPERATIONS
+CYCLE_OPERATIONS = OPERATIONS | {'git_checkout'}
 PROTECTED = {'.git', '.dryforge', '.claude', '.codex', '.agents'}
 SHELLS = {'sh', 'bash', 'zsh', '/bin/sh', '/bin/bash', '/bin/zsh', '/usr/bin/bash', '/usr/bin/zsh'}
 GIT = {'git', '/usr/bin/git', '/bin/git'}
@@ -50,12 +51,14 @@ def relative_scope(value):
 def validate_policy(policy):
     require(isinstance(policy, dict), 'runtime policy must be an object')
     version = policy.get('version')
-    require(type(version) is int and version in (1, 2, 3), 'unsupported runtime policy')
+    require(type(version) is int and version in (1, 2, 3, 4), 'unsupported runtime policy')
     fields = {'version', 'operations', 'paths', 'verification_commands', 'trust_workspace_code'}
     if version >= 2:
         fields.add('go_worktrees')
     if version == 3:
         fields.add('integration_branch' if 'integration_branch' in policy else 'go_workflow')
+    if version == 4:
+        fields.add('go_workflow')
     require(set(policy) == fields, 'runtime policy has missing or unknown fields')
     if version >= 2:
         require(type(policy['go_worktrees']) is bool, 'go_worktrees must be an explicit boolean grant')
@@ -68,6 +71,7 @@ def validate_policy(policy):
     ops, paths, commands = policy['operations'], policy['paths'], policy['verification_commands']
     require(isinstance(ops, list) and bool(ops) and all(isinstance(x, str) for x in ops)
             and len(set(ops)) == len(ops) and set(ops) <= (BASE_OPERATIONS | {'git_merge'} if 'integration_branch' in policy
+                                       else CYCLE_OPERATIONS if version == 4
                                        else OPERATIONS if version == 3 else BASE_OPERATIONS), 'invalid delegated operations')
     require(isinstance(paths, list) and bool(paths) and len(paths) <= 128, 'paths are required')
     for p in paths:
@@ -76,13 +80,16 @@ def validate_policy(policy):
     require(type(policy['trust_workspace_code']) is bool, 'project-code trust must be explicit')
     if version >= 2 and policy['go_worktrees']:
         require(policy['trust_workspace_code'], 'worktree delegation requires explicit project-code trust')
-        require(bool(set(ops) & OPERATIONS),
+        require(bool(set(ops) & (CYCLE_OPERATIONS if version == 4 else OPERATIONS)),
                 'worktree delegation requires a scoped operation')
     if 'git_merge' in ops:
-        require(version == 3 and policy['go_worktrees'],
-                'Git merge requires a separate human-approved v3 integration scope')
+        require(version >= 3 and policy['go_worktrees'],
+                'Git merge requires a separate human-approved v3/v4 integration scope')
     if version == 3 and 'go_workflow' in policy:
         from runtime_git import validate_workflow
+        validate_workflow(policy)
+    if version == 4:
+        from runtime_cycle import validate_workflow
         validate_workflow(policy)
     if set(ops) & ({'git_add', 'git_commit', 'verify'} | GO_OPERATIONS):
         require(policy['trust_workspace_code'], 'Git filters/hooks and verification may execute project code; explicit trust required')
@@ -222,10 +229,14 @@ def _effective_root(path, base, policy, *, file_target=False):
     return worktree, _known_worktree(base, worktree, policy)
 
 
-def classify(payload, workspace, policy):
+def classify(payload, workspace, policy, cycle=None):
     """Return operation + observable scope, or refuse. Does not execute any request."""
     validate_policy(policy)
     root = Path(workspace).resolve(strict=True)
+    bound_cycle = policy['version'] == 4 and (cycle or {}).get('kind') != 'migration'
+    if bound_cycle:
+        from runtime_cycle import validate_binding
+        validate_binding(root, policy, cycle)
     require(isinstance(payload, dict), 'malformed host request')
     method = payload.get('method')
     cwd, command, changes = None, None, None
@@ -264,6 +275,9 @@ def classify(payload, workspace, policy):
                     not kind.get('move_path') and not kind.get('movePath'), 'deletion/move is not delegated')
             path = change.get('path')
             effective, info = _effective_root(path, root, policy, file_target=True)
+            if bound_cycle:
+                from runtime_cycle import check_checkout
+                check_checkout(root, effective, cycle)
             identity = info['root'] if info else str(root)
             if selected is None:
                 selected = identity
@@ -282,6 +296,9 @@ def classify(payload, workspace, policy):
         argv = [argv[0], *argv[3:]]
     effective, worktree = _effective_root(cwd, root, policy)
     require(not Path(cwd).is_symlink(), 'symlink cwd is not delegated')
+    if bound_cycle and (not is_git or argv[1:2] in (['add'], ['commit'])):
+        from runtime_cycle import check_checkout
+        check_checkout(root, effective, cycle, verify=not is_git)
     if is_git:
         if worktree is None:
             require((effective / '.git').is_dir() and not (effective / '.git').is_symlink(),
@@ -311,6 +328,10 @@ def classify(payload, workspace, policy):
             require(bool(resolved), 'no verified staged changes')
             operation = 'git_commit'
         else:
+            if policy['version'] == 4:
+                from runtime_cycle import classify_lifecycle
+                require(worktree is None, 'Go lifecycle commands require the repository checkout')
+                return classify_lifecycle(argv, root, policy, cycle)
             from runtime_git import classify_lifecycle
             require(worktree is None, 'Go lifecycle commands require the base checkout')
             return classify_lifecycle(argv, root, policy)
