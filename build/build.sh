@@ -2,12 +2,12 @@
 # build.sh — regenerate every platform package from the canonical skill source.
 #
 #   src/skills/        canonical, platform-neutral skills (single source of truth)
-#   platform/claude/   claude-only frontmatter values + plugin.json + LICENSE
+#   platform/claude/   claude-only frontmatter values + plugin.json
 #   platform/codex/    codex-only openai.yaml + plugin.portable.json (Agent Plugins 1.0 root manifest)
-#                      + plugin.json (.codex-plugin compatibility overlay) + LICENSE
-#   platform/grok/     grok-only plugin.json + LICENSE
-#   platform/agent-plugin/  Agent Plugins 1.0 plugin.json + LICENSE
-#   platform/antigravity/   Antigravity plugin.json + rules + LICENSE
+#                      + plugin.json (.codex-plugin compatibility overlay)
+#   platform/grok/     grok-only plugin.json
+#   platform/agent-plugin/  Agent Plugins 1.0 plugin.json
+#   platform/antigravity/   Antigravity plugin.json + rules
 #   README.md          repo-root README (+ README_{ko,zh,ja}.md) — GitHub landing only, NOT bundled into plugins
 #   claude/            generated Claude plugin   (committed; Claude installs this)
 #   codex/plugin/      generated Codex plugin    (committed; Codex installs this)
@@ -85,7 +85,6 @@ for s in $SKILLS; do
   fi
 done
 cp "$PLAT/claude/plugin.json" "$OUT/claude/.claude-plugin/plugin.json"
-cp "$PLAT/claude/LICENSE" "$OUT/claude/"
 
 # ── Codex → ./codex/plugin ──────────────────────────────────────────────────
 echo "=== build: codex ==="
@@ -101,7 +100,6 @@ done
 # .codex-plugin/plugin.json stays as the compatibility overlay for older Codex clients.
 cp "$PLAT/codex/plugin.portable.json" "$OUT/codex/plugin/plugin.json"
 cp "$PLAT/codex/plugin.json" "$OUT/codex/plugin/.codex-plugin/plugin.json"
-cp "$PLAT/codex/LICENSE" "$OUT/codex/plugin/"
 
 # ── Grok → ./grok ──────────────────────────────────────────────────────────
 echo "=== build: grok ==="
@@ -113,7 +111,6 @@ for s in $SKILLS; do
     "$OUT/grok/skills/$s/SKILL.md"
 done
 cp "$PLAT/grok/plugin.json" "$OUT/grok/plugin.json"
-cp "$PLAT/grok/LICENSE" "$OUT/grok/"
 
 # ── Agent Plugins 1.0 → ./agent-plugin ─────────────────────────────────────
 echo "=== build: agent-plugin ==="
@@ -125,14 +122,12 @@ for s in $SKILLS; do
     "$OUT/agent-plugin/skills/$s/SKILL.md"
 done
 cp "$PLAT/agent-plugin/plugin.json" "$OUT/agent-plugin/plugin.json"
-cp "$PLAT/agent-plugin/LICENSE" "$OUT/agent-plugin/"
 
 # ── Antigravity → ./antigravity ────────────────────────────────────────────
 echo "=== build: antigravity ==="
 mkdir -p "$OUT/antigravity"
 cp -R "$SRC" "$OUT/antigravity/skills"
 cp "$PLAT/antigravity/plugin.json" "$OUT/antigravity/plugin.json"
-cp "$PLAT/antigravity/LICENSE" "$OUT/antigravity/"
 cp -R "$PLAT/antigravity/rules" "$OUT/antigravity/rules"
 
 # guard ②: manual-only injection must land once in every Grok and Agent Plugin skill.

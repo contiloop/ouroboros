@@ -23,11 +23,11 @@
 
 按既有 Go 规则，单个 `MECHANICAL`/`NONE` 任务由 L2 直接实现，并行或 `RISKY` 工作委托给下层代理，同时保留必要的独立审查。同一会话让 Ready 中形成的设计上下文延续到实现判断中。
 
-本插件将 Dryforge 流程提供为 `ouroboros:ready` 和 `ouroboros:go`。L2 会话由 L1 创建，并不是 Ready 技能自行创建。L1 对 L2 承担普通用户的角色，具体 L3 的管理由 L2 负责。缺少判断依据或超出委托范围的决定才返回用户协调。完成一轮并不意味着已经实现整体目标。
+L1 调用已安装的 Dryforge 技能。Codex 使用 `$dryforge:ready`、`$dryforge:go` 与技能附件，Claude Code 使用 `/dryforge:ready`、`/dryforge:go`。L2 会话由 L1 创建，并不是 Ready 技能自行创建。L1 对 L2 承担普通用户的角色，具体 L3 的管理由 L2 负责。缺少判断依据或超出委托范围的决定才返回用户协调。完成一轮并不意味着已经实现整体目标。
 
 Ready、Go 及其下层代理使用普通调用者接口，不必根据上层是人还是 L1 改变流程。访谈属于用户与 L1 的对话，不是额外的代理或使用阶段。
 
-如果现有代码库尚需建立项目文档，L1 可以在已批准的范围内先安排 **Dryforge Migration**（`ouroboros:migration`），回答问题、审阅文档与独立审查结果，并另行提交已接受的文档。之后在新的工作会话中开始 Ready–Go。Migration 本身只编写文档，不实现产品代码，也不自行提交。新项目或已完成准备的项目跳过此步骤。[运行说明](src/skills/init/references/migration-orchestration.md)
+如果现有代码库尚需建立项目文档，L1 可以在已批准的范围内先安排 **Dryforge Migration**（`dryforge:migration`），回答问题、审阅文档与独立审查结果，并另行提交已接受的文档。之后在新的工作会话中开始 Ready–Go。Migration 本身只编写文档，不实现产品代码，也不自行提交。新项目或已完成准备的项目跳过此步骤。[运行说明](src/skills/init/references/migration-orchestration.md)
 
 ## 安装与当前状态
 
@@ -39,4 +39,4 @@ Grep MCP 和 Context7 MCP 是可选（Optional）调查工具。参见 [MCP 设�
 
 ## 来源与许可证
 
-Ouroboros 是基于 **prekuter** 的 [Dryforge](https://github.com/prekuter/dryforge) 开发的独立分支，遵循 [Apache-2.0](LICENSE)。保留现有 `.dryforge/` 记录。公开 `mission` 命令已替换为 `init` 和 `approve`，但不会因此重置已有运行记录。
+Ouroboros 是基于 **prekuter** 的 [Dryforge](https://github.com/prekuter/dryforge) 开发的独立分支，遵循 [Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0)。保留现有 `.dryforge/` 记录。公开 `mission` 命令已替换为 `init` 和 `approve`，但不会因此重置已有运行记录。

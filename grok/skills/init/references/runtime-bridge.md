@@ -18,13 +18,18 @@ trusted same-user controller interface, not a sandbox against hostile agents sha
 limits within the human-approved budget. Claude startup includes a no-tool model bootstrap call
 and may incur cost. Wait for `status` to expose a real host session_id and IDLE. A PID is not proof
 of readiness. User/project Claude settings and MCP configuration require explicit `--load-settings`
-choices and a new availability check in L2. Host permission gates remain authoritative.
+choices and a new availability check in L2. Alternatively, pass `--dryforge-plugin <installed
+Claude plugin root>` to load only that plugin using the SDK's native `plugins` option. The root
+must contain `.claude-plugin/plugin.json` identifying `dryforge`. No versioned cache path is
+hardcoded. Codex discovers enabled Dryforge skills through `skills/list` in the worker workspace;
+it does not use this Claude-only option. Install/enable Dryforge for the selected host before use.
+Host permission gates remain authoritative.
 
 ## One cycle over one session
 
 For approved existing-project preparation, first record `start` with `kind: migration`, then
 `send --kind migration --id <id> --ledger <state.json> --cycle <id> --text-file <goal>`.
-This loads the complete bundled Migration SKILL.md and follows its reference-loading rules.
+This invokes the installed `dryforge:migration` skill through the selected host.
 Continue questions and corrections in that session using `message`. Record result/acceptance
 and checkpoint explicitly; the runtime does not manufacture them from a completed turn.
 Follow `migration-orchestration.md`, then create a fresh session for the development flow below.
@@ -34,9 +39,10 @@ Follow `migration-orchestration.md`, then create a fresh session for the develop
 2. After actual capability checks, L1 records the existing ledger `start` event with the observed
    L2 session_id, approved goal and checkpoint. No cycle assignment is inferred from a spawn.
 3. `send --kind ready --id <id> --ledger <state.json> --cycle <cycle-id> --text-file <goal>` gives
-   L2 the full preserved procedure and reference paths. Claude executes explicitly authorized
-   procedure text; Codex also receives `$ready` and a native `skill` input. Never describe file
-   loading as a proven slash-command invocation. Standalone manual-only settings are unchanged.
+   L2 the caller's goal plus the installed Dryforge Ready skill. Codex sends `$dryforge:ready`
+   and a native `skill` input with the path returned by `skills/list`. Claude sends
+   `/dryforge:ready <goal>` after checking its `slash_commands` from the session's init event.
+   The host loads the procedure and references; the controller does not read or paste them.
 4. `wait --id <id> --timeout 30` reads durable results or pending input. A wait timeout is not a
    failed task. L1 answers within original intent or relays to the human. Keep decision provenance
    in the mission ledger as well as the mailbox. A final prose question yields a turn; answer via
@@ -58,6 +64,16 @@ Follow `migration-orchestration.md`, then create a fresh session for the develop
 The runtime does not choose architecture, answer questions itself or replace the mission loop.
 Every cycle input is bound to the current intent digest. Ordinary messages continue the existing
 phase; interpreting a payload correctly remains the agent's responsibility, not a security proof.
+
+The transport adds no Ouroboros role prompt or stage-specific behavioral instructions to L2.
+L1 selects Ready, Go or Migration; the host adapter invokes the installed `dryforge:<kind>` skill.
+Codex uses `$dryforge:<kind>` plus a native skill attachment; Claude uses `/dryforge:<kind>`.
+Ordinary messages preserve L1's caller text verbatim. Claude retains its standard coding preset.
+Missing, disabled or ambiguous skills are rejected before a model turn or Go start is recorded.
+There is no fallback to bundled Ouroboros copies or pasted procedure text. Correct the host's
+availability and explicitly retry in the same session (restart/resume if Claude needs to reload
+its plugin). Session identity, phase and approval validation stay in the controller. L2 delegates
+to L3 using Dryforge's task prompts, not an outer role overlay.
 
 ## Answering a pending host request
 

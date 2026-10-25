@@ -17,7 +17,7 @@
 
 <p>
   <a href="https://github.com/prekuter/dryforge/releases"><img alt="Release" src="https://img.shields.io/github/v/release/prekuter/dryforge?style=flat-square&label=release&color=3f3f46"></a>
-  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/prekuter/dryforge?style=flat-square&color=3f3f46"></a>
+  <a href="https://www.apache.org/licenses/LICENSE-2.0"><img alt="License" src="https://img.shields.io/github/license/prekuter/dryforge?style=flat-square&color=3f3f46"></a>
   <a href="https://github.com/prekuter/dryforge/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/prekuter/dryforge/ci.yml?style=flat-square&label=CI"></a>
 </p>
 
@@ -371,7 +371,7 @@ Join us on [Discord](https://discord.gg/bU7yjyH3wY) for questions, feedback, and
 
 # License
 
-[Apache License 2.0](LICENSE) (`Apache-2.0`).
+[Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0) (`Apache-2.0`).
 
 <br />
 

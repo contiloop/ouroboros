@@ -2,6 +2,16 @@
 
 ## Unreleased — cycle-aware runtime delegation
 
+- Invoke installed Dryforge skills natively: Codex resolves `dryforge:*` via `skills/list` and
+  attaches the selected skill; Claude sends `/dryforge:*` after checking session commands, with
+  optional explicit installed-plugin loading. Remove bundled-procedure text injection from L2.
+  Missing skills reject dispatch before Go start, preserving approval and the existing session.
+
+- Remove the outer L2 role prompt and stage-specific behavior overlays. Pass ordinary caller
+  messages unchanged; keep Dryforge procedure loading and controller-side approval/session checks.
+- Remove CONTRIBUTING, SECURITY and LICENSE files, including packaged license copies and their
+  build requirements. Keep upstream attribution and license metadata; link README license
+  references to the Apache text instead of a removed local file.
 - Separate the human runtime grant from L1's exact per-cycle branch/worktree/archive bindings.
   Policy v4 distinguishes final integration, cycle feature branches and L3 task branches;
   old policies retain their scope. Additional in-scope repair tasks are assigned by L1.

@@ -23,11 +23,11 @@ Ouroboros では **L1** がユーザーとの対話を続けながら開発全�
 
 既存の Go 規則に従い、単一の `MECHANICAL`/`NONE` タスクは L2 が直接実装し、並列または `RISKY` な作業は下位エージェントに委任します。必要な独立レビューは維持します。同じセッションを使うことで、Ready の設計コンテキストを実装時の判断に引き継げます。
 
-このプラグインでは Dryforge の手順を `ouroboros:ready` と `ouroboros:go` として提供します。L2 セッションを作るのは L1 であり、Ready スキル自体ではありません。L1 は L2 に対して通常のユーザーの役割を担い、個々の L3 の管理は L2 が担当します。L1 が判断できない意図や委任範囲外の決定はユーザーに確認します。一つのサイクルの完了が、全体の目標達成とは限りません。
+L1 はインストール済みの Dryforge スキルを呼び出します。Codex では `$dryforge:ready`・`$dryforge:go` とスキル添付、Claude Code では `/dryforge:ready`・`/dryforge:go` を使います。L2 セッションを作るのは L1 であり、Ready スキル自体ではありません。L1 は L2 に対して通常のユーザーの役割を担い、個々の L3 の管理は L2 が担当します。L1 が判断できない意図や委任範囲外の決定はユーザーに確認します。一つのサイクルの完了が、全体の目標達成とは限りません。
 
 Ready・Go とその作業者は、呼び出し元が人間か L1 かによって手順を変えません。インタビューは L1 との対話の一部であり、別のエージェントや追加の利用手順ではありません。
 
-既存コードベースにプロジェクト文書を初めて整備する必要がある場合、L1 は承認された範囲で **Dryforge Migration**（`ouroboros:migration`）を依頼できます。質問への回答、文書と独立レビューの確認、受け入れた文書の別途コミットを経て、新しい作業セッションで Ready–Go を開始します。Migration 自体は文書を作成し、製品コードの実装やコミットは行いません。新規または整備済みのプロジェクトでは省略します。[運用手順](src/skills/init/references/migration-orchestration.md)
+既存コードベースにプロジェクト文書を初めて整備する必要がある場合、L1 は承認された範囲で **Dryforge Migration**（`dryforge:migration`）を依頼できます。質問への回答、文書と独立レビューの確認、受け入れた文書の別途コミットを経て、新しい作業セッションで Ready–Go を開始します。Migration 自体は文書を作成し、製品コードの実装やコミットは行いません。新規または整備済みのプロジェクトでは省略します。[運用手順](src/skills/init/references/migration-orchestration.md)
 
 ## インストールと現在の状態
 
@@ -39,4 +39,4 @@ Grep MCP と Context7 MCP は任意（Optional）の調査ツールです。[MCP
 
 ## 原著作者とライセンス
 
-Ouroboros は **prekuter** による [Dryforge](https://github.com/prekuter/dryforge) を基にした独立フォークで、[Apache-2.0](LICENSE) に従います。既存の `.dryforge/` 記録は維持します。公開 `mission` コマンドは `init` と `approve` に置き換わりましたが、既存の実行記録はリセットしません。
+Ouroboros は **prekuter** による [Dryforge](https://github.com/prekuter/dryforge) を基にした独立フォークで、[Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0) に従います。既存の `.dryforge/` 記録は維持します。公開 `mission` コマンドは `init` と `approve` に置き換わりましたが、既存の実行記録はリセットしません。

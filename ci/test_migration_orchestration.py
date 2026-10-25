@@ -152,11 +152,10 @@ class MigrationTests(unittest.TestCase):
                 prepare(self.cfg,'sid',kind,'wrong phase',self.path,'c1')
         with self.assertRaises(ledger.ContractError): self.event('go','L2',digest='a'*64)
 
-    def test_actual_migration_entrypoint_loaded_without_workflow(self):
+    def test_migration_selects_installed_skill_and_preserves_caller_text(self):
         body = self.dispatch(); prompt, skill = prompt_for(self.cfg,body)
-        self.assertEqual(skill['name'],'migration')
-        self.assertIn((SCRIPTS.parent.parent/'migration/SKILL.md').read_text(),prompt)
-        self.assertIn('Do not start Ready or Go in this session',prompt)
+        self.assertEqual(skill,{'name':'dryforge:migration'})
+        self.assertEqual(prompt,body['text'])
         for private in ('You are L2','L1',str(self.path)):
             self.assertNotIn(private,prompt)
 

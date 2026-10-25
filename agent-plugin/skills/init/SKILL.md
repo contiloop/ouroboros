@@ -50,6 +50,12 @@ action, documentation edits and the later harness checkpoint in the reviewed pro
 permission to overwrite it; preserve and review it under the ordinary Migration procedure.
 For a new project or an already prepared project, proceed to Ready without Migration.
 
+Check that Dryforge is installed for the selected execution host. After approval, L1 creates L2
+and explicitly invokes the installed skill with the cycle prompt: Codex uses `$dryforge:ready`
+with a native skill attachment; Claude Code uses `/dryforge:ready`. Go uses the corresponding
+`dryforge:go` invocation in the same L2 session. Skill contents are loaded by the host, not copied
+into the prompt by Ouroboros. Use `references/host-adapter.md` for availability checks.
+
 The user may continue refining this for as long as needed. `init`, an interview answer, a tool
 result, and your own assessment that the draft is ready do not activate the loop. Tell the user
 that `ouroboros:approve` hands the reviewed proposal to L1. Do not launch cycle workers or start

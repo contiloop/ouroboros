@@ -55,6 +55,5 @@ class OuroborosBrandingTest(unittest.TestCase):
     def test_legacy_state_is_preserved(self):
         self.assertIn('.dryforge/', (ROOT/'src/skills/go/SKILL.md').read_text())
         self.assertTrue((ROOT/'README.upstream.md').exists())
-        self.assertTrue((ROOT/'LICENSE').exists())
 
 if __name__=='__main__': unittest.main()

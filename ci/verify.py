@@ -438,17 +438,6 @@ def validate_codex_invocation(root: Path) -> None:
     print(f"OK Codex manual-only invocation ({len(skills)} skills)")
 
 
-def validate_licenses(root: Path) -> None:
-    canonical = (root / "LICENSE").read_bytes()
-    if b"Apache License" not in canonical or b"Version 2.0, January 2004" not in canonical:
-        raise VerificationError("LICENSE is not the Apache License 2.0 text")
-    copies = sorted(path for path in root.rglob("LICENSE") if ".git" not in path.parts)
-    for path in copies:
-        if path.read_bytes() != canonical:
-            raise VerificationError(f"LICENSE differs from the root LICENSE: {path.relative_to(root)}")
-    print(f"OK license copies ({len(copies)})")
-
-
 def verify(root: Path, tag: str | None = None) -> None:
     required = [
         "CHANGELOG.md",
@@ -465,7 +454,6 @@ def verify(root: Path, tag: str | None = None) -> None:
         ".agents/plugins/marketplace.json",
         ".grok-plugin/marketplace.json",
         ".github/plugin/marketplace.json",
-        "LICENSE",
     ]
     missing = [item for item in required if not (root / item).exists()]
     if missing:
@@ -478,7 +466,6 @@ def verify(root: Path, tag: str | None = None) -> None:
     validate_grok_package(root)
     validate_antigravity_package(root)
     validate_codex_invocation(root)
-    validate_licenses(root)
     validate_reproducible_build(root)
 
 

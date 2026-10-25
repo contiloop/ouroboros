@@ -8,18 +8,6 @@ import os
 from pathlib import Path
 from .store import BridgeError, require
 
-ROLE = '''Follow the caller's explicitly selected procedure: Migration, Ready or Go.
-Keep Ready and its subsequent Go in this same session. Migration is separate preparation:
-finish its documentation and independent review here; start later Ready/Go in a fresh session.
-Ask questions through the available question tool, or return the exact question and wait for an
-answer. Request execution permission through the host's normal tools. A yielded turn is not
-approval. Finish the requested work and report its evidence before taking a new assignment.
-Use the existing task-agent and independent-review rules. Do not reuse an implementer as its
-independent reviewer. Do not edit the runtime's private state or approval records.
-Load authorized procedure files and references; loading files is not a native slash invocation.
-'''
-
-
 def observable(value):
     """Keep tool/agent evidence, omit raw model thinking/signatures recursively."""
     if dataclasses.is_dataclass(value): value = dataclasses.asdict(value)
@@ -37,6 +25,7 @@ class ClaudeAdapter:
         self.client = None
         self.bootstrap = True
         self.probe = False
+        self.commands = set()
 
     async def connect(self):
         try:
@@ -69,12 +58,18 @@ class ClaudeAdapter:
 
         options = dict(cwd=self.config['workspace'], resume=self.sid, fork_session=False,
                        permission_mode='default', can_use_tool=permission,
-                       system_prompt={'type':'preset','preset':'claude_code','append':ROLE},
+                       system_prompt={'type':'preset','preset':'claude_code'},
                        setting_sources=self.config.get('settings',[]), max_turns=self.config['max_model_turns'],
                        hooks={name:[sdk.HookMatcher(hooks=[hook])] for name in
                               ('PreToolUse','PostToolUse','PostToolUseFailure','SubagentStart','SubagentStop')})
         if self.config.get('model'): options['model'] = self.config['model']
         if self.config.get('budget_usd'): options['max_budget_usd'] = self.config['budget_usd']
+        if self.config.get('dryforge_plugin'):
+            root = Path(self.config['dryforge_plugin'])
+            manifest = root/'.claude-plugin/plugin.json'
+            require(manifest.is_file() and json.loads(manifest.read_text()).get('name') == 'dryforge',
+                    '--dryforge-plugin must identify an installed Claude Code Dryforge plugin')
+            options['plugins'] = [{'type':'local','path':str(root)}]
         self.client = sdk.ClaudeSDKClient(options=sdk.ClaudeAgentOptions(**options))
         await self.client.connect()
         result = await self.run('Connection bootstrap only. Do not use tools. Reply CONNECTED.', probe=True)
@@ -86,12 +81,21 @@ class ClaudeAdapter:
         require(self.sid in (None,sid),'Claude replaced the recorded session')
         self.bind(sid); self.sid = sid
 
+    async def resolve_skill(self, name):
+        require(name in self.commands,
+                f'Claude Code skill /{name} is unavailable in this session; load the installed Dryforge '
+                'plugin with --dryforge-plugin or explicitly selected --load-settings sources')
+        return {'name':name}
+
     async def run(self, prompt, skill=None, probe=False):
         self.probe = probe
+        if skill: prompt = '/'+skill['name']+' '+prompt
         await self.client.query(prompt)
         result = None
         async for msg in self.client.receive_response():
-            if isinstance(msg,self.sdk.SystemMessage) and msg.subtype == 'init': self.identity(msg.data.get('session_id'))
+            if isinstance(msg,self.sdk.SystemMessage) and msg.subtype == 'init':
+                self.identity(msg.data.get('session_id'))
+                self.commands = set(msg.data.get('slash_commands',[]))
             if isinstance(msg,self.sdk.ResultMessage):
                 self.identity(msg.session_id)
                 result = {'ok': not msg.is_error and msg.subtype == 'success','session_id':msg.session_id,
@@ -289,8 +293,19 @@ class CodexAdapter:
         require(t.get('id') == self.sid,'thread/read returned a different thread')
         return next((x for x in t.get('turns',[]) if x['id'] == self.turn_id),None)
 
+    async def resolve_skill(self, name):
+        result = await self.rpc.call('skills/list',{'cwds':[self.config['workspace']],'forceReload':True})
+        matches = [s for row in result.get('data',[]) if row.get('cwd') == self.config['workspace']
+                   for s in row.get('skills',[]) if s.get('name') == name and s.get('enabled') is True]
+        require(len(matches) == 1,
+                f'Codex skill ${name} must resolve to one enabled installed skill; found {len(matches)}')
+        path = matches[0].get('path')
+        require(isinstance(path,str) and Path(path).is_absolute() and Path(path).is_file(),
+                f'Codex skill ${name} has no readable installed file')
+        return {'name':name,'path':path}
+
     async def run(self,prompt,skill=None,probe=False):
-        text = ROLE+'\n\n'+prompt
+        text = prompt
         if skill: text = '$'+skill['name']+'\n'+text
         inputs = [{'type':'text','text':text}]
         if skill: inputs.append({'type':'skill',**skill})

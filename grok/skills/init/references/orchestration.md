@@ -16,7 +16,7 @@ validates recorded state and authority, not model behavior or human identity.
   It may receive another cycle only after reporting back and L1's evaluation. It is **not** an
   autonomous sector owner allowed to invent its own successive cycles.
 - **L3 / Task agents:** L2's researchers, implementers, and independent reviewers. L2 controls
-  their lifecycle using `../go/references/agent-lifecycle.md`. L1 does not micromanage them.
+  their lifecycle using the installed Dryforge Go skill. L1 does not micromanage them.
 
 **Mission success is not cycle success. Session reuse is not authority reuse.** Evidence from
 one commit, approval, or task cannot silently authorize a different one.
@@ -91,7 +91,10 @@ invent token counts. Do not replace L2 between ready and go merely to clear its 
 
 Act as the user of ordinary Ready/Go: give the worker the cycle goal, relevant original product
 requirements and decisions, project path, expected Git checkpoint, harness/previous-cycle pointers,
-and complete procedure paths. Keep Mission authority, provider identity and ledger correlation in
+and an explicit invocation of the installed Dryforge Ready skill: `$dryforge:ready` with its native
+skill attachment in Codex, `/dryforge:ready` in Claude Code. Verify the skill is available in L2;
+do not paste its content or use the bundled `ouroboros:ready` copy as a fallback. Keep Mission
+authority, provider identity and ledger correlation in
 the outer controller. Do not tell the worker whether its caller is a human or an AI, add a special
 Mission mode to its workflow, or ask it to read the private Mission ledger/cycle contract. The
 worker asks, receives approval and reports through its ordinary interface. Record the real
@@ -108,8 +111,9 @@ Do not impersonate a human approval in the audit log.
 At READY_REVIEW, read the three actual documents and compare them with the cycle and mission.
 Approve the exact combined content digest, not merely their paths or a summary. Send go to the
 **same session**. If the documents change, the approval is stale and ready review must happen
-again. If the host cannot invoke manual-only skills programmatically, use its supported explicit
-user-invocation/authorized-procedure-loading path or stop; never claim an invocation that failed.
+again. Explicitly invoke `$dryforge:go` with its native attachment in Codex or `/dryforge:go`
+in Claude Code, in that same L2 session. If the host cannot invoke the installed skill, report the
+missing capability; do not replace invocation with pasted instructions.
 
 For a v4 runtime grant, record `bind_runtime` after approval and before Go. Keep final integration,
 the cycle branch and each task branch/worktree distinct (`runtime-permissions.md`). Select exact

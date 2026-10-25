@@ -19,7 +19,7 @@ Approval is a handoff, not the end of the conversation. L1 incorporates further 
 
 ## The cycle
 
-After the handoff, L1 manages the existing **Dryforge Ready and Go procedures**, packaged here as `ouroboros:ready` and `ouroboros:go`:
+After the handoff, L1 invokes the installed **Dryforge Ready and Go skills**. Codex uses `$dryforge:ready` / `$dryforge:go` with native skill attachments; Claude Code uses `/dryforge:ready` / `/dryforge:go`:
 
 1. **L1 creates an L2 agent session and requests Ready.** It supplies the cycle goal and relevant user intent. The Ready skill does not itself create the agent.
 2. **L2 follows Dryforge Ready.** It investigates existing solutions and prepares the specification, plan and handoff documents. L2 asks L1 its questions; L1 answers from the user's intent and delegated authority. Decisions lacking sufficient grounding or authority return to the user.
@@ -29,7 +29,7 @@ After the handoff, L1 manages the existing **Dryforge Ready and Go procedures**,
 
 Your `ouroboros:approve` hands responsibility to L1. The later Ready approval is L1's review of a particular cycle's documents. A finished cycle is not automatically a finished goal.
 
-For an existing codebase that needs initial project documentation, L1 can first assign **Dryforge Migration** (`ouroboros:migration`) within the approved scope. L1 answers its questions, reviews the documents and independent review, and arranges the accepted checkpoint. Migration writes documentation; it does not implement product code or commit by itself. Ready–Go then starts in a fresh worker session. New or already prepared projects skip this step. [Migration operation](src/skills/init/references/migration-orchestration.md)
+For an existing codebase that needs initial project documentation, L1 can first assign **Dryforge Migration** (`dryforge:migration`) within the approved scope. L1 answers its questions, reviews the documents and independent review, and arranges the accepted checkpoint. Migration writes documentation; it does not implement product code or commit by itself. Ready–Go then starts in a fresh worker session. New or already prepared projects skip this step. [Migration operation](src/skills/init/references/migration-orchestration.md)
 
 ## Architecture
 
@@ -78,6 +78,10 @@ Use `/ouroboros:init`, talk through the proposal, then use `/ouroboros:approve`.
 
 Register this checkout through Codex's local marketplace flow using `.agents/plugins/marketplace.json`, which points to `codex/plugin/`. Enable the `ouroboros` plugin, then select **`$ouroboros:init`** followed by **`$ouroboros:approve`** when the proposal is ready.
 
+Install and enable Dryforge for the host running L2 as well. The L1 loop invokes that installed
+plugin; the bundled `ouroboros:ready` / `ouroboros:go` copies are not its backend.
+For external Claude workers, see the explicit plugin-loading option in [runtime setup](docs/RUNTIME.md).
+
 ### Other workflows and packages
 
 For a single cycle you supervise directly, use `ouroboros:ready` followed by `ouroboros:go`. The `migration` skill onboards an existing project into the development workflow; replacing a worker does not require it.
@@ -110,6 +114,6 @@ python3 ci/verify.py
 
 ## Credits and license
 
-Ouroboros builds on [Dryforge](https://github.com/prekuter/dryforge) by **prekuter** under [Apache-2.0](LICENSE). It is an independent fork. The original [English](README.upstream.md) and [Korean](README_ko.upstream.md) READMEs are preserved for reference.
+Ouroboros builds on [Dryforge](https://github.com/prekuter/dryforge) by **prekuter** under [Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0). It is an independent fork. The original [English](README.upstream.md) and [Korean](README_ko.upstream.md) READMEs are preserved for reference.
 
 Existing `.dryforge/` state paths and internal mission identifiers are retained for compatibility. The public `mission` command has been replaced by `init` and `approve`; existing run records are not reset by that change.

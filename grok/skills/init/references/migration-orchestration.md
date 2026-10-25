@@ -2,7 +2,7 @@
 
 Migration prepares an existing codebase's durable project documentation. It is a separate
 assignment before development, not another Ready stage. L1 keeps the user's intent and history;
-the worker follows `../migration/SKILL.md` (relative to the init skill root) and its references.
+the worker follows the installed `dryforge:migration` skill and its references.
 No special worker mode, provider identity or private ledger is needed in that worker's prompt.
 
 ## Choose preparation only when needed
@@ -35,8 +35,8 @@ prerequisites through the existing authorized setup path first.
    against the already approved cycle/stall budget; it does not replenish any limit.
 2. With the external runtime, send `--kind migration --ledger <state> --cycle <id>` plus the
    existing codebase, original intent/constraints and relevant decisions in `--text-file`.
-   Native hosts load the same complete Migration skill. Migration has its procedure in SKILL.md;
-   unlike Ready/Go, it does not require a `references/workflow.md` entrypoint.
+   Invoke `$dryforge:migration` with a native skill attachment in Codex or `/dryforge:migration`
+   in Claude Code. The host loads the installed skill; do not paste a bundled procedure.
 3. Answer the worker's ordinary questions from original human intent and code evidence. Return
    missing product/business decisions to the user only when needed. Preserve the ordinary
    SCAN → ELICIT → GENERATE → independent REVIEW procedure. L1's acceptance never replaces the

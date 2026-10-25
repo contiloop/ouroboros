@@ -30,11 +30,24 @@ for line in sys.stdin:
     if method == 'initialized': continue
     r = {}
     if method == 'initialize': r = {'userAgent':'FIXTURE-NOT-CODEX'}
+    elif method == 'skills/list':
+        catalog = p.with_suffix('.skills.json')
+        if catalog.exists():
+            skills = json.loads(catalog.read_text())
+        else:
+            skills = []
+            for name in ('ready','go','migration'):
+                entry = p.parent/'fixture-dryforge'/name/'SKILL.md'
+                entry.parent.mkdir(parents=True,exist_ok=True)
+                entry.write_text('FIXTURE SKILL, NOT A REAL PROCEDURE')
+                skills.append({'name':'dryforge:'+name,'path':str(entry),'enabled':True})
+        r = {'data':[{'cwd':cwd,'skills':skills,'errors':[]} for cwd in params['cwds']]}
     elif method == 'thread/start': save(); r = {'thread':state}
     elif method == 'thread/resume': r = {'thread':{'id':'wrong'} if os.environ.get('FIXTURE_WRONG_ID') else state}
     elif method == 'thread/read': r = {'thread':children.get(params.get('threadId'),state)}
     elif method == 'turn/start':
-        t = {'id':'turn-'+str(len(state['turns'])+1),'status':'inProgress','items':[]}
+        t = {'id':'turn-'+str(len(state['turns'])+1),'status':'inProgress','items':[],
+             'input':params['input']}
         state['turns'].append(t); save()
         emit({'id':rid,'result':{'turn':t}})
         text = params['input'][0]['text']

@@ -92,6 +92,8 @@ def parser():
                 s.add_argument('--'+k,type=int,default=default)
             s.add_argument('--budget-usd',type=float)
             s.add_argument('--load-settings',action='append',choices=('user','project','local'),default=[])
+            s.add_argument('--dryforge-plugin',type=Path,
+                           help='Claude Code only: installed Dryforge plugin root to load into L2')
         if name in ('resume','__serve'): s.add_argument('--basis')
         if name == 'resume': s.add_argument('--reconciled',action='store_true')
         if name == 'send':
@@ -120,9 +122,12 @@ def dispatch(a):
                 require(0 < getattr(a,k) <= 86400,'invalid finite limit: '+k)
             require(a.budget_usd is None or 0 < a.budget_usd < 10000,'invalid USD limit')
             require(a.backend != 'codex' or a.budget_usd is None,'Codex adapter cannot enforce a USD limit')
+            require(a.backend == 'claude' or a.dryforge_plugin is None,
+                    '--dryforge-plugin is for Claude Code; Codex resolves installed skills through skills/list')
             config = {k:getattr(a,k) for k in ('backend','model','handoff_ref','turn_seconds','startup_seconds','max_messages','max_model_turns','budget_usd')}
             config.update(workspace=str(workspace),runtime_root=str(root),worker=wid,
-                          skills_root=str(SCRIPTS.parent.parent),deadline=time.time()+a.lifetime_seconds,settings=a.load_settings)
+                          dryforge_plugin=str(a.dryforge_plugin.expanduser().resolve()) if a.dryforge_plugin else None,
+                          deadline=time.time()+a.lifetime_seconds,settings=a.load_settings)
             store.create(wid,config); return launch(store,wid)
         if a.command == 'resume':
             require(a.reconciled and a.basis,'--reconciled and --basis are required')

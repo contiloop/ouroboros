@@ -26,7 +26,7 @@ import mission_state
 
 def config(root,**kw):
     c=dict(backend='codex',workspace=str(root),runtime_root=str(root/'.dryforge/mission/runtime'),
-           skills_root=str(SCRIPTS.parent.parent),worker='w',settings=[],deadline=time.time()+120,
+           worker='w',settings=[],deadline=time.time()+120,
            turn_seconds=10,startup_seconds=5,max_messages=20,max_model_turns=20)
     c.update(kw);return c
 
@@ -164,18 +164,22 @@ class GateTests(unittest.TestCase):
     def test_paused_mission_blocks_work(self):
         self.state['status']='PAUSED';self.save()
         with self.assertRaises(BridgeError):self.body('message')
-    def test_full_workflow_loaded_not_summarized(self):
+    def test_installed_skill_selected_without_pasting_procedure(self):
         p,skill=prompt_for(self.c,self.body())
-        self.assertIn((SCRIPTS.parent.parent/'go/references/workflow.md').read_text(),p)
-        self.assertEqual(skill['name'],'go')
+        self.assertEqual(p,'fixture')
+        self.assertEqual(skill,{'name':'dryforge:go'})
     def test_worker_prompt_does_not_expose_decision_provider(self):
-        from runtime_bridge.adapters import ROLE
         prompt, _ = prompt_for(self.c,self.body())
         for private in ('You are L2', 'L1', 'Decision provider', str(self.ledger), 'Mission: fixture'):
-            self.assertNotIn(private, ROLE + prompt)
+            self.assertNotIn(private, prompt)
         self.assertNotIn('cycle-contract.md', prompt)
-    def test_message_never_grants_go(self):
-        p,skill=prompt_for(self.c,self.body('message'));self.assertIsNone(skill);self.assertIn('Do not start go',p)
+        self.assertNotIn(self.state['cycle']['approved_digest'], prompt)
+    def test_message_preserves_caller_text_without_advancing_phase(self):
+        text = '결과를 승인합니다.\n로컬 main 병합을 진행하세요.\n'
+        body = prepare(self.c,'sid','message',text,self.ledger,'c1')
+        p,skill=prompt_for(self.c,body)
+        self.assertIsNone(skill);self.assertEqual(p,text)
+        self.assertEqual(json.loads(self.ledger.read_text()),self.state)
     def test_explicit_go_records_start_not_success(self):
         mark_go(self.c,self.body(),'m1');s=json.loads(self.ledger.read_text())
         self.assertEqual(s['cycle']['stage'],'GO');self.assertEqual(s['status'],'ACTIVE')
@@ -198,6 +202,33 @@ class CodexTests(unittest.IsolatedAsyncioTestCase):
     async def test_two_turns_same_host_thread(self):
         a=await self.a.run('first');b=await self.a.run('second')
         self.assertEqual(a['session_id'],b['session_id']);self.assertNotEqual(a['turn_id'],b['turn_id'])
+    async def test_native_inputs_preserve_caller_and_selected_skill(self):
+        skill=await self.a.resolve_skill('dryforge:ready')
+        await self.a.run('작업 요청\n',skill=skill)
+        await self.a.run('질문에 대한 답변\n')
+        go=await self.a.resolve_skill('dryforge:go')
+        await self.a.run('승인합니다. 실행하세요.',skill=go)
+        turns=json.loads((self.root/'host.json').read_text())['turns']
+        self.assertEqual(turns[0]['input'],[{'type':'text','text':'$dryforge:ready\n작업 요청\n'},
+                                           {'type':'skill',**skill}])
+        self.assertEqual(turns[1]['input'],[{'type':'text','text':'질문에 대한 답변\n'}])
+        self.assertEqual(turns[2]['input'],[{'type':'text','text':'$dryforge:go\n승인합니다. 실행하세요.'},
+                                           {'type':'skill',**go}])
+        self.assertEqual(set(self.ids),{self.a.sid})
+        self.assertNotIn(str(SCRIPTS),json.dumps(turns))
+    async def test_unavailable_disabled_or_ambiguous_skill_never_falls_back(self):
+        skill=await self.a.resolve_skill('dryforge:ready')
+        for catalog in ([],[dict(skill,enabled=False)],[dict(skill,enabled=True)]*2,
+                        [dict(skill,name='ouroboros:ready',enabled=True)]):
+            with self.subTest(catalog=catalog):
+                (self.root/'host.skills.json').write_text(json.dumps(catalog))
+                with self.assertRaises(BridgeError):await self.a.resolve_skill('dryforge:ready')
+        self.assertEqual(json.loads((self.root/'host.json').read_text())['turns'],[])
+    async def test_skill_catalog_refresh_uses_current_installed_path(self):
+        skill=await self.a.resolve_skill('dryforge:ready')
+        path=self.root/'another-version/SKILL.md';path.parent.mkdir();path.write_text('fixture')
+        (self.root/'host.skills.json').write_text(json.dumps([dict(skill,path=str(path),enabled=True)]))
+        self.assertEqual((await self.a.resolve_skill('dryforge:ready'))['path'],str(path))
     async def test_permission_request_is_correlated(self):
         self.assertTrue((await self.a.run('FIXTURE_PERMISSION'))['ok'])
         self.assertEqual(self.replies[0][1]['params']['threadId'],self.a.sid)
@@ -260,7 +291,8 @@ class FakeClient:
     async def connect(self):pass
     async def query(self,text):self.inputs.append(text)
     async def receive_response(self):
-        yield FakeSystem('init',{'session_id':'fixture-claude'})
+        yield FakeSystem('init',{'session_id':'fixture-claude',
+                                'slash_commands':['dryforge:ready','dryforge:go','dryforge:migration']})
         yield FakeResult()
     async def disconnect(self):pass
 
@@ -278,6 +310,30 @@ class ClaudeTests(unittest.IsolatedAsyncioTestCase):
     async def test_one_client_same_session_multiple_turns(self):
         client=self.a.client;await self.a.run('ready');await self.a.run('go')
         self.assertIs(client,self.a.client);self.assertEqual(len(client.inputs),3);self.assertEqual(set(self.ids),{'fixture-claude'})
+    async def test_host_preset_and_caller_text_without_role_override(self):
+        self.assertEqual(self.a.client.options.system_prompt,{'type':'preset','preset':'claude_code'})
+        await self.a.run('승인한 작업을 진행하세요.\n')
+        self.assertEqual(self.a.client.inputs[-1],'승인한 작업을 진행하세요.\n')
+    async def test_namespaced_slash_commands_on_same_client(self):
+        client=self.a.client
+        for kind in ('ready','go','migration'):
+            skill=await self.a.resolve_skill('dryforge:'+kind)
+            await self.a.run('작업 요청\n둘째 줄',skill=skill)
+            self.assertEqual(client.inputs[-1],'/dryforge:'+kind+' 작업 요청\n둘째 줄')
+        self.assertIs(client,self.a.client)
+        self.assertEqual(set(self.ids),{'fixture-claude'})
+    async def test_missing_slash_command_is_not_sent_as_plain_text(self):
+        self.a.commands={'ouroboros:ready','ready'}
+        before=list(self.a.client.inputs)
+        with self.assertRaises(BridgeError):await self.a.resolve_skill('dryforge:ready')
+        self.assertEqual(self.a.client.inputs,before)
+    async def test_explicit_plugin_loading_does_not_enable_other_settings(self):
+        root=self.root/'installed-dryforge';(root/'.claude-plugin').mkdir(parents=True)
+        (root/'.claude-plugin/plugin.json').write_text(json.dumps({'name':'dryforge'}))
+        self.a.config['dryforge_plugin']=str(root)
+        await self.a.close();await self.a.connect()
+        self.assertEqual(self.a.client.options.plugins,[{'type':'local','path':str(root)}])
+        self.assertEqual(self.a.client.options.setting_sources,[])
     async def test_no_permission_bypass(self):
         self.assertEqual(self.a.client.options.permission_mode,'default');self.assertFalse(hasattr(self.a.client.options,'allowed_tools'))
     async def test_no_implicit_resume_or_fork(self):
@@ -340,6 +396,30 @@ class CliTests(unittest.TestCase):
         self.start('--turn-seconds','1');self.send('m','FIXTURE_HANG');self.state({'ERROR'})
         self.assertEqual(self.call('result','--id','m')['state'],'UNCERTAIN')
         self.assertEqual(len(json.loads((self.root/'host.json').read_text())['turns']),1)
+    def test_missing_go_skill_preserves_approval_and_can_retry_same_session(self):
+        sid=self.start()['session_id']
+        docs=self.project/'.dryforge'
+        for name in ('spec.md','plan.md','handoff.md'):(docs/name).write_text(name)
+        state_path=docs/'mission/state.json'
+        contract=dict(mission_id='skill-fixture',goal='fixture',workspace=str(self.project),
+                      success_criteria=['fixture'],constraints=[],human_only=[],delegated_actions=['answer'],
+                      max_cycles=2,max_stalled_cycles=2,approved_by='human',approval_ref='FIXTURE-NOT-REAL-CONSENT')
+        state=mission_state.init_state(contract);d=mission_state.document_digest(docs)
+        state['cycle']=dict(id='c1',session_id=sid,stage='APPROVED',pending={},digest=d,approved_digest=d)
+        state_path.write_text(json.dumps(state))
+        catalog=self.root/'host.skills.json';catalog.write_text('[]')
+        prompt=self.root/'go.txt';prompt.write_text('Approved. Execute the plan.')
+        args=('--kind','go','--ledger',str(state_path),'--cycle','c1','--text-file',str(prompt))
+        self.call('send','--id','missing',*args)
+        self.assertEqual(self.call('wait','--id','missing','--timeout','5')['message']['state'],'REJECTED')
+        self.assertEqual(json.loads(state_path.read_text()),state)
+        self.assertEqual(json.loads((self.root/'host.json').read_text())['turns'],[])
+        catalog.unlink()  # Fixture simulates installation becoming available.
+        self.call('send','--id','available',*args)
+        r=self.call('wait','--id','available','--timeout','5')['message']
+        self.assertEqual(r['state'],'TURN_COMPLETE');self.assertEqual(r['session_id'],sid)
+        self.assertEqual(json.loads(state_path.read_text())['cycle']['stage'],'GO')
+        self.call('stop');self.state({'STOPPED'})
     def test_permission_roundtrip(self):
         s=self.start();self.send('m','FIXTURE_PERMISSION');r=self.state({'WAITING'})['pending'][0]
         answer={'principal':'L1','action':'allow','basis':'fixture','session_id':s['session_id'],'request_digest':r['fingerprint']}

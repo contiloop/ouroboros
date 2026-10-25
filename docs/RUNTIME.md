@@ -33,11 +33,15 @@ PROJECT="/absolute/path/to/your/test-project"
 
 "$PY" "$BRIDGE" doctor --backend claude
 "$PY" "$BRIDGE" start --workspace "$PROJECT" --worker l2-01 --backend claude \
+  --dryforge-plugin /absolute/path/to/installed/claude-dryforge \
   --turn-seconds 600 --lifetime-seconds 3600 --max-messages 20
 "$PY" "$BRIDGE" status --workspace "$PROJECT" --worker l2-01
 ```
 
-Change to `--backend codex` for Codex. Paths/limits are examples, not budget authorization. Claude
+For Codex, use `--backend codex` and omit `--dryforge-plugin`; enabled Dryforge skills are resolved
+through the host's `skills/list` API. For Claude, the plugin path must be the installed Claude
+Code package root containing `.claude-plugin/plugin.json` with name `dryforge`. You can omit the
+path if Dryforge is already loaded through explicitly selected settings. Paths/limits are examples, not budget authorization. Claude
 startup makes a no-tool bootstrap model call to obtain/confirm its session ID and may incur cost.
 A successful process launch is not a connected session: wait for a real session_id and IDLE.
 `doctor` checks dependencies, not login or live execution.
@@ -99,10 +103,14 @@ Do not pre-record `go` yourself. It never records approval, acceptance or comple
 notifications. A failure after that write leaves an in-flight GO to reconcile, not something to
 replay blindly. Mailbox/ledger/filesystem effects are not one distributed atomic transaction.
 
-Full preserved procedures are passed with reference paths. Claude uses explicitly authorized
-procedure loading (not a claimed slash invocation); Codex additionally receives `$ready`/`$go` and
-the official skill input item. Normal manual-only settings are unchanged. A yielded prose question
-ends a turn, not the session; `send --kind message` continues that phase after a legitimate answer.
+L1's prompt is passed with an explicit installed Dryforge skill invocation. Codex receives
+`$dryforge:ready` / `$dryforge:go` plus the native skill input with the path from `skills/list`.
+Claude receives `/dryforge:ready <prompt>` / `/dryforge:go <prompt>` after checking the session's
+reported `slash_commands`. Migration uses the equivalent `dryforge:migration` invocation.
+The host loads the selected skill; the bridge never pastes SKILL.md or workflow text and never
+falls back to bundled Ouroboros copies. An unavailable skill rejects the message before Go start;
+it does not consume document approval. A yielded prose question ends a turn, not the session;
+`send --kind message` continues that phase after a legitimate answer.
 A message is not authority to skip the ready approval gate or start another cycle.
 
 ### Pending questions and tool permissions

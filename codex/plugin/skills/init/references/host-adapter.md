@@ -20,9 +20,11 @@ worker. Do not auto-install clients, change permissions or enable experimental f
 Official subagent documentation describes nested spawning and resuming an agent by ID, but actual
 limits and tools depend on the installed version. It also documents that ordinary subagents do
 not receive AskUserQuestion, and manual-only skills cannot be preloaded using the agent `skills`
-field. Verify a supported parent-message relay and explicit authorized procedure-loading path;
-do not rely on frontmatter to grant a tool the host removes. Keep ready/go manual-only for normal
-users. Loading approved procedure files in mission mode is not evidence that `/ready` was invoked.
+field. Verify a supported parent-message relay and native explicit command invocation;
+do not rely on frontmatter to grant a tool the host removes. A full SDK worker accepts
+`/dryforge:ready <goal>`, then `/dryforge:go <approval/instruction>` in the same session. Check
+`slash_commands` in its init event and load the installed plugin through selected settings or
+`--dryforge-plugin`. Do not paste skill files as a substitute for an unavailable command.
 
 Use the installed host's actual Agent/message/resume interfaces. Do not hardcode a guessed Agent
 `resume` parameter or silently replace a lost ID. An SDK controller can manage separate worker
@@ -36,7 +38,11 @@ using App Server can maintain a worker thread and deliver subsequent turns; a th
 notification is not a completed ready-go cycle. Do not assume a configuration key or default
 nesting depth across client versions. Check actual schemas and capabilities before invocation.
 If a top-level worker session is used instead of native nesting, keep the same worker thread
-through ready/go and give it its own independent task agents.
+through ready/go and give it its own independent task agents. Resolve `dryforge:ready` and
+`dryforge:go` using `skills/list` for the workspace. Send `$dryforge:ready` / `$dryforge:go` with the
+caller's prompt and the corresponding native `skill` input (name and returned absolute path).
+The host loads the skill; the controller does not concatenate SKILL.md or workflow references.
+Migration uses the same host-specific invocation rules for `dryforge:migration`.
 
 ## Optional executable transport
 

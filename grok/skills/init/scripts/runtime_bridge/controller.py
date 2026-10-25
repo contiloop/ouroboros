@@ -81,31 +81,11 @@ def prompt_for(config,body):
     if kind == 'probe':
         return ('Read-only capability probe, not mission work. Do not implement, install or approve anything. '
                 'Report only observed host behavior.\n'+body['text'],None)
-    b = body['binding']; root = Path(config['skills_root'])
-    # Identity, delegation, ledger and transport correlation belong to the outer
-    # controller. Ready/Go receive the same caller interface in either mode.
-    prompt = (f'Workspace: {config["workspace"]}.\n'
-              'Ask clarifying questions through the available host tool or return the exact question. '
-              'Continue in this same session when the caller answers. An answer does not start Go.\n')
-    skill = None
-    if kind in ('ready','go','migration'):
-        entry = root/kind/'SKILL.md'; workflow = root/kind/'references/workflow.md'
-        require(entry.is_file() and (kind == 'migration' or workflow.is_file()),'authorized procedure files missing')
-        prompt += (f'Execute the full authorized {kind} procedure below, including required references. '
-                   f'Relative paths resolve from {entry.parent}, not the current working directory. '
-                   'Procedure loading is not proof of a native slash-command invocation.\n\n'
-                   +entry.read_text()+'\n\n'+(workflow.read_text() if kind != 'migration' else '')+'\n')
-        skill = {'name':kind,'path':str(entry)}
-        if kind == 'ready': prompt += '\nStop at READY_REVIEW; return document paths and digest. Do not run go in this turn.\n'
-        elif kind == 'migration':
-            prompt += ('\nPerform the existing migration procedure, including its independent review. '
-                       'Return all generated/updated documentation paths, completion marker, review and check evidence. '
-                       'Wait for the caller to review the result. Do not start Ready or Go in this session. '
-                       'Migration writes documentation; it does not implement product code or commit the harness.\n')
-        else: prompt += f'The approved document digest is {b["docs_digest"]}. Check it before implementing.\n'
-    else:
-        prompt += '\nContinue only the current phase. Do not start go or another cycle from this message.\n'
-    return prompt+'\nCaller input:\n'+body['text'],skill
+    if kind == 'message':
+        return body['text'], None
+    # L1 selects a skill; the host loads it using its native invocation mechanism.
+    # Never paste bundled procedure text or substitute an Ouroboros copy.
+    return body['text'], {'name':'dryforge:'+kind}
 
 
 def check_answer(store,wid,rid,response):
@@ -265,6 +245,9 @@ async def serve(root,wid,basis=None,adapter_factory=None):
                 try:
                     validate_dispatch(config,body)
                     prompt,skill = prompt_for(config,body)
+                    if skill:
+                        async with asyncio.timeout(max(.01,min(30,config['deadline']-time.time()))):
+                            skill = await adapter.resolve_skill(skill['name'])
                     if body['kind'] == 'go': mark_go(config,body,current['id'])
                 except (ValueError,KeyError,OSError) as exc:
                     store.finish(wid,owner,current['id'],{'error':str(exc)},'REJECTED')

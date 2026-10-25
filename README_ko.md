@@ -19,7 +19,7 @@ Ouroboros에서는 **L1**이 사용자와 계속 대화하면서 개발 전체�
 
 ## Ready–Go 반복
 
-실행을 인계받은 L1은 기존 **Dryforge Ready·Go 절차**를 아래 흐름으로 운영합니다. 이 플러그인에서는 `ouroboros:ready`, `ouroboros:go`라는 이름으로 제공합니다.
+실행을 인계받은 L1은 설치된 **Dryforge Ready·Go 스킬**을 아래 흐름으로 호출합니다. Codex에서는 `$dryforge:ready`·`$dryforge:go`와 스킬 첨부를, Claude Code에서는 `/dryforge:ready`·`/dryforge:go`를 사용합니다.
 
 1. **L1이 L2 에이전트 세션을 만들고 Ready를 요청합니다.** 이번 사이클의 목표와 사용자 의도에 관한 맥락을 전달합니다. Ready 스킬 자체가 에이전트를 생성하는 것은 아닙니다.
 2. **L2가 Dryforge Ready 절차를 수행합니다.** 기존 해결책을 조사하고 요구사항·계획·인계 문서를 작성합니다. 궁금한 점은 L1에 묻고, L1이 사용자 의도와 위임 범위에 따라 답합니다. 판단 근거가 부족하거나 위임 범위를 벗어나는 결정만 사용자와 조율합니다.
@@ -29,7 +29,7 @@ Ouroboros에서는 **L1**이 사용자와 계속 대화하면서 개발 전체�
 
 사용자의 `ouroboros:approve`는 L1에 실행을 맡기는 승인입니다. 이후 사이클별 Ready 승인은 L1이 실제 문서를 보고 수행합니다. 한 사이클이 끝났다는 이유만으로 전체 목표가 완료됐다고 판단하지 않습니다.
 
-기존 코드베이스에 프로젝트 문서와 작업 규칙을 처음 마련해야 한다면, L1이 승인된 범위에서 **Dryforge Migration**(`ouroboros:migration`)을 먼저 맡길 수 있습니다. 질문에 답하고 실제 문서와 독립 검토 결과를 확인한 뒤, 수락한 문서를 별도 승인 범위에 따라 커밋합니다. Migration 자체는 문서만 작성하며 제품 코드 구현이나 커밋을 하지 않습니다. 이후 새 작업자 세션에서 Ready–Go를 시작합니다. 새 프로젝트나 이미 준비된 프로젝트는 이 단계를 건너뜁니다. [Migration 운영 절차](src/skills/init/references/migration-orchestration.md)
+기존 코드베이스에 프로젝트 문서와 작업 규칙을 처음 마련해야 한다면, L1이 승인된 범위에서 **Dryforge Migration**(`dryforge:migration`)을 먼저 맡길 수 있습니다. 질문에 답하고 실제 문서와 독립 검토 결과를 확인한 뒤, 수락한 문서를 별도 승인 범위에 따라 커밋합니다. Migration 자체는 문서만 작성하며 제품 코드 구현이나 커밋을 하지 않습니다. 이후 새 작업자 세션에서 Ready–Go를 시작합니다. 새 프로젝트나 이미 준비된 프로젝트는 이 단계를 건너뜁니다. [Migration 운영 절차](src/skills/init/references/migration-orchestration.md)
 
 ## 구조
 
@@ -78,6 +78,10 @@ claude --plugin-dir ~/ouroboros/claude
 
 `.agents/plugins/marketplace.json`을 사용하는 로컬 마켓플레이스 절차로 이 체크아웃을 등록합니다. 이 파일은 `codex/plugin/` 패키지를 가리킵니다. `ouroboros` 플러그인을 활성화한 뒤 **`$ouroboros:init`**을 선택하고, 초안을 검토한 후 **`$ouroboros:approve`**를 선택합니다.
 
+L2를 실행할 호스트에도 Dryforge를 설치하고 활성화해야 합니다. L1 루프는 그 설치본을 호출합니다.
+패키지에 남아 있는 `ouroboros:ready`·`ouroboros:go` 복사본을 백엔드로 사용하지 않습니다.
+별도 Claude 작업자에 플러그인을 로드하는 옵션은 [실행 환경 안내](docs/RUNTIME.md)를 참고하세요.
+
 ### 다른 실행 방식과 패키지
 
 사용자가 직접 감독하는 단일 사이클은 `ouroboros:ready` → `ouroboros:go`로 실행할 수 있습니다. `migration`은 기존 프로젝트에 개발 작업 구조를 구성하는 스킬이며, 작업자를 교체할 때마다 실행하지 않습니다.
@@ -110,6 +114,6 @@ python3 ci/verify.py
 
 ## 원저작자와 라이선스
 
-Ouroboros는 **prekuter**의 [Dryforge](https://github.com/prekuter/dryforge)를 기반으로 한 독립 Fork이며 [Apache-2.0](LICENSE)을 따릅니다. 원본 [영문](README.upstream.md)과 [한국어](README_ko.upstream.md) README는 참고용으로 보존합니다.
+Ouroboros는 **prekuter**의 [Dryforge](https://github.com/prekuter/dryforge)를 기반으로 한 독립 Fork이며 [Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0)을 따릅니다. 원본 [영문](README.upstream.md)과 [한국어](README_ko.upstream.md) README는 참고용으로 보존합니다.
 
 기존 `.dryforge/` 기록 경로와 내부 mission 식별자는 호환성을 위해 유지합니다. 공개 `mission` 명령은 `init`과 `approve`로 바뀌었으며, 이 변경으로 기존 실행 기록을 초기화하지 않습니다.
