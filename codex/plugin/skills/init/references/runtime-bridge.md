@@ -1,129 +1,172 @@
-# Optional L2 runtime — persistent host sessions, not another agent tier
+# Host sessions and optional runtime
 
-Load only when native L2 persistence/relay is missing or the human chooses this execution path.
-`scripts/worker_runtime.py` supplies actual Claude Agent SDK and Codex App Server operations.
-L1 still owns intent and chooses cycles. L2 is a full host session; L3 uses that host's tools.
-Do not claim L3 support until a live probe observes it. Dependency presence is not compatibility.
+Read this when selecting or operating a transport. Prefer verified native persistent sessions;
+otherwise `scripts/worker_runtime.py` supplies a full Codex App Server or Claude SDK controller.
+Verify real identity/resume, question relay, installed skill invocation, L3 tools/independent
+reviewers, workspace access and limits. Presence of a tool, dependency or PID is not certification.
+A one-shot process plus summary does not preserve a session. Model behavior is not certified by
+static/unit checks; live verification needs cycles, questions, reviews, handoffs and recovery.
 
-## Before use
+## Host setup
 
-Python 3.11+ on macOS/Linux/WSL; a Git project with `.dryforge/` ignored. Claude additionally
-requires the optional SDK in the selected Python environment; Codex requires an installed CLI.
-Never install dependencies, log in, alter permissions or open network listeners automatically.
-Use absolute paths to this skill's script and the user's selected Python executable. This is a
-trusted same-user controller interface, not a sandbox against hostile agents sharing that user.
+Use actual installed APIs rather than assumed nesting depths or resume parameters. Codex resolves
+skills through workspace `skills/list`. Claude SDK checks `slash_commands` in its init event;
+ordinary subagents may lack AskUserQuestion or manual-skill preloading, so verify the actual relay.
+An SDK controller can provide full sessions without spending a native subagent nesting level.
+L2 still needs verified L3 access. Invoke skills as specified in `orchestration.md`.
 
-`doctor --backend claude|codex` checks dependencies only. `start --workspace <repo> --worker <id>
---backend claude|codex` launches a controller with finite turn/lifetime/message limits. Set those
-limits within the human-approved budget. Claude startup includes a no-tool model bootstrap call
-and may incur cost. Wait for `status` to expose a real host session_id and IDLE. A PID is not proof
-of readiness. User/project Claude settings and MCP configuration require explicit `--load-settings`
-choices and a new availability check in L2. Alternatively, pass `--dryforge-plugin <installed
-Claude plugin root>` to load only that plugin using the SDK's native `plugins` option. The root
-must contain `.claude-plugin/plugin.json` identifying `dryforge`. No versioned cache path is
-hardcoded. Codex discovers enabled Dryforge skills through `skills/list` in the worker workspace;
-it does not use this Claude-only option. Install/enable Dryforge for the selected host before use.
-Host permission gates remain authoritative.
+The external controller requires Python 3.11+, POSIX locks, a Git repository and ignored
+`.dryforge/`. Codex needs its CLI; Claude needs the SDK in the selected environment. Use absolute
+script/workspace paths. Do not auto-install, log in or change host permissions. Claude settings/MCP
+loading is explicit via `--load-settings`; `--dryforge-plugin <root>` selects an installed plugin
+whose `.claude-plugin/plugin.json` identifies `dryforge`. Codex uses host discovery instead.
 
-## One cycle over one session
+## Commands
 
-For approved existing-project preparation, first record `start` with `kind: migration`, then
-`send --kind migration --id <id> --ledger <state.json> --cycle <id> --text-file <goal>`.
-This invokes the installed `dryforge:migration` skill through the selected host.
-Continue questions and corrections in that session using `message`. Record result/acceptance
-and checkpoint explicitly; the runtime does not manufacture them from a completed turn.
-Follow `migration-orchestration.md`, then create a fresh session for the development flow below.
+Use script `--help` for arguments. Use the Records section below for ledger events.
 
-1. `send --kind probe --id <id> --text-file <path>` tests read-only session/relay/task-agent
-   capabilities. Do not fabricate the mission ledger's capability booleans from a text response.
-2. After actual capability checks, L1 records the existing ledger `start` event with the observed
-   L2 session_id, approved goal and checkpoint. No cycle assignment is inferred from a spawn.
-3. `send --kind ready --id <id> --ledger <state.json> --cycle <cycle-id> --text-file <goal>` gives
-   L2 the caller's goal plus the installed Dryforge Ready skill. Codex sends `$dryforge:ready`
-   and a native `skill` input with the path returned by `skills/list`. Claude sends
-   `/dryforge:ready <goal>` after checking its `slash_commands` from the session's init event.
-   The host loads the procedure and references; the controller does not read or paste them.
-4. `wait --id <id> --timeout 30` reads durable results or pending input. A wait timeout is not a
-   failed task. L1 answers within original intent or relays to the human. Keep decision provenance
-   in the mission ledger as well as the mailbox. A final prose question yields a turn; answer via
-   `send --kind message` to the same worker. This is not permission to start go.
-5. L1 reads the actual three docs, records `ready` and legitimate `approve` in the existing ledger.
-   With runtime policy v4, L1 then records `bind_runtime` with the cycle's concrete branch,
-   task-worktree map and archive under the human grant. Queued Go rechecks that binding too.
-   `send --kind go` checks identity, cycle, active mission, unresolved questions and exact approved
-   document digest at enqueue and dispatch. Immediately before sending this explicitly approved
-   command, the controller atomically records the ledger's **go execution-start event**. L1 must
-   not pre-advance that event. A host error after start is UNCERTAIN/GO, never a fabricated result.
-6. All other result/accept/close/evaluate events remain under existing L1/L2 responsibilities.
-   Use `rework` followed by `send --kind message` to request corrections in the same L2 before
-   acceptance. After acceptance, continue cleanup/integration with ordinary messages in that
-   session; do not create a replacement worker or start another Go for this finishing phase.
-   TURN_COMPLETE means the host ended a turn and observed child work/callbacks settled. Inspect tests, independent review, artifacts and
-   side effects before accepting a cycle. L1 alone selects another cycle or mission completion.
+1. `doctor --backend claude|codex` checks dependencies, not authentication/live operation.
+   `start --workspace <repo> --worker <id> --backend <host>` creates the controller with finite
+   turn/lifetime/message limits within the reviewed budget. Claude bootstrap can incur cost.
+   Wait for `status` to report a real `session_id` and IDLE. Use read-only `send --kind probe`
+   with `--id`/`--text-file` to verify capabilities; self-report alone is insufficient.
+2. Record ledger `start` using observed identity/capabilities. Send
+   `send --kind ready --id <id> --ledger <state> --cycle <id> --text-file <goal>`.
+   The host loads installed Dryforge; the controller adds no role or procedure-body prompt.
+   Missing/disabled/ambiguous skills fail before the model turn or Go start.
+3. `wait --id <id> --timeout 30` returns replies or pending input. Timeout is not task failure.
+   Answer yielded prose questions with `send --kind message` to the same worker. Record decision
+   provenance; an answer is not Go approval. Ordinary message text is preserved verbatim.
+4. Review and record `ready`/`approve`; for v4 also `bind_runtime`. `send --kind go` rechecks
+   identity, intent, questions and document approval at enqueue/dispatch and records the **go**
+   event immediately before sending. Do not pre-record it. A subsequent error is UNCERTAIN/GO.
+5. Record result/accept/close/evaluate from evidence. For corrections, record `rework` then send
+   `message`; after acceptance use messages for cleanup in the same session. TURN_COMPLETE only
+   reports a settled host turn, not accepted work. Migration uses `--kind migration` and
+   `orchestration.md#migration`, followed by a fresh development session.
 
-The runtime does not choose architecture, answer questions itself or replace the mission loop.
-Every cycle input is bound to the current intent digest. Ordinary messages continue the existing
-phase; interpreting a payload correctly remains the agent's responsibility, not a security proof.
+## Pending requests
 
-The transport adds no Ouroboros role prompt or stage-specific behavioral instructions to L2.
-L1 selects Ready, Go or Migration; the host adapter invokes the installed `dryforge:<kind>` skill.
-Codex uses `$dryforge:<kind>` plus a native skill attachment; Claude uses `/dryforge:<kind>`.
-Ordinary messages preserve L1's caller text verbatim. Claude retains its standard coding preset.
-Missing, disabled or ambiguous skills are rejected before a model turn or Go start is recorded.
-There is no fallback to bundled Ouroboros copies or pasted procedure text. Correct the host's
-availability and explicitly retry in the same session (restart/resume if Claude needs to reload
-its plugin). Session identity, phase and approval validation stay in the controller. L2 delegates
-to L3 using Dryforge's task prompts, not an outer role overlay.
+`status.pending` carries request ID/content, session_id, fingerprint and delegation eligibility.
+Use `answer --request-id <id> --response-file <json>` with `session_id`, `request_digest`,
+`principal` (L1/human), actual `basis` and `action`. These records are not self-authenticating.
 
-## Answering a pending host request
+For questions, `action: answer` supplies `answers` keyed by Codex question ID or Claude original
+question text. For tools, use Execution scope below; eligibility is a hint, not approval.
+A delegated allow uses `principal: L1`, `action: allow`, the current `policy_digest` and decision
+basis. Deny with `action: deny`; out-of-scope authority needs the human. Use exact-call responses,
+never session-wide approval or permission amendments. Host controls may resolve requests earlier.
+Permission expansion, MCP elicitation and unsupported RPC methods fail closed. Child JSON grants
+no authority. Keep private state/provider identity outside worker messages.
 
-`status.pending` includes request id, actual content, session_id and fingerprint. `answer
---request-id <id> --response-file <json>` takes session_id, request_digest, principal (human/L1),
-basis and action. These are records from a trusted controller, not self-authenticating claims.
+## Recovery and evidence
 
-Claude AskUserQuestion uses `action: answer` plus `answers` keyed by original question text.
-L1 may answer only when the matching active cycle delegates answer; it must still check that the
-content follows the human's intent. Tool callbacks use allow/deny for that exact invocation,
-never new rules or allow-for-session. Generic Ready approval is not a tool permission. An explicit
-human-approved runtime policy may delegate a bounded allow to L1; force-load
-`references/runtime-permissions.md` for this path. `status.pending[].delegation` reports eligibility
-and policy digest, not approval. L1 must inspect the exact request, record its own basis and answer
-as `principal: L1`; do not ask the human again for a matching delegated action. Unknown/out-of-scope
-requests still require the human. Host rules may resolve tools earlier; no host rule is widened.
+Receipts: QUEUED, DISPATCHED, TURN_COMPLETE, TURN_FAILED, REJECTED, CANCELLED, UNCERTAIN.
+Identical message-ID retries return the existing receipt; changed content fails. One OS-locked
+controller writes turns per workspace. Codex drains observed child callbacks within the original
+budget before settling; this does not certify unobserved children or Claude child drainage.
 
-Codex structured requestUserInput uses the same question route (`action: answer`, `answers` keyed
-by actual question IDs). L1 answers only within the active intent contract, with human-only
-decisions relayed to the human. A question interface does not itself authorize side effects.
-Yielded product questions can also use ledger-bound message turns. Permission expansion and MCP elicitation are declined;
-unsupported RPC methods fail closed. Do not turn child-produced JSON into authority-bearing input.
+On timeout/disconnection, inspect effects and children before
+`resume --reconciled --basis <evidence>`. Resume retains the recorded host ID and limits, expires
+old callbacks and cancels unsent input for explicit reissue. Never automatically replay uncertain
+writes. New workers require `--handoff-ref` and reconciled workspace/children. Plugin updates do
+not hot-reload a controller: stop/reconcile and resume the same session on the updated runtime.
 
-The worker receives ordinary goal/procedure/question/approval content, without L1 identity, Mission
-mode or private ledger paths. The outer controller binds cycle/session/authority and preserves the
-real decision principal. Codex parent completion alone does not expire live child callbacks: drain
-them under the existing dispatch budget, then settle the message. No synthetic keep-alive prompt
-or new model turn is required. This does not certify unobserved children or Claude child drainage.
+`stop` requires confirmed STOPPED/ERROR plus separate child inspection. `result --id` returns a
+compact reply; `events --after <cursor> --limit 50` exposes activity. Use `--full` only for needed
+protected evidence; keep logs ignored. Hooks observe, never authorize or complete work.
+No auto-go-on-stop hook. This same-user controller is not a hostile-process security sandbox.
 
-## Delivery, shutdown and recovery
+## Records
 
-Messages are QUEUED, DISPATCHED, TURN_COMPLETE, TURN_FAILED, REJECTED, CANCELLED or UNCERTAIN.
-Exact message-ID retries return their existing receipt; different content under that ID fails.
-Only one OS-locked controller may write turns in a workspace; kernel locks release on crash.
-This is a serialized local transport, not a distributed exactly-once executor.
+Use `scripts/mission_state.py` with ignored `.dryforge/mission/state.json`; preserve existing runs.
+Keep original intent/decisions, current L2 ID, phase and artifact/checkpoint references. Detailed
+checks/logs stay in files. Use `show` for current revision/digests and read stored evidence as needed.
+Records validate consistency, not user identity or whether model claims are true.
 
-Lost connection/timeouts never cause automatic replay. Inspect recorded host thread, partial file
-or external effects and live children first. Then `resume --reconciled --basis <evidence>` resumes
-the **recorded host ID**, expires stale callbacks and cancels unsent inputs for explicit reissue.
-A changed host ID fails. Resume never falls back to a new session or replenishes stored limits.
-New workers after prior ones require `--handoff-ref` and actual child/workspace reconciliation.
-Context headroom and child quiescence remain unknown until independently observed.
+- `draft --state <path> --contract <json> [--policy <json>]` starts an unapproved draft with stable
+  `mission_id` and absolute `workspace`. `revise_draft` replaces its full `contract` and
+  `runtime_policy` (explicit null if absent), preserving identity and source `basis`.
+- Before activation, complete goal, success_criteria, constraints, delegated_actions, human_only,
+  max_cycles and max_stalled_cycles; include applicable host limits in the reviewed proposal.
+  Available delegated actions: answer, approve_ready, accept_result, complete, migration.
+  `activate` uses `actor: human`, actual approval_ref, review basis and expected_proposal_digest
+  from `show`. It activates intent and proposed execution policy together, without a second prompt.
+- Events use `apply --state <path> --event <json>` with id, op, actor, mission_id, expected_revision;
+  cycle events add cycle_id and L2 events add session_id. Record actual evidence. Identical event
+  retries are idempotent; changed content under the same ID fails. Persist then reconcile delivery.
+- Development flow: `start → ready → approve → go → result → accept → close → evaluate`.
+  `start` binds session_id, goal, checkpoint_ref, explicit reuse and verified capabilities
+  (persistent_session, decision_relay, nested_agents, explicit_procedure_loading). Reuse also
+  needs session_resumable and sufficient context. `ready`/`approve` use the exact digest from
+  `digest --docs-dir <repo>/.dryforge`; changed docs invalidate approval. Record decision basis.
+  The external controller records `go` at dispatch; do not pre-advance it.
+- `result` records approved digest, commit, result_ref, checks (command/exit_code/observed),
+  independent review (independent/evidence_ref), empty blockers and children_quiescent.
+  Inspect this evidence before `accept`. Corrections use `rework` with approved digest, basis
+  and feedback_ref, then an ordinary message to the same L2. `close` needs archive_ref,
+  checkpoint_ref and children_quiescent; `evaluate` records decision, progress and basis.
+  COMPLETE additionally requires success_evidence for every criterion.
+- Migration uses `start(kind=migration, reuse=false)` with need_ref, then result/accept/close/evaluate.
+  Digest the actual changed doc paths with `migration-digest --workspace <repo> --paths-file <json>`;
+  record paths/digest and the same check/review evidence in result. Accept the exact digest.
+  Close with handoff_ref, checkpoint_ref and children_quiescent after the authorized docs commit.
+- `question` records request_id, question and authority scope; `answer` records that ID, answer
+  and decision basis. `interrupt` is a host event; after reconciliation `resume` uses the same
+  session_id, reconciled=true and checkpoint_ref. An active-cycle `abort` requires the human,
+  basis, checkpoint_ref and quiescent children. `observe` records host events, never approvals.
+- For an approved change to goal, success_criteria, constraints, priorities or non_goals, record
+  one `amend` event at a cycle boundary: actor=human, patch, actual approval_ref, reviewed basis
+  and expected_intent_digest from `show`. History, workers, consumed limits and pause status stay
+  intact. This cannot change authority, workspace or budgets. In-scope clarification needs no amendment.
+- Old extension records are historical evidence. New skill_* workflows are removed. If `show`
+  reports pending legacy_extensions, explicitly retire each via `skill_cancel` (L1, request_id,
+  basis) at a cycle boundary before proceeding. Cancellation does not approve its proposal or
+  resolve a product question; retain the evidence and settle any consequential open decision.
 
-`stop` requests shutdown; wait for STOPPED/ERROR and inspect children separately. `result --id`
-returns a compact reply; `--full` exposes the original. `events --after <cursor> --limit 50` lists
-observable events; add `--full` to inspect protected payloads. Large events use artifact pointers.
-Logs may contain private code/input, must remain ignored and must not flood L1's context. Hooks
-observe actual host activity but never approve or complete a cycle. No global hooks are installed.
+## Execution scope
 
-The bridge enforces finite time/message bounds. Claude's model-turn/USD settings are SDK query
-limits, not a mission-wide cost guarantee. Codex does not enforce a USD budget here. Unsupported
-required limits are a blocker; unknown telemetry is not unlimited credit. Real host/model behavior
-still needs live acceptance; protocol fixtures are not real agents.
+L1 decides exact requests within the user's reviewed grant. Policy eligibility alone is not a
+reason to allow a command. Ready approval and tool authority are distinct, but can be included
+in one user handoff. Preserve host controls and explicit human-only decisions; do not expand
+an old grant by relabeling its version. Current existing-project Go uses policy v4:
+
+```json
+{
+  "version": 4,
+  "operations": ["workspace_edit", "git_add", "git_commit", "verify", "git_checkout",
+                 "git_worktree_add", "git_merge", "git_worktree_remove", "git_branch_delete"],
+  "paths": ["src", "tests", "README.md", "AGENTS.md", "CLAUDE.md", "docs", ".gitignore"],
+  "verification_commands": [["python3", "-B", "-m", "unittest", "discover", "-v"]],
+  "trust_workspace_code": true,
+  "go_worktrees": true,
+  "go_workflow": {"integration_branch": "main", "cycle_branch_prefix": "dryforge/",
+                  "task_branch_prefix": "dryforge/task-"}
+}
+```
+
+This is an example, not consent: choose actual task paths, tests and needed operations. Trusting
+project code covers effects of tests and Git hooks; this runtime is not a security sandbox.
+File grants cover ordinary additions/updates, not protected metadata, deletion or arbitrary shell.
+Git staging names explicit files; commits use `git commit -m`. Verification uses exact approved
+argv. No force/reset/amend, push, install or permission expansion is inferred. The classifier
+provides the actual eligible operation/reason. If rejected, inspect the reason and real effects;
+use existing host/human authority where required rather than bypassing the classifier.
+
+After Ready approval and before Go, record `bind_runtime` as L1 with basis, current policy_digest
+and targets: cycle_branch, tasks (task-ID → branch), archive_dir. Pin the final integration tip;
+select targets from the approved plan and send their names to L2 as ordinary caller instructions.
+An inline-only cycle has an empty tasks map; greenfield may use main as the cycle branch.
+For additional in-scope Go repair tasks, `bind_tasks` adds new IDs/branches under the same grant.
+
+Only registered task worktrees under `.dryforge/worktrees/<task-id>` qualify; the runtime verifies
+Git common-directory and reverse pointers, not just path names. Task changes merge to the cycle
+branch. After result acceptance, the exact accepted cycle commit may merge into the unchanged
+integration target. Cleanup requires clean, merged work; archive identity must remain unchanged.
+Use the actual base/task cwd (Claude Git callbacks require explicit `git -C <root>`).
+
+For an existing run, a human `runtime_policy` event grants/revokes scope using actual approval_ref,
+basis, expected_policy_digest and policy (explicit null to revoke), plus cycle_id when active.
+It changes neither the goal nor phase. For pending eligible requests use the answer fields above;
+record and consumption both recheck policy, stage, documents and Git state. A mismatch needs a
+new decision. Policy versions 1–3 keep their existing narrower scope.

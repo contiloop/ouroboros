@@ -29,7 +29,7 @@ After the handoff, L1 invokes the installed **Dryforge Ready and Go skills**. Co
 
 Your `ouroboros:approve` hands responsibility to L1. The later Ready approval is L1's review of a particular cycle's documents. A finished cycle is not automatically a finished goal.
 
-For an existing codebase that needs initial project documentation, L1 can first assign **Dryforge Migration** (`dryforge:migration`) within the approved scope. L1 answers its questions, reviews the documents and independent review, and arranges the accepted checkpoint. Migration writes documentation; it does not implement product code or commit by itself. Ready–Go then starts in a fresh worker session. New or already prepared projects skip this step. [Migration operation](src/skills/init/references/migration-orchestration.md)
+For an existing codebase that needs initial project documentation, L1 can first assign **Dryforge Migration** (`dryforge:migration`) within the approved scope. L1 answers its questions, reviews the documents and independent review, and arranges the accepted checkpoint. Migration writes documentation; it does not implement product code or commit by itself. Ready–Go then starts in a fresh worker session. New or already prepared projects skip this step. [Migration operation](src/skills/init/references/orchestration.md#migration)
 
 ## Architecture
 
@@ -80,7 +80,7 @@ Register this checkout through Codex's local marketplace flow using `.agents/plu
 
 Install and enable Dryforge for the host running L2 as well. The L1 loop invokes that installed
 plugin; the bundled `ouroboros:ready` / `ouroboros:go` copies are not its backend.
-For external Claude workers, see the explicit plugin-loading option in [runtime setup](docs/RUNTIME.md).
+For external Claude workers, see the explicit plugin-loading option in [runtime setup](src/skills/init/references/runtime-bridge.md).
 
 ### Other workflows and packages
 
@@ -99,9 +99,8 @@ On Codex, live checks have confirmed discovery of the new commands and L1 handli
 ## Guides and development
 
 - [Conversation, handoff and cycle operation](docs/MISSION.md)
-- [Persistent sessions and runtime setup](docs/RUNTIME.md)
-- [Delegated execution scope](src/skills/init/references/runtime-permissions.md)
-- [Extending L1's understanding and decision inputs](docs/SKILL_INTERFACE.md)
+- [Persistent sessions and runtime setup](src/skills/init/references/runtime-bridge.md)
+- [Delegated execution scope](src/skills/init/references/runtime-bridge.md#execution-scope)
 
 `src/skills/` is the source of truth. It contains `init`, `approve`, `ready`, `go` and `migration`. The five platform packages are generated from it using `build/build.sh`.
 

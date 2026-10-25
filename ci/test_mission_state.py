@@ -260,23 +260,4 @@ class LedgerTest(unittest.TestCase):
             with self.subTest(key=key), self.assertRaises(m.ContractError):m.init_state(c)
 
 
-class L3PolicyTest(unittest.TestCase):
-    def args(self):
-        return dict(role='implementer',same_task=True,same_contract=True,same_workspace=True,
-                    resume_available=True,context='sufficient',old_writer_stopped=True)
-
-    def test_resume_only_same_task_contract_workspace(self):
-        d=self.args();self.assertEqual(m.l3_action(**d),'RESUME')
-        for field in ('same_task','same_contract','same_workspace','resume_available'):
-            with self.subTest(field=field):self.assertEqual(m.l3_action(**dict(d,**{field:False})),'SPAWN')
-        self.assertEqual(m.l3_action(**dict(d,context='unknown')),'SPAWN')
-
-    def test_truthy_strings_are_not_capability_evidence(self):
-        with self.assertRaises(m.ContractError):m.l3_action(**dict(self.args(),resume_available='yes'))
-
-    def test_review_must_be_fresh_and_live_writer_suspends(self):
-        d=self.args();self.assertEqual(m.l3_action(**dict(d,role='reviewer')),'FRESH_REVIEW')
-        self.assertEqual(m.l3_action(**dict(d,old_writer_stopped=False)),'WAIT')
-
-
 if __name__=='__main__':unittest.main()

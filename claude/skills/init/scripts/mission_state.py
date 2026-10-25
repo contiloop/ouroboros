@@ -105,22 +105,6 @@ def migration_digest(workspace: Path, paths: list) -> str:
         raise ContractError(str(exc)) from exc
 
 
-def l3_action(*, role: str, same_task: bool, same_contract: bool, same_workspace: bool,
-              resume_available: bool, context: str, old_writer_stopped: bool) -> str:
-    """Policy for a new assignment; a reviewer-only recheck is handled by its parent."""
-    require(role in {'implementer', 'researcher', 'reviewer', 'spec-reviewer'}, 'unknown L3 role')
-    require(context in {'sufficient', 'insufficient', 'unknown'}, 'unknown context disposition')
-    for value in (same_task, same_contract, same_workspace, resume_available, old_writer_stopped):
-        require(type(value) is bool, 'capability and identity checks must be explicit booleans')
-    if not old_writer_stopped:
-        return 'WAIT'
-    if role in {'reviewer', 'spec-reviewer'}:
-        return 'FRESH_REVIEW'
-    if all((same_task, same_contract, same_workspace, resume_available)) and context == 'sufficient':
-        return 'RESUME'
-    return 'SPAWN'
-
-
 def authority(s: dict, e: dict, action: str) -> None:
     text(e.get('basis'), 'decision basis')
     require(e['actor'] in {'L1', 'human'}, 'only the decision provider may approve or answer')
@@ -129,13 +113,18 @@ def authority(s: dict, e: dict, action: str) -> None:
         require(action in s['contract']['delegated_actions'], 'decision outside delegated authority')
 
 
-def _skill_api():
-    """Load only our shipped sibling, including when this CLI is imported by file path."""
-    path = Path(__file__).with_name('skill_contract.py')
-    spec = importlib.util.spec_from_file_location('_ouroboros_skill_contract', path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+INTENT_FIELDS = {'goal', 'success_criteria', 'constraints', 'priorities', 'non_goals'}
+LEGACY_TERMINAL = {'ACCEPTED', 'COMMITTED', 'REJECTED', 'CANCELLED'}
+
+
+def intent_digest(contract: dict) -> str:
+    return hashlib.sha256(json.dumps(contract, sort_keys=True, ensure_ascii=False,
+                                    separators=(',', ':'), allow_nan=False).encode()).hexdigest()
+
+
+def pending_legacy(state: dict) -> bool:
+    return any(item['stage'] not in LEGACY_TERMINAL
+               for item in state.get('extensions', {}).get('requests', {}).values())
 
 
 def _runtime_api():
@@ -171,12 +160,12 @@ def apply(state: dict, event: dict) -> dict:
     s = copy.deepcopy(state)
     c = s['cycle']
     require(s['status'] != 'COMPLETE' or op == 'observe', 'mission is complete')
-    extension = op.startswith('skill_')
+    boundary = op in {'amend', 'skill_cancel'}
     if s['status'] == 'DRAFT':
         require(op in {'revise_draft', 'activate', 'observe'}, 'approve the reviewed draft before execution')
     if s['status'] == 'PAUSED':
-        require(op in {'observe', 'resume', 'abort', 'continue'} or extension or op == 'runtime_policy', 'mission is paused')
-    if not extension and op not in {'start', 'observe', 'continue', 'runtime_policy', 'revise_draft', 'activate'}:
+        require(op in {'observe', 'resume', 'abort', 'continue'} or boundary or op == 'runtime_policy', 'mission is paused')
+    if not boundary and op not in {'start', 'observe', 'continue', 'runtime_policy', 'revise_draft', 'activate'}:
         require(c is not None, 'no active cycle')
         require(e.get('cycle_id') == c['id'], 'event belongs to a different cycle')
         if e['actor'] == 'L2':
@@ -237,14 +226,36 @@ def apply(state: dict, event: dict) -> dict:
         s['schema_version'] = max(3, s['schema_version'])
         if policy is not None and policy['version'] == 4:
             s['schema_version'] = max(5, s['schema_version'])
-    elif extension:
-        api = _skill_api()
-        try:
-            api.require(op in api.OPERATIONS, 'unknown skill operation')
-            api.transition(s, e, init_state)
-            s['schema_version'] = max(2, s['schema_version'])  # Old runtimes fail closed instead of skipping pending extensions.
-        except api.ContractError as exc:
-            raise ContractError(str(exc)) from exc
+    elif op == 'amend':
+        require(e['actor'] == 'human' and c is None, 'reviewed intent changes require human approval at a cycle boundary')
+        require(not pending_legacy(s), 'resolve old pending extension records before changing intent')
+        text(e.get('approval_ref'), 'actual human approval reference')
+        text(e.get('basis'), 'reviewed change and impact')
+        require(e.get('expected_intent_digest') == intent_digest(s['contract']), 'approved intent changed')
+        patch = e.get('patch')
+        require(isinstance(patch, dict) and bool(patch) and patch.keys() <= INTENT_FIELDS,
+                'amend only goal, success criteria, constraints, priorities or non-goals')
+        for key, value in patch.items():
+            if key == 'goal': text(value, key)
+            else: strings(value, key, nonempty=key == 'success_criteria')
+        previous = copy.deepcopy(s['contract'])
+        require(any(previous.get(k) != v for k, v in patch.items()), 'no intent change')
+        revised = dict(previous, **copy.deepcopy(patch))
+        revised.update(approved_by='human', approval_ref=e['approval_ref'])
+        init_state(revised)
+        s.setdefault('intent_history', []).append(dict(previous_contract=previous,
+            previous_digest=intent_digest(previous), next_digest=intent_digest(revised),
+            approval_ref=e['approval_ref'], basis=e['basis'], event_id=e['id']))
+        s['contract'] = revised
+    elif op == 'skill_cancel':
+        # Retire old pending records without discarding evidence or executing their proposals.
+        require(c is None and e['actor'] == 'L1', 'cancel legacy work at a cycle boundary as L1')
+        text(e.get('basis'), 'reason for retiring the old request')
+        rid = text(e.get('request_id'), 'legacy request ID')
+        requests = s.get('extensions', {}).get('requests', {})
+        require(rid in requests and requests[rid]['stage'] not in LEGACY_TERMINAL,
+                'no pending legacy request')
+        requests[rid].update(stage='CANCELLED', cancellation=copy.deepcopy(e))
     elif op == 'start':
         require(e['actor'] == 'L1', 'L1 assigns cycles')
         require(c is None, 'previous cycle has not been evaluated')
@@ -258,7 +269,7 @@ def apply(state: dict, event: dict) -> dict:
                             for x in s['cycles']), 'migration already completed')
             s['schema_version'] = max(4, s['schema_version'])
         if 'extensions' in s:
-            require(not _skill_api().pending(s), 'resolve or explicitly cancel pending skill work before a cycle')
+            require(not pending_legacy(s), 'explicitly cancel old pending extension records before a cycle')
         require(len(s['cycles']) < s['contract']['max_cycles'], 'cycle budget exhausted')
         require(s['stalled'] < s['contract']['max_stalled_cycles'], 'progress budget exhausted')
         cid, sid = text(e.get('cycle_id'), 'cycle ID'), text(e.get('session_id'), 'worker session')
@@ -532,7 +543,8 @@ def main() -> int:
         else: s=json.loads(args.state.read_text(encoding='utf-8'))
         print(json.dumps(dict(schema_version=s['schema_version'],status=s['status'],revision=s['revision'],cycle=s['cycle'],
                               completed_cycles=len(s['cycles']),stalled=s['stalled'],
-                              extensions=_extension_summary(s),
+                              legacy_extensions=_extension_summary(s),
+                              intent_digest=intent_digest(s['contract']),
                               proposal_digest=proposal_digest(s) if s['status'] == 'DRAFT' else None,
                               runtime_policy_digest=_runtime_api().fingerprint(s.get('runtime_authority'))),ensure_ascii=False,indent=2))
         return 0

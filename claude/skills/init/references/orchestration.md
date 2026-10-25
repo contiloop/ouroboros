@@ -1,161 +1,75 @@
-# L1 execution — operate Ready/Go after user approval
+# L1 execution
 
-Load this procedure from `ouroboros:approve` after the reviewed draft is activated, or when
-continuing an already approved run. All `references/...` and `scripts/...` paths here resolve
-from the **init skill root**. Reply in the user's language. Load `references/intent-contract.md`,
-`references/cycle-contract.md`, and `references/host-adapter.md` before delegation. The local ledger
-validates recorded state and authority, not model behavior or human identity.
+You own the user's goal across cycles. Act as the caller of ordinary Dryforge skills: choose work,
+answer questions, review outcomes and continue until the goal is met. L2 is the Dryforge main
+agent assigned **one ready-go cycle**; it may implement or delegate to L3. L2 controls L3.
+Paths below resolve from the init skill root. Read conditional references only when needed.
 
-## Three levels, different lifetimes
+## Run the loop
 
-- **L1 / Mission Orchestrator (you):** understand the human's intent, preserve its constraints,
-  answer within delegated authority, evaluate outcomes, and select the next cycle. Do not absorb
-  raw task logs or implement the cycle yourself to hide a missing worker capability.
-- **L2 / Cycle Worker:** the Dryforge main agent. One development assignment is **one ready-go cycle**.
-  The same L2 session must span questions, ready approval, go, result approval, and handoff.
-  It may receive another cycle only after reporting back and L1's evaluation. It is **not** an
-  autonomous sector owner allowed to invent its own successive cycles.
-- **L3 / Task agents:** L2's researchers, implementers, and independent reviewers. L2 controls
-  their lifecycle using the installed Dryforge Go skill. L1 does not micromanage them.
+1. **Choose work.** Read the approved intent, original decisions, accepted checkpoint and remaining
+   limits. Select a bounded outcome advancing a success criterion, one cycle per working repository.
+   Use the accepted branch/commit; an unmerged feature is unavailable in a checkout of main.
+   An existing project needing initial harness preparation uses Migration below within delegated scope. New or already prepared projects go directly to Ready.
+2. **Prepare L2.** Verify persistent session identity, question/approval relay, installed skills,
+   L3 tools, workspace access and enforceable limits. Use native sessions when supported; otherwise
+   consult `references/runtime-bridge.md` for `scripts/worker_runtime.py`. If neither works, report
+   the missing capability; never auto-install clients or weaken permissions. Record the real ID.
+   REUSE only after a completed, evaluated cycle with children quiescent and verified context
+   headroom; otherwise SPAWN with the accepted checkpoint. Keep the same L2 session throughout
+   Ready, Go, corrections, result acceptance and cleanup.
+3. **Request Ready.** Send the cycle goal, relevant original requirements/decisions, project path
+   and checkpoint/harness pointers. Explicitly invoke the installed skill as below. Give L2 ordinary
+   caller messages; keep L1 identity, private state and approval bookkeeping outside its prompt.
+4. **Decide and approve.** Answer within delegated judgment using user intent and evidence. Research
+   technical unknowns; ask the human only for a consequential decision outside that scope. Read
+   the actual spec, plan and handoff plus independent review evidence. Request corrections or
+   approve their exact combined digest. Changed documents require renewed review. Invoke Go in
+   the same L2 session. For runtime policy v4, bind cycle targets before Go using
+   `references/runtime-bridge.md#execution-scope`; distinguish integration, cycle and task branches.
+5. **Review results.** Check requirement coverage, actual tests, independent review and unresolved
+   issues. Request in-scope corrections through `rework` and an ordinary message to the same L2.
+   Acceptance preserves Dryforge's gates. After acceptance, let that L2 finish authorized archive,
+   integration and cleanup; receive the final commit/branch, archive, checks and child status.
+   Keep raw logs in files. A turn ending or Transport receipts never prove cycle completion.
+6. **Continue.** Record and evaluate the checkpoint: CONTINUE or REPLAN when more work is needed,
+   ESCALATE for a real human boundary, COMPLETE only with evidence for all success criteria.
+   Routine progress updates need no human reply. Enforce the approved cycle/stall/time/cost limits;
+   report unknown telemetry. L1 chooses the next cycle.
 
-**Mission success is not cycle success. Session reuse is not authority reuse.** Evidence from
-one commit, approval, or task cannot silently authorize a different one.
+## Invoke installed Dryforge skills
 
-## 1. Read the approved handoff
+| Host | Ready / Go / Migration |
+| --- | --- |
+| Codex | Resolve `dryforge:<kind>` with workspace `skills/list`; send `$dryforge:<kind>` plus the native `skill` input with its returned name/path and the caller's prompt. |
+| Claude Code | Invoke `/dryforge:<kind> <caller prompt>`; verify the command is available in that session. |
 
-Read the activated intent, original human evidence, execution-policy attachment and remaining
-limits. `ouroboros:approve` is the handoff from the interview to this loop; do not repeat that
-approval or reinterpret a previous run's consent as a new grant. Follow the reviewed outcomes,
-priorities, non-goals, delegated decisions and human-only boundaries. L1 is the decision provider
-for questions, Ready review and result acceptance within this scope. For tools, load
-`references/runtime-permissions.md` when needed. Inspect each eligible request and answer as L1;
-do not ask the human again for authority already delegated. Host controls remain authoritative.
+The host loads the skill. Missing skills are a capability gap; do not paste procedure files or
+substitute bundled Ouroboros copies. Session creation does not create a Git worktree. Dryforge
+owns task worktree execution; L1 selects permitted targets when the runtime policy requires it.
 
-Keep the conversation with the human open throughout execution. Additional explanations that
-fit the approved intent inform ordinary worker messages and decisions. A requested change to the
-goal or authority needs impact review and a distinct, traceable approval before dependent work
-uses it. Stop affected work when necessary; preserve unrelated progress and the same cycle
-session. The current ledger commits formal goal amendments at an evaluated cycle boundary;
-do not claim arbitrary mid-cycle rewriting is implemented. Future interview methods plug into
-intent collection without changing Ready/Go's caller interface.
+## Keep intent and execution connected
 
-## Optional skill boundary — evidence in, authority stays here
+Continue listening to the user. Apply in-scope clarification without another handoff; review the
+impact of changed goals/authority before dependent work proceeds. Stop affected work when needed
+and preserve unrelated progress. At an evaluated cycle boundary, record a reviewed goal change directly with `amend` and
+the actual human approval. No separate skill request or result protocol is needed.
 
-When a human or a genuine decision gap calls for an extension, force-load
-`references/skill-interface.md` **at that point**, not for every ordinary cycle. Use a versioned
-request/result envelope; keep the skill-specific payload free of artificial universal checklists.
-No extension is mandatory, no skill name is privileged, and a skill does not imply a new agent.
-L1 retains the raw intent context; existing ready/go and independent-review contracts stay intact.
+Use the relevant section of `references/runtime-bridge.md` for state records and tool decisions. Record L1 decisions as L1;
+never turn a worker claim into human approval. Already delegated requests need no new consent.
+Host controls and explicit human-only boundaries still apply.
 
-Accepting a skill's findings is not accepting a changed mission. Inspect decisive sources before
-using the result. If it proposes new intent, use **PROPOSE → REVIEW → APPROVE → COMMIT**: review
-exact content, obtain the human's explicit approval, then commit at an evaluated cycle boundary.
-A payload, `completed` flag, hook, or `next_action` cannot approve anything. Use the local ledger's
-`skill_*` operations for these records; it checks consistency, not truth or human identity.
-Return technical unknowns to research/testing, not to the human as invented preference questions.
+On interruption, reconcile effects and live children, then resume the recorded L2. Replacing it
+with a summary is a handoff, requiring an explicit abort/replacement decision during an active
+cycle. Do not replay uncertain writes. Context compaction may require rereading approved artifacts;
+a session ID alone does not guarantee memory. A fresh checkout needs accepted Git content and
+explicit transfer of trusted ignored `.dryforge/` state; a new session does not justify Migration.
 
-## 2. Verify the host, then choose a cycle
+## Migration
 
-If native persistence/relay is insufficient or the human selects a separate full-host worker,
-force-load `references/runtime-bridge.md` at that point. The bundled `scripts/worker_runtime.py`
-implements actual Claude SDK / Codex App Server sessions, durable messages and input callbacks.
-Use the chosen Python/client environment; never auto-install or weaken permissions. Follow
-start/status/send/wait/answer rather than a new one-shot process per prompt. Transport receipts
-are not approval or mission completion; only an explicitly approved Go command records start.
-
-Run the capability preflight in `references/host-adapter.md`. Require actual worker identity,
-resume/message support, L2-to-L3 spawning, explicit procedure loading, and a question relay.
-A tool appearing in L1's list is not proof it works in L2. No spawning capability → report a
-blocker; do not silently flatten the three levels. Do not change host permissions automatically.
-
-Select one bounded outcome that advances a mission success criterion. Read the current accepted
-Git checkpoint and harness. Resolve branch integration before assigning dependent work: a feature
-commit not merged to main is **not** available in a checkout of main. Use the exact accepted
-branch/commit as the next workspace. Preserve normal go clean-tree and base-branch preconditions;
-when these cannot be reconciled without integration, request the required approval and pause.
-
-## 3. Assign or reuse L2
-
-Before the first Ready, determine whether this is an existing codebase without an established
-Dryforge project harness. If the approved scope includes that preparation, load
-`references/migration-orchestration.md`: assign ordinary Migration to a fresh worker, answer
-questions, review its documentation and independent review, then checkpoint the accepted result.
-Start Ready in a **different fresh session**. Do not migrate new projects, already prepared
-projects, or each newly spawned worker. A Migration receipt is not result acceptance.
-
-Start one cycle at a time per working repository. Select **REUSE** only at a completed, evaluated
-cycle boundary: the host confirms the same session is resumable, context headroom is sufficient
-for the next cycle plus recovery, and no old child is still writing. Otherwise **SPAWN** a fresh
-L2 with the checkpoint packet. Unknown headroom is not evidence of sufficient capacity. Never
-invent token counts. Do not replace L2 between ready and go merely to clear its context.
-
-Act as the user of ordinary Ready/Go: give the worker the cycle goal, relevant original product
-requirements and decisions, project path, expected Git checkpoint, harness/previous-cycle pointers,
-and an explicit invocation of the installed Dryforge Ready skill: `$dryforge:ready` with its native
-skill attachment in Codex, `/dryforge:ready` in Claude Code. Verify the skill is available in L2;
-do not paste its content or use the bundled `ouroboros:ready` copy as a fallback. Keep Mission
-authority, provider identity and ledger correlation in
-the outer controller. Do not tell the worker whether its caller is a human or an AI, add a special
-Mission mode to its workflow, or ask it to read the private Mission ledger/cycle contract. The
-worker asks, receives approval and reports through its ordinary interface. Record the real
-session ID returned by the host. Keep its session
-available while waiting for questions or approval; a yielded turn is not a closed session.
-
-## 4. Relay decisions and approve exact artifacts
-
-L2 uses its normal question-and-approval interface. You are its decision provider, not a new
-source of product intent. Answer only when the contract or human evidence entails the decision;
-otherwise ask the human and relay the actual answer. Record principal, scope, basis and request ID.
-Do not impersonate a human approval in the audit log.
-
-At READY_REVIEW, read the three actual documents and compare them with the cycle and mission.
-Approve the exact combined content digest, not merely their paths or a summary. Send go to the
-**same session**. If the documents change, the approval is stale and ready review must happen
-again. Explicitly invoke `$dryforge:go` with its native attachment in Codex or `/dryforge:go`
-in Claude Code, in that same L2 session. If the host cannot invoke the installed skill, report the
-missing capability; do not replace invocation with pasted instructions.
-
-For a v4 runtime grant, record `bind_runtime` after approval and before Go. Keep final integration,
-the cycle branch and each task branch/worktree distinct (`runtime-permissions.md`). Select exact
-targets from the reviewed plan within the human's grant and send the concrete names to the same
-L2 through its ordinary caller interface. Selecting targets does not amend the grant or require
-the human to approve each branch. Never interpret a v3 `base_branch: main` as permission to use
-any feature branch automatically.
-
-## 5. Evaluate, then loop
-
-L2 runs go with its original dispatch, tests, integration and independent-review gates. It may
-implement low-risk sequential work itself; risky/parallel work still earns L3 agents. L2 resolves
-local implementation exceptions within the approved spec. Only decisions outside that authority
-are relayed upward. A negative feasibility experiment stops dependent work, as in ordinary go.
-
-Inspect the result and captured evidence, not just DONE. Accept within delegated authority, then
-let the same L2 finish archiving, checkpointing and quiescing children. Receive a compact packet:
-cycle outcome, requirement coverage, commit/branch, check commands/results, archive/harness paths,
-accepted concerns, unresolved facts, and safe session-reuse status. Keep raw logs on disk.
-
-If the implementation needs correction within the same approved spec, record `rework` with
-specific feedback and the approved digest, then send a correction message to that same L2.
-The ledger returns RESULT_REVIEW to GO and retains the previous result. Require fresh result
-evidence before acceptance. After acceptance, implementation writes stop; only the authorized
-archive, verification, integration and cleanup remain. Under v4, the pinned archive preserves
-the document identity for subsequent Git decisions. Close and evaluate only after L2 reports
-the actual final checkpoint; then choose the next cycle and its new binding.
-
-Choose **CONTINUE**, **REPLAN**, **ESCALATE**, or **COMPLETE**, with evidence and a reason. CONTINUE
-and REPLAN return to step 2; only L1 chooses the next cycle. Enforce cycle/stall/time/cost limits
-before dispatch; unavailable budget telemetry must be disclosed, never treated as infinite credit.
-COMPLETE requires evidence for every mission success criterion, not just green unit tests.
-
-## Failure and recovery
-
-An interrupted session pauses the cycle. Reconcile files, live children and external effects, then
-resume the recorded L2 ID. A new worker with a summary is a **handoff**, not a resumed session.
-If the original session is unrecoverable, preserve the checkpoint and ask for an explicit abort/
-replacement decision. Never replay a side-effecting operation just because its last message was
-lost. Hooks are observations, never approvals or proof of completion.
-
-Spawning a new worker does **not** invoke migration. Migration initializes an existing project's
-harness; a session handoff reads the existing harness. A fresh clone/worktree may lack the ignored
-`.dryforge/status.json` and archives: explicitly transfer trusted state or resolve ready's existing-
-harness guard, rather than treating the project as new or regenerating its documentation.
+When an existing project needs initial harness documentation and preparation is delegated, assign
+installed `dryforge:migration` to a fresh worker. Answer its questions and review the actual docs,
+checks and independent review. Accept the reviewed result, then arrange its authorized Git
+checkpoint separately: Migration itself writes docs, not product code or commits. Reconcile that
+worker and start Ready in a fresh session with the accepted checkpoint. Prepared projects retain
+their harness; a missing ignored marker in another checkout alone does not justify Migration.

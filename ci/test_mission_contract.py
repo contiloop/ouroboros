@@ -24,7 +24,7 @@ class MissionContractTest(unittest.TestCase):
 
     def test_mission_is_one_cycle_not_a_sector_loop(self):
         t=(ROOT/'src/skills/init/references/orchestration.md').read_text()
-        for s in ('one ready-go cycle','not** an','same L2 session','REUSE','SPAWN','migration','CONTINUE','REPLAN','ESCALATE','COMPLETE'):
+        for s in ('one ready-go cycle','L1 chooses the next cycle','same L2 session','REUSE','SPAWN','migration','CONTINUE','REPLAN','ESCALATE','COMPLETE'):
             self.assertIn(s,t)
 
     def test_ready_go_do_not_identify_their_decision_provider(self):
@@ -44,10 +44,10 @@ class MissionContractTest(unittest.TestCase):
             self.assertIn(s,t)
 
     def test_no_auto_approval_hook_claim(self):
-        t=(ROOT/'src/skills/init/references/host-adapter.md').read_text()
+        t=(ROOT/'src/skills/init/references/runtime-bridge.md').read_text()
         self.assertIn('No auto-go-on-stop hook',t)
         self.assertIn('SDK controller',t)
-        self.assertIn('runtime-bridge.md',t)
+        self.assertIn('scripts/worker_runtime.py',t)
         self.assertIn('not certified',t)
         self.assertIn('AskUserQuestion',t)
 

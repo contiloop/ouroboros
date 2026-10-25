@@ -12,7 +12,7 @@ class RuntimeContractTests(unittest.TestCase):
         for s in ('runtime-bridge.md','worker_runtime.py','Transport receipts','never auto-install'):self.assertIn(s,t)
     def test_runtime_mirrored(self):
         source=ROOT/'src/skills/init'
-        for rel in ('scripts/worker_runtime.py','scripts/runtime_permissions.py','references/runtime-permissions.md','scripts/runtime_bridge/store.py','scripts/runtime_bridge/adapters.py','scripts/runtime_bridge/controller.py','references/runtime-bridge.md'):
+        for rel in ('scripts/worker_runtime.py','scripts/runtime_permissions.py','scripts/runtime_bridge/store.py','scripts/runtime_bridge/adapters.py','scripts/runtime_bridge/controller.py','references/runtime-bridge.md'):
             for pkg in PACKAGES:self.assertEqual((source/rel).read_bytes(),(ROOT/pkg/'init'/rel).read_bytes())
     def test_packaged_cli_does_not_require_sdk_for_help(self):
         for pkg in PACKAGES:
@@ -28,7 +28,7 @@ class RuntimeContractTests(unittest.TestCase):
         t=(ROOT/'src/skills/init/scripts/runtime_bridge/adapters.py').read_text()
         for s in ('bypassPermissions','danger-full-access','dangerouslySkipPermissions'):self.assertNotIn(s,t)
     def test_guides_explain_verification_and_auth_limits(self):
-        t=(ROOT/'docs/RUNTIME.md').read_text()
+        t=(ROOT/'docs/MISSION.md').read_text()
         for s in ('UNCERTAIN','not an adversarial','not a promise','SDK-shaped doubles','not live authenticated model runs'):
             self.assertIn(s,t.replace('**',''))
 if __name__=='__main__':unittest.main()

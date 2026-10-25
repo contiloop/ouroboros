@@ -27,7 +27,7 @@ L1 はインストール済みの Dryforge スキルを呼び出します。Code
 
 Ready・Go とその作業者は、呼び出し元が人間か L1 かによって手順を変えません。インタビューは L1 との対話の一部であり、別のエージェントや追加の利用手順ではありません。
 
-既存コードベースにプロジェクト文書を初めて整備する必要がある場合、L1 は承認された範囲で **Dryforge Migration**（`dryforge:migration`）を依頼できます。質問への回答、文書と独立レビューの確認、受け入れた文書の別途コミットを経て、新しい作業セッションで Ready–Go を開始します。Migration 自体は文書を作成し、製品コードの実装やコミットは行いません。新規または整備済みのプロジェクトでは省略します。[運用手順](src/skills/init/references/migration-orchestration.md)
+既存コードベースにプロジェクト文書を初めて整備する必要がある場合、L1 は承認された範囲で **Dryforge Migration**（`dryforge:migration`）を依頼できます。質問への回答、文書と独立レビューの確認、受け入れた文書の別途コミットを経て、新しい作業セッションで Ready–Go を開始します。Migration 自体は文書を作成し、製品コードの実装やコミットは行いません。新規または整備済みのプロジェクトでは省略します。[運用手順](src/skills/init/references/orchestration.md#migration)
 
 ## インストールと現在の状態
 
@@ -35,7 +35,7 @@ Ready・Go とその作業者は、呼び出し元が人間か L1 かによっ�
 
 実験版です。草案と承認の状態管理、サイクル・権限チェック、Claude SDK / Codex App Server 用の実行接続を含みます。Codex では新しいコマンドの認識と、親ターン終了後の子エージェントへの承認中継を確認済みです。新規セッションから最終目標までの完全な実機検証は未完了です。正式な目標変更は現在、評価済みのサイクル境界で反映します。
 
-Grep MCP と Context7 MCP は任意（Optional）の調査ツールです。[MCP 設定](docs/RESEARCH_MCP_SETUP.md)、[対話とサイクル運用](docs/MISSION.md)、[L1 の拡張](docs/SKILL_INTERFACE.md)も参照してください。
+Grep MCP と Context7 MCP は任意（Optional）の調査ツールです。[MCP 設定](docs/RESEARCH_MCP_SETUP.md)、[対話とサイクル運用](docs/MISSION.md)も参照してください。
 
 ## 原著作者とライセンス
 

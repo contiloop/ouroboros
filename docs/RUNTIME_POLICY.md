@@ -1,6 +1,6 @@
-# Scoped runtime decisions — L1 is the delegated decision provider
+# Runtime policy implementation and compatibility
 
-Load only when setting or using runtime-tool delegation. L2 need not change its question/approval
+Developer reference for supported policy versions; L1 uses the compact runtime guide. L2 need not change its question/approval
 workflow based on whether its caller is human or AI. L1 may decide within human-granted authority;
 it must not pretend its decision was made by the human. This is an optional execution-policy
 attachment, not a change to mission intent, a new agent, or an automatic allow engine.
@@ -17,7 +17,7 @@ After L1 accepts the actual Migration artifact digest, a separate checkpoint req
 `git_add`/`git_commit` only for reviewed documentation within that policy. Recheck the artifact
 bytes and index before consuming the answer. Migration itself never commits. Protected `.dryforge`
 marker/backup callbacks retain their existing host/human requirements. See
-[migration-orchestration.md](migration-orchestration.md) for the complete flow.
+[Migration](../src/skills/init/references/orchestration.md#migration) for the complete flow.
 
 ## One human grant, individual L1 decisions
 
@@ -264,8 +264,7 @@ A grant can be recorded while a tool callback is waiting, including during Go. I
 the Intent contract, approved 3-doc, session ID, stage, consumed budget or pause state. Each grant
 has a new revision/event ID, so revoke-and-regrant does not revive an old queued approval. Human-
 only restrictions in the contract (`runtime_permissions` or a named operation) take precedence.
-The first runtime-policy event upgrades the ledger to schema 3; old code rejects it. Skill-interface
-events preserve that version or later and cannot grant runtime authority. Schema-1/2 missions still load.
+The first runtime-policy event upgrades the ledger to schema 3; old code rejects it. Direct intent amendments preserve that version or later and cannot grant runtime authority. Schema-1/2 missions still load.
 Migration-authorized active runs use at least schema 4 (schema 5 with v4 policies or cycle bindings);
 applying or revoking a policy never downgrades them.
 

@@ -458,28 +458,25 @@ class DelegationTests(unittest.TestCase):
                   dict(grant(),verification_commands=[['sh','-c','echo ok']]),dict(grant(),version=99)):
             with self.assertRaises(ledger.ContractError):self.event(p)
 
-    def test_schema3_survives_skill_event_and_cannot_downgrade(self):
+    def test_schema3_survives_intent_change_and_cannot_downgrade(self):
         self.event(grant());self.s['cycle']=None; self.save()
-        request={'schema_version':1,'request_id':'x','mission_id':'fixture','skill':'future',
-                 'intent_digest':digest(self.s['contract']),'purpose':'fixture','input':{}}
-        e={'id':'extension','op':'skill_request','actor':'L1','mission_id':'fixture',
-           'expected_revision':self.s['revision'],'request':request}
+        e={'id':'amendment','op':'amend','actor':'human','mission_id':'fixture',
+           'expected_revision':self.s['revision'],'expected_intent_digest':ledger.intent_digest(self.s['contract']),
+           'patch':{'goal':'Reviewed new outcome'},'approval_ref':'human:change','basis':'reviewed impact'}
         nxt=ledger.apply(self.s,e);self.assertEqual(nxt['schema_version'],3)
+        self.assertEqual(nxt['runtime_authority'],self.s['runtime_authority'])
         nxt['schema_version']=2
         with self.assertRaises(ledger.ContractError):ledger.apply(nxt,dict(e,id='x2',expected_revision=nxt['revision']))
 
     def test_wrong_cycle_cannot_grant(self):
         with self.assertRaises(ledger.ContractError):self.event(grant(),cycle_id='other')
 
-    def test_old_grant_edit_requires_human_event_not_skill_patch(self):
-        import skill_contract
-        req={'schema_version':1,'request_id':'a','mission_id':'fixture','skill':'interview',
-             'intent_digest':digest(self.s['contract']),'purpose':'fixture','input':{}}
-        result={k:req[k] for k in skill_contract.IDENTITY}
-        result.update(status='completed',payload={},evidence=[{'id':'e','claim':'fixture','reference':'fixture',
-                      'kind':'dialogue','disposition':'VERIFIED'}],unresolved=[],next_action='review',
-                      proposal={'reason':'fixture','intent_patch':{'runtime_policy':grant()}})
-        with self.assertRaises(skill_contract.ContractError):skill_contract.validate_result(req,result)
+    def test_intent_amendment_cannot_expand_runtime_authority(self):
+        self.event(grant());self.s['cycle']=None
+        e={'id':'invalid-amendment','op':'amend','actor':'human','mission_id':'fixture',
+           'expected_revision':self.s['revision'],'expected_intent_digest':ledger.intent_digest(self.s['contract']),
+           'patch':{'runtime_policy':grant()},'approval_ref':'human:change','basis':'fixture'}
+        with self.assertRaises(ledger.ContractError):ledger.apply(self.s,e)
 
 
 if __name__ == '__main__': unittest.main()

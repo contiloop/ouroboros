@@ -27,7 +27,7 @@ L1 调用已安装的 Dryforge 技能。Codex 使用 `$dryforge:ready`、`$dryfo
 
 Ready、Go 及其下层代理使用普通调用者接口，不必根据上层是人还是 L1 改变流程。访谈属于用户与 L1 的对话，不是额外的代理或使用阶段。
 
-如果现有代码库尚需建立项目文档，L1 可以在已批准的范围内先安排 **Dryforge Migration**（`dryforge:migration`），回答问题、审阅文档与独立审查结果，并另行提交已接受的文档。之后在新的工作会话中开始 Ready–Go。Migration 本身只编写文档，不实现产品代码，也不自行提交。新项目或已完成准备的项目跳过此步骤。[运行说明](src/skills/init/references/migration-orchestration.md)
+如果现有代码库尚需建立项目文档，L1 可以在已批准的范围内先安排 **Dryforge Migration**（`dryforge:migration`），回答问题、审阅文档与独立审查结果，并另行提交已接受的文档。之后在新的工作会话中开始 Ready–Go。Migration 本身只编写文档，不实现产品代码，也不自行提交。新项目或已完成准备的项目跳过此步骤。[运行说明](src/skills/init/references/orchestration.md#migration)
 
 ## 安装与当前状态
 
@@ -35,7 +35,7 @@ Ready、Go 及其下层代理使用普通调用者接口，不必根据上层是
 
 项目处于实验阶段，包含草案与批准状态管理、循环与权限检查，以及连接 Claude SDK / Codex App Server 的可选执行层。Codex 已验证新命令识别，以及父代理回合结束后向 L1 转交子代理批准请求的流程。从新会话开始直至实现最终目标的完整实机验证仍未完成。目前正式目标变更在已评估的循环边界提交。
 
-Grep MCP 和 Context7 MCP 是可选（Optional）调查工具。参见 [MCP 设置](docs/RESEARCH_MCP_SETUP.md)、[对话与循环运行指南](docs/MISSION.md)及 [L1 扩展](docs/SKILL_INTERFACE.md)。
+Grep MCP 和 Context7 MCP 是可选（Optional）调查工具。参见 [MCP 设置](docs/RESEARCH_MCP_SETUP.md)、[对话与循环运行指南](docs/MISSION.md)。
 
 ## 来源与许可证
 

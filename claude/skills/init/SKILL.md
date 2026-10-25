@@ -1,66 +1,28 @@
 ---
 name: init
 description: >
-  Start Ouroboros and work with the user to understand and refine their intent. Keep a revisable
-  draft of outcomes, constraints and delegation until the user invokes ouroboros:approve.
-  Use when the user explicitly invokes ouroboros:init or the init skill for Ouroboros.
+  Start Ouroboros when the user invokes ouroboros:init. Discuss their intent and prepare
+  a revisable proposal; autonomous execution begins with ouroboros:approve.
 disable-model-invocation: true
 allowed-tools: Read, Edit, Write, Bash, Grep, Glob, Agent, SendMessage, AskUserQuestion
 ---
 
-# ouroboros:init — start the conversation
+# Start Ouroboros
 
-You are L1, the user's continuing counterpart. Open the conversation, learn what they want and
-help them refine it. This starts Ouroboros in discussion mode; autonomous Migration or Ready/Go execution
-begins only after `ouroboros:approve`. Reply in the user's language.
+You are L1, the user's continuing counterpart. Understand their intended outcome, help refine it,
+and reply in their language. Load `references/interview.md` for the conversation procedure.
 
-Load `references/interview.md`. Treat it as the current replaceable interview procedure, not a
-fixed questionnaire. Preserve the user's original words and corrections alongside your current
-understanding. Ask only what materially affects the outcome and cannot be inferred or researched.
+Inspect the selected project and existing `.dryforge/mission/state.json`. Preserve existing runs,
+approvals and checkpoints. For draft creation or revision, consult only the relevant section of
+`references/runtime-bridge.md#records`; keep private state ignored. An active run continues under its
+existing authority while you discuss changes.
 
-## Keep a revisable draft
+Present a concise proposal covering the outcome, completion evidence, constraints, delegated
+judgment, human-only decisions, workspace and execution scope. Disclose finite host guards as
+implementation limits; do not invent user preferences or reuse old trial limits. Include ordinary
+local Git lifecycle operations and Migration preparation when needed. Read
+`references/runtime-bridge.md#execution-scope` when preparing execution delegation.
 
-Inspect the selected workspace and existing `.dryforge/mission/state.json` before writing. Retain
-existing runs and checkpoints; init never resets them. For a new run use
-`scripts/mission_state.py draft --state <path> --contract <draft.json>`; the JSON must contain a
-stable `mission_id` and absolute `workspace`. Other intent fields may be incomplete while talking.
-Include `--policy <proposal.json>` only to record a proposed execution attachment. This grants
-nothing. Keep private state ignored under `.dryforge/mission/`.
-
-Record refinements through `revise_draft` events, with a complete replacement `contract` and
-`runtime_policy` (explicit null if none), revision and source `basis`. Identity and workspace stay
-fixed. An existing DRAFT is resumed in the same conversation. For an ACTIVE/PAUSED run, continue
-discussing against its current state; do not create a second run, erase approval, or change
-execution authority through init. Use the existing change/recovery procedure for that run.
-
-## Prepare the handoff
-
-When enough is known, show the user a concise reviewable proposal: outcome, completion evidence,
-constraints/non-goals, what L1 will decide, what remains human-only, local execution scope and
-finite host guards. Explain guards as implementation constraints, not invented user preferences;
-do not silently reuse trial limits. Explicitly include needed local Go lifecycle operations in
-the proposed policy so routine work does not produce repeated permission questions later.
-For the existing-project branch flow, load `references/runtime-permissions.md` and propose v4:
-distinguish the final integration branch, permitted cycle branches and permitted task branches.
-L1 will select exact cycle targets after Ready review; do not pin `main` as every task's base.
-
-For an existing codebase, inspect whether Dryforge project documentation is already established.
-If Migration is needed to serve the goal, include that preparation, the `migration` delegated
-action, documentation edits and the later harness checkpoint in the reviewed proposal. Load
-`references/migration-orchestration.md` for its scope. Existing project documentation is not
-permission to overwrite it; preserve and review it under the ordinary Migration procedure.
-For a new project or an already prepared project, proceed to Ready without Migration.
-
-Check that Dryforge is installed for the selected execution host. After approval, L1 creates L2
-and explicitly invokes the installed skill with the cycle prompt: Codex uses `$dryforge:ready`
-with a native skill attachment; Claude Code uses `/dryforge:ready`. Go uses the corresponding
-`dryforge:go` invocation in the same L2 session. Skill contents are loaded by the host, not copied
-into the prompt by Ouroboros. Use `references/host-adapter.md` for availability checks.
-
-The user may continue refining this for as long as needed. `init`, an interview answer, a tool
-result, and your own assessment that the draft is ready do not activate the loop. Tell the user
-that `ouroboros:approve` hands the reviewed proposal to L1. Do not launch cycle workers or start
-Migration or Ready/Go while the ledger is DRAFT. Read-only inspection and local draft maintenance are allowed.
-
-After approval, the conversation remains open; L1 continues listening while executing the
-approved loop. Intent understanding can be upgraded without changing the lower tiers' interface.
+`ouroboros:approve` hands the reviewed proposal to L1. Do not launch cycle workers or run
+Migration/Ready/Go while DRAFT. Read-only inspection and draft maintenance are allowed.
+After approval the conversation remains open while L1 executes.

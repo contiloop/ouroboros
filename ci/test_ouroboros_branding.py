@@ -49,7 +49,7 @@ class OuroborosBrandingTest(unittest.TestCase):
             s=path.read_text()
             self.assertIn('git clone --depth 1 https://github.com/contiloop/ouroboros.git',s)
             self.assertNotIn('feature/ouroboros-rebrand',s)
-            self.assertIn('docs/SKILL_INTERFACE.md',s)
+            self.assertNotIn('docs/SKILL_INTERFACE.md',s)
         self.assertIn(current+'.git', (ROOT/'README_ko.md').read_text())
 
     def test_legacy_state_is_preserved(self):

@@ -29,7 +29,7 @@ Ouroboros에서는 **L1**이 사용자와 계속 대화하면서 개발 전체�
 
 사용자의 `ouroboros:approve`는 L1에 실행을 맡기는 승인입니다. 이후 사이클별 Ready 승인은 L1이 실제 문서를 보고 수행합니다. 한 사이클이 끝났다는 이유만으로 전체 목표가 완료됐다고 판단하지 않습니다.
 
-기존 코드베이스에 프로젝트 문서와 작업 규칙을 처음 마련해야 한다면, L1이 승인된 범위에서 **Dryforge Migration**(`dryforge:migration`)을 먼저 맡길 수 있습니다. 질문에 답하고 실제 문서와 독립 검토 결과를 확인한 뒤, 수락한 문서를 별도 승인 범위에 따라 커밋합니다. Migration 자체는 문서만 작성하며 제품 코드 구현이나 커밋을 하지 않습니다. 이후 새 작업자 세션에서 Ready–Go를 시작합니다. 새 프로젝트나 이미 준비된 프로젝트는 이 단계를 건너뜁니다. [Migration 운영 절차](src/skills/init/references/migration-orchestration.md)
+기존 코드베이스에 프로젝트 문서와 작업 규칙을 처음 마련해야 한다면, L1이 승인된 범위에서 **Dryforge Migration**(`dryforge:migration`)을 먼저 맡길 수 있습니다. 질문에 답하고 실제 문서와 독립 검토 결과를 확인한 뒤, 수락한 문서를 별도 승인 범위에 따라 커밋합니다. Migration 자체는 문서만 작성하며 제품 코드 구현이나 커밋을 하지 않습니다. 이후 새 작업자 세션에서 Ready–Go를 시작합니다. 새 프로젝트나 이미 준비된 프로젝트는 이 단계를 건너뜁니다. [Migration 운영 절차](src/skills/init/references/orchestration.md#migration)
 
 ## 구조
 
@@ -80,7 +80,7 @@ claude --plugin-dir ~/ouroboros/claude
 
 L2를 실행할 호스트에도 Dryforge를 설치하고 활성화해야 합니다. L1 루프는 그 설치본을 호출합니다.
 패키지에 남아 있는 `ouroboros:ready`·`ouroboros:go` 복사본을 백엔드로 사용하지 않습니다.
-별도 Claude 작업자에 플러그인을 로드하는 옵션은 [실행 환경 안내](docs/RUNTIME.md)를 참고하세요.
+별도 Claude 작업자에 플러그인을 로드하는 옵션은 [실행 환경 안내](src/skills/init/references/runtime-bridge.md)를 참고하세요.
 
 ### 다른 실행 방식과 패키지
 
@@ -99,9 +99,8 @@ Codex에서는 새 명령의 인식과 부모 턴 종료 후 자식의 승인 �
 ## 상세 문서와 개발
 
 - [대화, 실행 인계와 사이클 운영](docs/MISSION.md)
-- [지속 세션과 실행 환경 설정](docs/RUNTIME.md)
-- [실행 권한 위임 범위](src/skills/init/references/runtime-permissions.md)
-- [L1의 의도 이해와 판단 입력 확장](docs/SKILL_INTERFACE.md)
+- [지속 세션과 실행 환경 설정](src/skills/init/references/runtime-bridge.md)
+- [실행 권한 위임 범위](src/skills/init/references/runtime-bridge.md#execution-scope)
 
 원본은 `src/skills/`에 있습니다. `init`, `approve`, `ready`, `go`, `migration`을 포함하며, `build/build.sh`가 다섯 플랫폼용 패키지를 생성합니다.
 

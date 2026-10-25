@@ -1,136 +1,59 @@
-# Ouroboros init and approve: conversation, handoff, persistent cycles
+# Ouroboros operation
 
-`ouroboros:init` starts the conversation with L1. Refine the goal, completion criteria and delegated
-scope together. `ouroboros:approve` hands that reviewed proposal to L1, which then manages ordinary
-Ready/Go cycles. The conversation stays open while work runs. Interview procedures can evolve
-independently of the lower tiers' ordinary caller interface.
+`ouroboros:init` starts a conversation about the outcome, completion criteria and delegation.
+`ouroboros:approve` hands that reviewed proposal to L1. L1 chooses development cycles, answers
+questions, reviews Ready documents and results, and continues until the goal is met. The user
+can keep talking throughout; routine progress updates do not require a reply.
 
-The package includes a local state ledger and optional [runtime bridge](RUNTIME.md). It does not
-install global hooks or authenticate approval records. Actual host support for persistent nested
-sessions must be checked. A complete fresh init-to-outcome live-model acceptance run is not yet
-certified; local state/transport tests are separate evidence.
-
-## Architecture
+## Responsibility
 
 ```text
-Human <-> L1 (init: discuss / approve: take responsibility)
-             |
-             | one cycle goal + delegated decisions
-             v
-          L2 Ouroboros main agent (persistent session)
-             ready -> questions/approval -> go -> acceptance -> checkpoint
-                                           |
-                                           +-- L3 implementer(s)
-                                           +-- L3 independent reviewer
-             |
-             +-- evidence -> L1 evaluates -> REUSE same L2 or SPAWN new L2
+User ↔ L1: intent, delegated judgment, cycle selection and result acceptance
+        ↕
+       L2: ordinary Dryforge Ready → Go → result approval → cleanup
+        ↕
+       L3: implementation/review agents managed by Dryforge
 ```
 
-L1 owns the next cycle and final intent. L2 owns **one cycle at a time**, not a self-directed
-sector loop. L2 must not be replaced between ready and go. A yielded turn can resume the same
-session. At a completed and evaluated boundary, use the same L2 only when resume is verified and
-context headroom is sufficient; otherwise use a fresh worker with an explicit checkpoint.
+L2 may implement directly or delegate. Dryforge owns task scheduling, L3 lifecycle and worktrees.
+Ouroboros preserves the same L2 through a cycle and relays caller decisions. It does not install
+another set of L3 scheduling rules. Reuse or replace L2 only after an evaluated checkpoint;
+interrupted cycles reconcile and resume their recorded session.
 
-Go's existing execution policy stays: simple sequential tasks may run inline; risky/parallel tasks
-use implementer agents; final review is independent. L3 may resume same-task fixes when contract,
-workspace and capacity still match. New tasks or unknown capacity use a fresh agent. Independent
-review must never reuse/fork the implementer's context. No agent replacement requires migration.
+## Use
 
-## Try it
+| Host | Start the conversation | Hand over the reviewed proposal |
+| --- | --- | --- |
+| Codex | `$ouroboros:init` | `$ouroboros:approve` |
+| Claude Code | `/ouroboros:init` | `/ouroboros:approve` |
 
-Use Ouroboros's generated plugin package. In Claude Code:
+Install Dryforge for the selected worker host. L1 explicitly invokes its Ready/Go/Migration skills;
+the host loads their instructions. The old public Mission skill and optional extension protocol
+are no longer shipped. Existing private records remain under ignored `.dryforge/mission/`.
 
-1. `/ouroboros:init` — open the conversation, refine intent and review the proposed delegation.
-2. `/ouroboros:approve` — approve the current reviewed proposal and hand cycle management to L1.
+The [L1 procedure](../src/skills/init/references/orchestration.md) defines the loop and when to use
+Migration. The [runtime guide](../src/skills/init/references/runtime-bridge.md) is the single
+operating reference for connection commands, progress records, recovery and delegated tool approvals.
+[Runtime policy](RUNTIME_POLICY.md) retains detailed implementation/version compatibility.
+[Grep/Context7 setup](RESEARCH_MCP_SETUP.md) is optional.
 
-In Codex explicitly select `$ouroboros:init`, then `$ouroboros:approve`, from this plugin once available. The old
-`mission` skill is no longer shipped. Ordinary `$ouroboros:ready`/`$ouroboros:go` remain available for a manually
-supervised single cycle. Internal `.dryforge/mission/` records are retained; do not reset old runs.
+A reviewed goal change uses `amend` at a cycle boundary. It preserves authority, history and
+consumed limits. Pending legacy extension records require explicit disposition; cancelling a
+record does not answer an unresolved product question. A new checkout needs both the accepted
+Git checkpoint and explicit transfer of trusted ignored state.
 
-Example: “Build a local memo CLI; help me work out what it should do.” Discuss the requirements
-with L1, inspect the proposal, then invoke approve. L1 performs Ready reviews, Go dispatch,
-result checks and cycle selection within that scope without asking for each step again. Actual
-human-only decisions still return to the human. Additional conversation remains possible at
-all times. Formal goal changes currently commit at evaluated cycle boundaries.
+## Implementation and verification
 
-Read-only project inspection can inform the discussion. Cycle workers do not start in DRAFT.
-After activation, missing host capability is a concrete blocker, not silent single-agent
-fallback. Grep/Context7 remain optional; see [MCP setup](RESEARCH_MCP_SETUP.md).
+The ledger records decisions; it does not run agents. Native host sessions can supply the
+connection, or the optional Python controller uses Codex App Server/Claude SDK and a SQLite
+mailbox. There is no extra model supervisor or network listener. Host permissions stay in force.
+The same-user controller is not an adversarial security boundary and does not authenticate a
+JSON approval principal. A timeout or UNCERTAIN receipt needs reconciliation, not automatic replay.
 
-## What the runtime must supply
+Protocol tests include SDK-shaped doubles, real local Git/SQLite and subprocesses; these are
+not live authenticated model runs. Passing them is not a promise of model behavior, L3 support
+or an uninterrupted multi-cycle run. Live verification must exercise same-session Ready/Go,
+questions, delegated approvals, independent review, cleanup and interruption recovery.
 
-A host adapter must create actual sessions, retain IDs, route questions/answers to the correct
-worker, explicitly load ready/go, enforce budgets/permissions, quiesce children, inspect evidence
-and reconcile filesystem state. Native tools can provide this in a capable agent host. The optional [runtime bridge](RUNTIME.md) supplies Claude SDK and Codex App Server operations.
-Use its actual CLI commands; a JSON ledger event alone neither spawns nor resumes a model. The runtime preflight and official sources are in
-[host-adapter.md](../src/skills/init/references/host-adapter.md).
-
-Hooks can supply observations. A stopped process/agent does not mean a successful cycle, and an
-approval of a spec does not authorize every tool call. No auto-go-on-stop hook is installed.
-Do not submit approval events from untrusted hook output or from a child task's claimed authority.
-
-## Durable ledger (Python 3, standard library)
-
-The script is included in every platform's `skills/init/scripts/` directory. From a repository
-checkout (replace paths with your actual approved files):
-
-```sh
-python3 src/skills/init/scripts/mission_state.py draft \
-  --state /project/.dryforge/mission/state.json --contract /project/draft-contract.json
-python3 src/skills/init/scripts/mission_state.py digest --docs-dir /project/.dryforge
-python3 src/skills/init/scripts/mission_state.py apply \
-  --state /project/.dryforge/mission/state.json --event /project/next-event.json
-python3 src/skills/init/scripts/mission_state.py show --state /project/.dryforge/mission/state.json
-```
-
-Do not run the example with invented approvals. The contract shape is documented in
-[intent-contract.md](../src/skills/init/references/intent-contract.md).
-Events carry `mission_id`, `id`, `op`, `actor`, `expected_revision`, and (during a cycle) `cycle_id`.
-L2 events additionally carry the recorded `session_id`. Operation fields follow the implementation
-and its behavioral fixtures in [test_mission_state.py](../ci/test_mission_state.py).
-
-The outer handoff is `DRAFT -> revise_draft (repeat) -> activate -> ACTIVE`.
-`show` reports the proposal digest; activation binds both intent and proposed execution scope to
-the actual human invocation. After activation, each inner cycle follows
-`start -> ready -> approve -> go -> result -> accept -> close -> evaluate`.
-The inner `approve` is L1 reviewing exact Ready documents, not another user handoff.
-`question/answer` does not grant go approval; `interrupt/resume` requires the same worker ID.
-`abort` requires a human and stopped children. `continue` resumes an evaluated, escalated mission
-only after a human decision; it cannot enlarge the cycle budget. A new budget needs an explicitly
-approved replacement contract/mission, never a silent ledger reset. `observe` cannot advance gates.
-Identical event retries are idempotent; changed payloads with the same ID and stale revisions fail.
-The writer lock and atomic snapshot prevent conflicting local writes; they do not provide an
-exactly-once guarantee for external commands. A stale lock needs manual owner/crash reconciliation.
-
-The ledger validates supplied records, **not** the truth of tests or the origin of approval. Keep
-its write interface under the trusted controller. Preserve ordinary sandbox/tool permissions.
-Do not store credentials or raw confidential transcripts in the ledger; use protected references.
-
-## Checkpoint and migration
-
-A new worker reads the accepted branch/commit, harness, cycle archives and decisions. `.dryforge/`
-is ignored and will not appear automatically in a new clone/worktree. Transfer trusted state
-explicitly or resolve the existing-harness guard. A checkpoint must not silently point to main
-when the prior cycle's work is still on a feature branch. Leave failed worktrees for diagnosis.
-
-## Verification
-
-```sh
-PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s ci -p 'test_*.py'
-bash build/build.sh
-# Commit generated files before the clean-tree reproducibility check:
-python3 ci/verify.py
-```
-
-Tests cover ledger transitions, rejected approvals, session replacement, stale artifacts, reuse,
-fresh review, pause/recovery, budget/stall stops, persistence and five-platform mirroring. Synthetic
-two/three-cycle tests are **not live Claude/Codex runs**. Before unattended use, demonstrate same-ID
-ready/go, actual L3 spawning and review, a relayed question, human-only escalation, L2 reuse and
-replacement, interruption recovery, and mission-level success evidence on the target host.
-
-## Delegated tool decisions
-
-L1 can be the decision provider for local tool permissions as well as cycle specs, within an
-explicit human-approved [runtime policy](../src/skills/init/references/runtime-permissions.md).
-This uses a `runtime_policy` event and state schema 3. It does not change the active Intent or
-Ready approval. Schema-1/2 ledgers remain readable and human-only until explicitly opted in.
+Run `python3 -B -m unittest discover -s ci -p 'test_*.py'` and `bash build/build.sh` for regression
+and package checks. `python3 ci/verify.py` also verifies reproducible generation from a clean tree.
