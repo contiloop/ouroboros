@@ -1,0 +1,15 @@
+{
+  "name": "dryforge",
+  "description": "Official marketplace for Dryforge.",
+  "owner": { "name": "prekuter", "email": "prekuter@dryforge.dev" },
+  "plugins": [
+    {
+      "name": "dryforge",
+      "description": "Intent to implementation: ready, then go.",
+      "author": { "name": "prekuter", "email": "prekuter@dryforge.dev" },
+      "source": "./claude",
+      "homepage": "https://github.com/prekuter/dryforge",
+      "keywords": ["agent-harness", "harness", "bounded-autonomy", "plugin", "coding-agent", "claude-code", "codex", "copilot", "intent", "elicitation", "spec", "planning", "brainstorming", "verification", "autonomy"]
+    }
+  ]
+}
