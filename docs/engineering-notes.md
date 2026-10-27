@@ -117,3 +117,18 @@
 
 ## Local plugin trial
 - `claude --plugin-dir ./claude` from another project loads the generated Claude package directly.
+
+## First live unattended run (2026-10-27/28, claude 2.1.311)
+- Sample: `~/Desktop/topmemo`, a macOS always-on-top memo app in Swift (SwiftPM, no Xcode). L1 ran
+  as a headless `claude -p` session with `--plugin-dir <repo>/claude`; the human side was driven by
+  another session through the relay (questions arrived as `q<k>.json`, answers as `a<k>.json`).
+- Flow observed: `init` asked two structured bundles (window model, show/hide, features, floating
+  scope; validation permissions, limits, name/shortcut), wrote the four documents, `approve` wrote a
+  two-node work graph, cycle 1 hit a broken Swift toolchain on the machine (stale Command Line Tools
+  files; needed `sudo`) and L1 escalated it as a blocker it could not resolve; after the fix the same
+  worker session continued, cycle 1 merged (90 tests), the budget stop fired, an amendment raised it,
+  cycle 2 merged (167 tests), a beta cycle ran the automatable checks (fresh-clone build, relaunch
+  check ×15) and escalated the on-screen items; the human reported all pass; COMPLETE.
+- Cost (list-price conversion): about 43 USD total; one Go turn alone was 16 USD.
+- Observed defects/decisions for the next cycle are in `docs/tracking/status.md` (budget, models and
+  effort in the interview, language, content review before approve).
