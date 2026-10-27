@@ -82,11 +82,11 @@ Everything after approval.
 ## Models
 - L2: {l2}
 - L3: {l3}
+- effort: {effort}
 
 ## Limits
 - max cycles: {cycles}
 - max stalled cycles: {stalled}
-- budget usd: {budget}
 
 ## Workspace
 /tmp/project
@@ -95,10 +95,10 @@ Everything after approval.
 NAMES = ('scenario.md', 'validation.md', 'spec.md', 'delegation.md')
 
 
-def proposal_set(cycles=3, stalled=2, budget='10', l2='default', l3='default', **override):
+def proposal_set(cycles=3, stalled=2, l2='default', l3='default', effort='default', **override):
     """The four valid proposal texts; `override` replaces whole files by name (scenario=..., spec=...)."""
     parts = {'scenario.md': SCENARIO, 'validation.md': VALIDATION, 'spec.md': SPEC,
-             'delegation.md': DELEGATION.format(cycles=cycles, stalled=stalled, budget=budget, l2=l2, l3=l3)}
+             'delegation.md': DELEGATION.format(cycles=cycles, stalled=stalled, l2=l2, l3=l3, effort=effort)}
     for key, text in override.items():
         parts[key + '.md'] = text
     return parts
@@ -115,6 +115,19 @@ def with_limits(limits_text, **kw):
 
 def set_sha(parts):
     return core.set_digest([(name, parts[name].encode()) for name in NAMES])
+
+
+CONTENT = ('scenario.md', 'validation.md', 'spec.md')
+
+
+def content_sha(parts):
+    """The content digest: the set digest's recipe over scenario, validation and spec only."""
+    blob = b''.join(f'{name}\n{len(parts[name].encode())}\n'.encode() + parts[name].encode() for name in CONTENT)
+    return hashlib.sha256(blob).hexdigest()
+
+
+def finding(text='a finding', disposition='settled', **extra):
+    return dict(text=text, disposition=disposition, **extra)
 
 
 class Workspace:
@@ -173,8 +186,16 @@ class Workspace:
         """Draft the whole set (default: the valid fixture) or, with a partial dict, revise that subset."""
         return self.ok('draft', *self.draft_args(parts or proposal_set()), **kw)
 
+    def review(self, kind='gate', findings=(), **kw):
+        """Record a review of the current set; by default a gate review with no findings (it passes)."""
+        doc = findings if isinstance(findings, (dict, str)) else dict(findings=list(findings))
+        text = doc if isinstance(doc, str) else json.dumps(doc)
+        return self.ok('review', '--kind', kind, '--findings', self.file(text, '.json'), **kw)
+
     def approve_fresh(self, parts=None):
+        """draft → passing gate review → shown → approve."""
         self.draft(parts)
+        self.review()
         self.ok('shown')
         return self.ok('approve')
 
@@ -227,16 +248,18 @@ class DraftTests(Base):
             self.assertEqual(stat.S_IMODE((priv / name).stat().st_mode), 0o600, name)
         run = self.ws.record()
         self.assertEqual(set(run), {'run_id', 'workspace', 'status', 'proposal_digest_shown', 'approvals', 'limits',
-                                    'spent_usd', 'stalled_cycles', 'host', 'session', 'cycles', 'stopped_reason',
-                                    'stopped_at', 'models', 'beta_cycles'})
+                                    'stalled_cycles', 'host', 'session', 'cycles', 'stopped_reason',
+                                    'stopped_at', 'models', 'effort', 'beta_cycles', 'reviews'})
         self.assertEqual(run['status'], 'DRAFT')
         self.assertEqual(run['workspace'], str(self.ws.path))
         self.assertIsNone(run['proposal_digest_shown'])
         self.assertEqual(run['approvals'], [])
         self.assertEqual(run['host'], 'claude')
         self.assertEqual(run['session'], dict(id=None, started=None, reason=None, cost_total_usd=0))
-        self.assertEqual(run['spent_usd'], 0)
+        self.assertNotIn('spent_usd', run)
         self.assertEqual(run['models'], dict(l2='default', l3='default'))
+        self.assertEqual(run['effort'], 'default')
+        self.assertEqual(run['reviews'], [])
         self.assertEqual(run['beta_cycles'], 0)
         for name in NAMES:
             self.assertEqual((priv / name).read_text(), proposal_set()[name], name)
@@ -328,7 +351,7 @@ class DraftTests(Base):
         self.assertEqual(run['approvals'], before['approvals'])
         self.assertEqual((self.ws.private / 'delegation.md').read_text(), proposal_set(cycles=5)['delegation.md'])
         self.assertFalse((self.ws.private / 'shown').exists())
-        self.assertEqual(self.ws.kinds(), ['draft', 'shown', 'approve', 'draft'])
+        self.assertEqual(self.ws.kinds(), ['draft', 'review', 'shown', 'approve', 'draft'])
         self.assertFalse((self.ws.private / 'archive').exists())
         out = self.ws.blocked('approve')  # the revision must be shown first
         self.assertIn('shown', out['error'])
@@ -438,7 +461,7 @@ class LegacyTests(Base):
                 self.assertEqual(json.loads((archived / 'run.json').read_text())['status'], status)
                 self.assertFalse((ws.private / 'proposal.md').exists())
                 self.assertEqual(ws.kinds(), ['draft'])
-                ws.ok('shown'); ws.ok('approve')
+                ws.review(); ws.ok('shown'); ws.ok('approve')
                 self.assertEqual(ws.record()['status'], 'ACTIVE')
 
     def test_legacy_active_record_is_refused_until_stopped(self):
@@ -501,7 +524,10 @@ class ShownAndShowTests(Base):
         self.assertFalse(out['legacy'])
         self.assertEqual(out['beta_cycles'], 0)
         self.assertIn('limits', out)
-        self.assertIn('spent_usd', out)
+        self.assertNotIn('spent_usd', out)
+        self.assertEqual(out['effort'], 'default')
+        self.assertEqual(out['content_digest'], content_sha(proposal_set()))
+        self.assertEqual(out['reviews'], dict(intent=None, gate=None))
         self.assertIn('session', out)
         self.assertIn('run_id', out)
 
@@ -549,6 +575,7 @@ class ApproveTests(Base):
 
     def test_draft_equal_activates(self):
         self.ws.draft()
+        self.ws.review()
         self.ws.ok('shown')
         out = self.ws.ok('approve')
         self.assertEqual(out['status'], 'ACTIVE')
@@ -559,11 +586,14 @@ class ApproveTests(Base):
         self.assertEqual(run['approvals'][0]['digest'], set_sha(proposal_set()))
         self.assertIn('time', run['approvals'][0])
         self.assertTrue(run['approvals'][0]['applied'])
-        self.assertEqual(run['limits'], dict(max_cycles=3, max_stalled_cycles=2, budget_usd=10))
+        self.assertEqual(run['limits'], dict(max_cycles=3, max_stalled_cycles=2))
         self.assertEqual(run['models'], dict(l2='default', l3='default'))
+        self.assertEqual(run['effort'], 'default')
         ev = self.ws.events()[-1]
         self.assertEqual((ev['kind'], ev['actor']), ('approve', 'human'))
         self.assertEqual(ev['data']['models'], dict(l2='default', l3='default'))
+        self.assertEqual(ev['data']['effort'], 'default')
+        self.assertNotIn('budget_usd', json.dumps(ev['data']))
 
     def test_active_same_digest_is_noop_with_show_summary(self):
         self.ws.approve_fresh()
@@ -632,6 +662,7 @@ class ApproveTests(Base):
             self.assertEqual((approved / name).stat().st_mode & 0o777, 0o600, name)
         self.ws.draft({'spec.md': SPEC + '\nrevised\n'})
         self.assertEqual((approved / 'spec.md').read_text(), SPEC)  # a pending revision does not touch it
+        self.ws.review()
         self.ws.ok('shown')
         self.ws.ok('approve')
         self.assertEqual((approved / 'spec.md').read_text(), SPEC + '\nrevised\n')
@@ -666,9 +697,12 @@ class ApproveTests(Base):
 
     def test_limits_parsing(self):
         cases = {
-            'max cycles: 3\nmax stalled cycles: 2\nbudget usd: no cap': dict(max_cycles=3, max_stalled_cycles=2, budget_usd=None),
-            '- Max cycles: 12\n- Max stalled cycles: 4\n- Budget USD: 2.5': dict(max_cycles=12, max_stalled_cycles=4, budget_usd=2.5),
-            'Max cycles 3, max stalled cycles 1, budget (USD) $40': dict(max_cycles=3, max_stalled_cycles=1, budget_usd=40),
+            'max cycles: 3\nmax stalled cycles: 2': dict(max_cycles=3, max_stalled_cycles=2),
+            '- Max cycles: 12\n- Max stalled cycles: 4': dict(max_cycles=12, max_stalled_cycles=4),
+            'Max cycles 3, max stalled cycles 1': dict(max_cycles=3, max_stalled_cycles=1),
+            # An old file's budget line is ignored.
+            'max cycles: 3\nmax stalled cycles: 2\nbudget usd: no cap': dict(max_cycles=3, max_stalled_cycles=2),
+            '- Max cycles: 5\n- Max stalled cycles: 1\n- Budget USD: 2.5': dict(max_cycles=5, max_stalled_cycles=1),
         }
         for limits, want in cases.items():
             with self.subTest(limits=limits):
@@ -677,11 +711,12 @@ class ApproveTests(Base):
                 ws.approve_fresh(with_limits(limits))
                 self.assertEqual(ws.record()['limits'], want)
         for limits in ('max cycles: 3\nbudget usd: 5', 'max stalled cycles: 1\nbudget usd: 5',
-                       'max cycles: 3\nmax stalled cycles: 1', 'max cycles: three\nmax stalled cycles: 1\nbudget usd: 5'):
+                       'max cycles: three\nmax stalled cycles: 1'):
             with self.subTest(limits=limits):
                 ws = Workspace()
                 self.addCleanup(ws.cleanup)
                 ws.draft(with_limits(limits))
+                ws.review()
                 ws.ok('shown')
                 out = ws.blocked('approve')
                 self.assertIn('delegation.md', out['error'])
@@ -696,6 +731,7 @@ class CompletenessTests(Base):
         ws = Workspace()
         self.addCleanup(ws.cleanup)
         ws.draft(parts)
+        ws.review()  # the gate is checked before completeness
         ws.ok('shown')
         out = ws.blocked('approve')
         self.assertTrue(out['error'].startswith(file + ':'), out['error'])
@@ -776,12 +812,12 @@ class CompletenessTests(Base):
         parts = proposal_set()
         parts['delegation.md'] = parts['delegation.md'].replace('Everything after approval.\n', '')
         self.check(parts, 'delegation.md', 'Delegated judgment')
-        self.check(with_limits('max cycles: 3\nmax stalled cycles: 1'), 'delegation.md', 'limits', 'budget')
+        self.check(with_limits('max cycles: 3'), 'delegation.md', 'limits', 'max stalled cycles')
 
     def test_check_set_returns_limits_and_models(self):
-        out = core.check_set(proposal_set(cycles=4, l3='haiku'))
-        self.assertEqual(out, dict(limits=dict(max_cycles=4, max_stalled_cycles=2, budget_usd=10),
-                                   models=dict(l2='default', l3='haiku')))
+        out = core.check_set(proposal_set(cycles=4, l3='haiku', effort='high'))
+        self.assertEqual(out, dict(limits=dict(max_cycles=4, max_stalled_cycles=2),
+                                   models=dict(l2='default', l3='haiku'), effort='high'))
         with self.assertRaises(core.RecordError) as cm:
             core.check_set({k: v for k, v in proposal_set().items() if k != 'validation.md'})
         self.assertIn('validation.md', str(cm.exception))
@@ -801,8 +837,485 @@ class CompletenessTests(Base):
         self.assertEqual(sp['ui_references'], 'none')
         self.assertEqual(len(sp['outline']), 2)
         self.assertEqual(list(sp['efficient_checks']), ['V2'])
-        de = core.parse_delegation(DELEGATION.format(cycles=1, stalled=1, budget='no cap', l2='a', l3='b'))
-        self.assertEqual((de['models'], de['workspace'], de['limits']['budget_usd']), (dict(l2='a', l3='b'), '/tmp/project', None))
+        de = core.parse_delegation(DELEGATION.format(cycles=1, stalled=1, l2='a', l3='b', effort='max'))
+        self.assertEqual((de['models'], de['effort'], de['workspace'], de['limits']),
+                         (dict(l2='a', l3='b'), 'max', '/tmp/project', dict(max_cycles=1, max_stalled_cycles=1)))
+
+
+class EffortTests(Base):
+    """`effort: <level>` in delegation.md `## Models`: `default` or one of the host's levels; stored and reported."""
+
+    def test_accepted_levels_are_stored_and_reported(self):
+        for level in core.EFFORTS:
+            with self.subTest(level=level):
+                ws = Workspace()
+                self.addCleanup(ws.cleanup)
+                ws.approve_fresh(proposal_set(effort=level))
+                self.assertEqual(ws.record()['effort'], level)
+                self.assertEqual(ws.ok('show')['effort'], level)
+                ev = ws.events()[-1]
+                self.assertEqual((ev['kind'], ev['data']['effort']), ('approve', level))
+        self.assertEqual(core.EFFORTS, ('default', 'low', 'medium', 'high', 'xhigh', 'max'))
+
+    def test_value_is_unwrapped_and_case_insensitive(self):
+        self.assertEqual(core.check_set(proposal_set(effort='`High`'))['effort'], 'high')
+        self.assertEqual(core.check_set(proposal_set(effort='Default'))['effort'], 'default')
+
+    def test_missing_line_is_refused(self):
+        parts = proposal_set()
+        parts['delegation.md'] = parts['delegation.md'].replace('- effort: default\n', '')
+        with self.assertRaises(core.RecordError) as cm:
+            core.check_set(parts)
+        self.assertEqual(str(cm.exception), 'delegation.md: `## Models` lacks `effort: <level or default>`')
+        out = CompletenessTests.check(self, parts, 'delegation.md', 'effort')
+        self.assertEqual(out['error'], 'delegation.md: `## Models` lacks `effort: <level or default>`')
+
+    def test_bad_value_is_refused_naming_file_and_line(self):
+        for bad in ('extreme', 'ultra', ''):
+            with self.subTest(bad=bad):
+                out = CompletenessTests.check(self, proposal_set(effort=bad), 'delegation.md', 'Models', 'effort')
+                self.assertIn(f'- effort: {bad}'.strip(), out['error'])
+                self.assertIn('default, low, medium, high, xhigh, max', out['error'])
+
+    def test_record_without_effort_behaves_as_default(self):
+        self.ws.approve_fresh()
+        run = self.ws.record()
+        del run['effort']
+        (self.ws.private / 'run.json').write_text(json.dumps(run))
+        self.assertEqual(self.ws.ok('show')['effort'], 'default')
+        self.assertEqual(core.effort(run), 'default')
+        self.assertEqual(core.effort(dict(effort=None)), 'default')
+
+    def test_effort_amendment_needs_no_review(self):
+        self.ws.approve_fresh()
+        self.ws.draft({'delegation.md': proposal_set(effort='xhigh')['delegation.md']})
+        self.ws.ok('shown')
+        out = self.ws.ok('approve')
+        self.assertEqual((out['approval'], out['effort']), ('amended', 'xhigh'))
+        self.assertEqual(self.ws.record()['effort'], 'xhigh')
+        ev = self.ws.events()[-1]
+        self.assertEqual((ev['kind'], ev['data']['effort']), ('amend', 'xhigh'))
+
+
+class ContentDigestTests(Base):
+    def test_layout_excludes_delegation(self):
+        parts = proposal_set()
+        blob = b''.join(f'{n}\n{len(parts[n].encode())}\n'.encode() + parts[n].encode() for n in CONTENT)
+        encoded = {n: t.encode() for n, t in parts.items()}
+        self.assertEqual(core.content_digest(encoded), hashlib.sha256(blob).hexdigest())
+        self.assertEqual(core.content_digest(list(reversed(list(encoded.items())))), core.content_digest(encoded))
+        other = dict(encoded, **{'delegation.md': proposal_set(cycles=9, effort='max')['delegation.md'].encode()})
+        self.assertEqual(core.content_digest(other), core.content_digest(encoded))
+        self.assertNotEqual(core.content_digest(dict(encoded, **{'spec.md': b'x'})), core.content_digest(encoded))
+        no_delegation = {n: encoded[n] for n in CONTENT}
+        self.assertEqual(core.content_digest(no_delegation), core.content_digest(encoded))
+        with self.assertRaises(core.RecordError):
+            core.content_digest({n: encoded[n] for n in ('scenario.md', 'spec.md')})
+
+    def test_show_reports_it_beside_the_set_digests(self):
+        self.ws.draft()
+        out = self.ws.ok('show')
+        self.assertEqual(out['content_digest'], content_sha(proposal_set()))
+        self.ws.draft({'delegation.md': proposal_set(cycles=7)['delegation.md']})
+        self.assertEqual(self.ws.ok('show')['content_digest'], content_sha(proposal_set()))
+        self.ws.draft({'spec.md': SPEC + '\nmore\n'})
+        self.assertEqual(self.ws.ok('show')['content_digest'], content_sha(proposal_set(spec=SPEC + '\nmore\n')))
+        (self.ws.private / 'spec.md').unlink()
+        out = self.ws.ok('show')
+        self.assertIsNone(out['content_digest'])
+        self.assertIsNone(out['proposal_digest'])
+
+
+FINDINGS = [
+    dict(id='F1', text='Who sees the error message is L1\'s guess.', disposition='open'),
+    dict(id='F2', text='The output format was settled by the user.', disposition='settled', note='log: round 2'),
+    dict(text='Storage engine unstated.', disposition='technical', note='L1 chose plain files'),
+]
+
+
+class ReviewTests(Base):
+    """`review --kind intent|gate --findings <file>` records a review of the current set."""
+
+    def test_records_entry_and_event(self):
+        self.ws.draft()
+        log = b'# Interview\n\nQ1: which output? A: a text file\n'
+        (self.ws.private / 'interview.md').write_bytes(log)
+        out = self.ws.review('intent', FINDINGS)
+        run = self.ws.record()
+        self.assertEqual(len(run['reviews']), 1)
+        entry = run['reviews'][0]
+        self.assertEqual(set(entry), {'kind', 'time', 'content_digest', 'log_digest', 'findings', 'open'})
+        self.assertEqual((entry['kind'], entry['content_digest'], entry['log_digest'], entry['findings'], entry['open']),
+                         ('intent', content_sha(proposal_set()), hashlib.sha256(log).hexdigest(), 3, 1))
+        self.assertEqual(out['reviews'], dict(intent=entry, gate=None))
+        self.assertEqual(run['status'], 'DRAFT')
+        self.assertIsNone(run['proposal_digest_shown'])
+        ev = self.ws.events()[-1]
+        self.assertEqual((ev['actor'], ev['kind'], ev['cycle_id']), ('L1', 'review', None))
+        self.assertEqual(ev['data'], dict(entry, items=FINDINGS))
+
+    def test_log_digest_is_null_without_a_log_and_entries_accumulate(self):
+        self.ws.draft()
+        self.ws.review('gate', [finding(disposition='open')])
+        self.ws.draft({'spec.md': SPEC + '\nrevised\n'})
+        out = self.ws.review('gate', [])
+        reviews = self.ws.record()['reviews']
+        self.assertEqual([(r['kind'], r['log_digest'], r['findings'], r['open']) for r in reviews],
+                         [('gate', None, 1, 1), ('gate', None, 0, 0)])
+        self.assertEqual(reviews[0]['content_digest'], content_sha(proposal_set()))
+        self.assertEqual(reviews[1]['content_digest'], content_sha(proposal_set(spec=SPEC + '\nrevised\n')))
+        self.assertEqual(out['reviews'], dict(intent=None, gate=reviews[1]))
+        self.assertEqual(self.ws.kinds(), ['draft', 'review', 'draft', 'review'])
+
+    def test_large_findings_list_is_copied_under_turns(self):
+        self.ws.draft()
+        big = [finding('x' * 9000, 'settled')]
+        self.ws.review('gate', big)
+        items = self.ws.events()[-1]['data']['items']
+        self.assertEqual(set(items), {'file', 'sha256', 'size'})
+        self.assertTrue(items['file'].startswith('turns/event-'))
+        self.assertEqual(json.loads((self.ws.private / items['file']).read_text()), big)
+
+    def test_allowed_on_active_and_stopped(self):
+        self.ws.approve_fresh()
+        self.ws.review('intent', [])
+        self.ws.ok('stop', '--reason', 'abort')
+        self.ws.review('gate', [finding()])
+        self.assertEqual([r['kind'] for r in self.ws.record()['reviews']], ['gate', 'intent', 'gate'])
+
+    def assert_refused(self, args, *fragments, ws=None):
+        ws = ws or self.ws
+        before = ws.record() if (ws.private / 'run.json').is_file() else None
+        events = ws.kinds() if before is not None else None
+        out = ws.blocked('review', *args)
+        for fragment in fragments:
+            self.assertIn(fragment, out['error'])
+        if before is not None:
+            self.assertEqual(ws.record(), before)
+            self.assertEqual(ws.kinds(), events)
+        return out
+
+    def findings_file(self, doc):
+        return self.ws.file(doc if isinstance(doc, str) else json.dumps(doc), '.json')
+
+    def test_refused_unless_a_complete_set_is_drafted(self):
+        good = self.findings_file(dict(findings=[]))
+        out = self.ws.blocked('review', '--kind', 'gate', '--findings', good)
+        self.assertIn('nothing proposed', out['error'])
+        self.assertFalse((self.ws.path / '.dryforge').exists())
+        self.ws.draft()
+        (self.ws.private / 'spec.md').unlink()
+        self.assert_refused(['--kind', 'gate', '--findings', good], 'nothing proposed')
+
+    def test_refused_on_a_legacy_record(self):
+        self.ws.draft()
+        self.ws.make_legacy('DRAFT')
+        self.assert_refused(['--kind', 'gate', '--findings', self.findings_file(dict(findings=[]))], 'legacy')
+
+    def test_refused_on_a_complete_run(self):
+        self.ws.approve_fresh()
+        self.ws.start_cycle(kind='beta')
+        self.ws.evaluate('COMPLETE')
+        self.assert_refused(['--kind', 'gate', '--findings', self.findings_file(dict(findings=[]))], 'COMPLETE', 'archive')
+
+    def test_refused_while_a_live_foreign_owner_holds_the_record(self):
+        self.ws.draft()
+        other = subprocess.Popen(['sleep', '30'])
+        self.addCleanup(other.kill)
+        (self.ws.private / 'owner.json').write_text(json.dumps(dict(pid=other.pid, started='x')))
+        self.assert_refused(['--kind', 'gate', '--findings', self.findings_file(dict(findings=[]))], str(other.pid))
+        self.ws.ok('review', '--kind', 'gate', '--findings', self.findings_file(dict(findings=[])), owner=other.pid)
+
+    def test_refused_on_malformed_findings(self):
+        self.ws.draft()
+        cases = [
+            ('not json', 'not JSON'),
+            ([], 'findings'),
+            (dict(other=[]), 'findings'),
+            (dict(findings='F1'), 'findings must be a list'),
+            (dict(findings=['F1']), 'finding 1'),
+            (dict(findings=[dict(disposition='open')]), 'text'),
+            (dict(findings=[dict(text='  ', disposition='open')]), 'text'),
+            (dict(findings=[dict(text=3, disposition='open')]), 'text'),
+            (dict(findings=[finding(), dict(text='x', disposition='closed')]), 'finding 2'),
+            (dict(findings=[dict(text='x')]), 'disposition'),
+            (dict(findings=[finding(id=7)]), 'id'),
+            (dict(findings=[finding(note=['x'])]), 'note'),
+        ]
+        for doc, fragment in cases:
+            with self.subTest(doc=doc):
+                self.assert_refused(['--kind', 'gate', '--findings', self.findings_file(doc)], fragment)
+        out = self.assert_refused(['--kind', 'gate', '--findings', self.findings_file(dict(findings=[finding(disposition='closed')]))],
+                                  'disposition')
+        self.assertIn('open, settled, technical', out['error'])
+        self.assert_refused(['--kind', 'other', '--findings', self.findings_file(dict(findings=[]))], 'intent', 'gate')
+        self.assert_refused(['--kind', 'gate', '--findings', str(self.ws.path / 'missing.json')], 'missing.json')
+        self.assertEqual(self.ws.record()['reviews'], [])
+
+    def test_record_without_reviews_behaves_as_empty(self):
+        self.ws.draft()
+        run = self.ws.record()
+        del run['reviews']
+        (self.ws.private / 'run.json').write_text(json.dumps(run))
+        self.assertEqual(self.ws.ok('show')['reviews'], dict(intent=None, gate=None))
+        self.ws.ok('shown')
+        out = self.ws.blocked('approve')
+        self.assertEqual((out['error'], out['reason']), ('review the current set', 'no_gate_review'))
+        self.ws.review()
+        self.assertEqual(len(self.ws.record()['reviews']), 1)
+
+
+class GateRuleTests(Base):
+    """`approve` requires a passing gate review on the current content: always for the first approval, and on
+    ACTIVE/STOPPED when scenario/validation/spec differ from the approved copies."""
+
+    def refused(self, reason, ws=None):
+        ws = ws or self.ws
+        before, kinds = ws.record(), ws.kinds()
+        out = ws.blocked('approve')
+        self.assertEqual((out['error'], out['reason']), ('review the current set', reason))
+        self.assertEqual(ws.record(), before)
+        self.assertEqual(ws.kinds(), kinds)
+        return out
+
+    def test_draft_requires_a_passing_gate(self):
+        self.ws.draft()
+        self.ws.ok('shown')
+        self.refused('no_gate_review')
+        self.ws.review('intent', [])  # the intent review is informational, never the gate
+        self.refused('no_gate_review')
+        self.ws.review('gate', FINDINGS)
+        out = self.refused('open_findings')
+        self.assertEqual(out['open'], 1)
+        self.assertFalse((self.ws.private / 'approved').exists())
+        self.ws.review('gate', [finding('F1 re-asked; the user answered', 'settled', note='log: round 3')])
+        out = self.ws.ok('approve')
+        self.assertEqual((out['status'], out['approval']), ('ACTIVE', 'activated'))
+
+    def test_the_last_gate_entry_decides(self):
+        self.ws.draft()
+        self.ws.review('gate', [])
+        self.ws.review('gate', [finding(disposition='open'), finding(disposition='open')])
+        self.ws.ok('shown')
+        self.assertEqual(self.refused('open_findings')['open'], 2)
+        self.ws.review('gate', [])
+        self.ws.review('intent', [finding(disposition='open')])  # a later intent entry does not matter
+        self.assertEqual(self.ws.ok('approve')['approval'], 'activated')
+
+    def test_stale_gate_names_both_digests(self):
+        self.ws.draft()
+        self.ws.review('gate', [])
+        revised = proposal_set(spec=SPEC + '\nrevised\n')
+        self.ws.draft({'spec.md': revised['spec.md']})
+        self.ws.ok('shown')
+        out = self.refused('stale')
+        self.assertEqual((out['reviewed_content_digest'], out['content_digest']),
+                         (content_sha(proposal_set()), content_sha(revised)))
+        self.ws.review('gate', [])
+        self.assertEqual(self.ws.ok('approve')['approval'], 'activated')
+
+    def test_a_delegation_only_redraft_keeps_a_draft_gate_valid(self):
+        self.ws.draft()
+        self.ws.review('gate', [])
+        self.ws.draft({'delegation.md': proposal_set(cycles=6)['delegation.md']})
+        self.ws.ok('shown')
+        self.assertEqual(self.ws.ok('approve')['approval'], 'activated')
+        self.assertEqual(self.ws.record()['limits']['max_cycles'], 6)
+
+    def test_active_unchanged_needs_no_review(self):
+        self.ws.approve_fresh()
+        self.ws.review('gate', [finding(disposition='open')])  # an open later gate is not consulted
+        show = self.ws.ok('show')
+        self.assertEqual(self.ws.ok('approve'), show)
+        self.assertEqual(self.ws.kinds().count('approve'), 1)
+
+    def test_stopped_unchanged_resumes_without_review(self):
+        self.ws.approve_fresh()
+        self.ws.ok('stop', '--reason', 'abort')
+        self.ws.review('gate', [finding(disposition='open')])
+        out = self.ws.ok('approve')
+        self.assertEqual((out['status'], out['approval']), ('ACTIVE', 'resumed'))
+
+    def test_delegation_only_amendment_needs_no_review(self):
+        for stop in (False, True):
+            with self.subTest(stopped=stop):
+                ws = Workspace()
+                self.addCleanup(ws.cleanup)
+                ws.approve_fresh()
+                if stop:
+                    ws.ok('stop', '--reason', 'abort')
+                ws.review('gate', [finding(disposition='open')])  # even an open last gate does not block it
+                ws.draft({'delegation.md': proposal_set(cycles=5, l2='opus')['delegation.md']})
+                ws.ok('shown')
+                out = ws.ok('approve')
+                self.assertEqual((out['status'], out['approval']), ('ACTIVE', 'amended'))
+                self.assertEqual(ws.record()['limits']['max_cycles'], 5)
+
+    def test_content_amendment_requires_the_gate(self):
+        for stop in (False, True):
+            with self.subTest(stopped=stop):
+                ws = Workspace()
+                self.addCleanup(ws.cleanup)
+                ws.approve_fresh()
+                if stop:
+                    ws.ok('stop', '--reason', 'abort')
+                revised = proposal_set(validation=VALIDATION + '\n### V3 Rebuild is fast\n- Behavior: b\n'
+                                       '- Environment: e\n- Evidence: v\n- Cost: fast\n')
+                ws.draft({'validation.md': revised['validation.md']})
+                ws.ok('shown')
+                out = self.refused('stale', ws)
+                self.assertEqual((out['reviewed_content_digest'], out['content_digest']),
+                                 (content_sha(proposal_set()), content_sha(revised)))
+                self.assertEqual(ws.record()['status'], 'STOPPED' if stop else 'ACTIVE')
+                ws.review('gate', [finding(disposition='open')])
+                self.assertEqual(self.refused('open_findings', ws)['open'], 1)
+                ws.review('gate', [finding(disposition='technical', note='L1 split V3')])
+                out = ws.ok('approve')
+                self.assertEqual((out['status'], out['approval']), ('ACTIVE', 'amended'))
+                self.assertEqual((ws.private / 'approved' / 'validation.md').read_text(), revised['validation.md'])
+
+    def test_a_reverted_content_change_is_unchanged_content(self):
+        self.ws.approve_fresh()
+        self.ws.draft({'spec.md': SPEC + '\nrevised\n'})
+        self.ws.draft({'spec.md': SPEC, 'delegation.md': proposal_set(cycles=4)['delegation.md']})
+        self.ws.ok('shown')
+        self.assertEqual(self.ws.ok('approve')['approval'], 'amended')
+
+    def test_active_or_stopped_without_approved_copies_counts_as_changed(self):
+        for status in ('ACTIVE', 'STOPPED'):
+            with self.subTest(status=status):
+                ws = Workspace()
+                self.addCleanup(ws.cleanup)
+                ws.approve_fresh()
+                if status == 'STOPPED':
+                    ws.ok('stop', '--reason', 'abort')
+                run = ws.record()
+                del run['reviews']  # an older run: no reviews, no approved/ copies
+                (ws.private / 'run.json').write_text(json.dumps(run))
+                subprocess.run(['rm', '-rf', str(ws.private / 'approved')], check=True)
+                self.refused('no_gate_review', ws)
+                ws.review('gate', [])
+                out = ws.ok('approve')
+                self.assertEqual(out.get('approval'), None if status == 'ACTIVE' else 'resumed')  # unchanged: the summary
+                self.assertEqual(out['status'], 'ACTIVE')
+
+    def test_order_of_checks(self):
+        # never shown comes before the gate
+        self.ws.draft()
+        out = self.ws.blocked('approve')
+        self.assertIn('never shown', out['error'])
+        # changed since shown comes before the gate
+        self.ws.ok('shown')
+        (self.ws.private / 'spec.md').write_text(SPEC + '\nedit\n')
+        out = self.ws.blocked('approve')
+        self.assertIn('changed since it was shown', out['error'])
+        self.assertEqual(out['changed'], ['spec.md'])
+        # the gate comes before completeness
+        bad = proposal_set(spec=SPEC.replace('## Users', '## Readers'))
+        self.ws.draft(bad)
+        self.ws.ok('shown')
+        self.refused('no_gate_review')
+        self.ws.review('gate', [])
+        out = self.ws.blocked('approve')
+        self.assertTrue(out['error'].startswith('spec.md:'), out['error'])
+        # COMPLETE comes first
+        ws = Workspace()
+        self.addCleanup(ws.cleanup)
+        ws.approve_fresh()
+        ws.start_cycle(kind='beta')
+        ws.evaluate('COMPLETE')
+        (ws.private / 'spec.md').write_text(SPEC + '\nlater\n')  # shown and gate would refuse too
+        self.assertIn('COMPLETE', ws.blocked('approve')['error'])
+
+    def test_core_approve_is_pure_and_takes_the_approved_content_digest(self):
+        texts = proposal_set()
+        digest, content = set_sha(texts), content_sha(texts)
+        run = core.record_shown(core.new_run('/tmp/project'), digest)
+        with self.assertRaises(core.RecordError) as cm:
+            core.approve(run, digest, texts, content_digest=content, approved_content_digest=None)
+        self.assertEqual(cm.exception.details['reason'], 'no_gate_review')
+        run['reviews'] = [dict(kind='gate', time='t', content_digest=content, log_digest=None, findings=0, open=0)]
+        snapshot = json.dumps(run, sort_keys=True)
+        new, action = core.approve(run, digest, texts, content_digest=content, approved_content_digest=None)
+        self.assertEqual((action, new['status'], new['effort']), ('activated', 'ACTIVE', 'default'))
+        self.assertEqual(json.dumps(run, sort_keys=True), snapshot)
+        new['reviews'] = []
+        self.assertEqual(core.approve(new, digest, texts, content_digest=content, approved_content_digest=content)[1],
+                         'unchanged')
+        with self.assertRaises(core.RecordError) as cm:
+            core.approve(new, digest, texts, content_digest=content, approved_content_digest='0' * 64)
+        self.assertEqual(cm.exception.details['reason'], 'no_gate_review')
+
+
+class LaunchEffortTests(Base):
+    """`_launch` hands the run's effort to the host port as the literal `effort=` keyword on every turn and records
+    it with the turn. A stub host stands in for the adapter (in-process); nothing is launched."""
+
+    def setUp(self):
+        super().setUp()
+        import contextlib
+        import io
+        import ouroboros_cli
+        from ouroboros import adapters
+        from ouroboros.ports import Turn
+        self.calls = []
+        calls = self.calls
+
+        class StubHost:
+            def start(self, workspace, message, raw_path, models=None, effort=None):
+                calls.append(('start', models, effort))
+                return Turn(pid=os.getpid(), raw_path=raw_path)
+
+            def send(self, workspace, session_id, message, raw_path, models=None, effort=None):
+                calls.append(('send', models, effort))
+                return Turn(pid=os.getpid(), raw_path=raw_path)
+
+        original = adapters.for_host
+        adapters.for_host = lambda name: StubHost()
+        self.addCleanup(setattr, adapters, 'for_host', original)
+
+        def cli(*args):
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                code = ouroboros_cli.main(['--workspace', str(self.ws.path), '--owner', str(self.ws.owner), *args])
+            out = json.loads(buf.getvalue())
+            self.assertEqual(code, 0, out)
+            return out
+        self.cli = cli
+
+    def finish_turn(self, session_id='s-1'):
+        run = self.ws.record()
+        run['turn']['state'] = 'COMPLETE'
+        run['session']['id'] = session_id
+        (self.ws.private / 'run.json').write_text(json.dumps(run))
+
+    def test_effort_reaches_the_port_and_the_record(self):
+        self.ws.approve_fresh(proposal_set(l2='sonnet', effort='high'))
+        self.ws.start_cycle()
+        out = self.cli('session-start', '--skill', 'ready', '--message', self.ws.file('x'))
+        self.assertEqual((out['effort'], out['models']), ('high', dict(l2='sonnet', l3='default')))
+        self.assertEqual(self.calls, [('start', dict(l2='sonnet', l3='default'), 'high')])
+        self.assertEqual(self.ws.record()['turn']['effort'], 'high')
+        session, turn = self.ws.events()[-2:]
+        self.assertEqual((session['kind'], session['data']['effort']), ('session', 'high'))
+        self.assertEqual((turn['kind'], turn['data']['effort']), ('turn', 'high'))
+        # An amendment of delegation.md takes effect at the next turn.
+        self.finish_turn()
+        self.ws.draft({'delegation.md': proposal_set(l2='sonnet', effort='default')['delegation.md']})
+        self.ws.ok('shown'); self.ws.ok('approve')
+        out = self.cli('session-send', '--message', self.ws.file('y'))
+        self.assertEqual(out['effort'], 'default')
+        self.assertEqual(self.calls[-1], ('send', dict(l2='sonnet', l3='default'), 'default'))  # the literal value
+        self.assertEqual(self.ws.events()[-1]['data']['effort'], 'default')
+
+    def test_a_record_without_effort_launches_with_default(self):
+        self.ws.approve_fresh()
+        self.ws.start_cycle()
+        run = self.ws.record()
+        del run['effort']
+        (self.ws.private / 'run.json').write_text(json.dumps(run))
+        self.cli('session-start', '--skill', 'ready', '--message', self.ws.file('x'))
+        self.assertEqual(self.calls, [('start', dict(l2='default', l3='default'), 'default')])
 
 
 class CycleTests(Base):
@@ -841,16 +1354,13 @@ class CycleTests(Base):
         ws.start_cycle(); ws.evaluate('CONTINUE')
         ws.start_cycle(); ws.evaluate('REPLAN')
         self.assertEqual(ws.record()['status'], 'STOPPED')
-        ws.blocked('cycle-start', '--kind', 'development', '--goal', ws.file('x'), '--checkpoint', 'c' * 40)
-        # Raise the limit through an amendment, but keep a budget that is already overspent.
-        ws.draft(proposal_set(cycles=9, stalled=5, budget='0.5'))
-        ws.ok('shown')
-        ws.ok('approve')
-        run = ws.record()
-        run['spent_usd'] = 1.0
-        (ws.private / 'run.json').write_text(json.dumps(run))
         out = ws.blocked('cycle-start', '--kind', 'development', '--goal', ws.file('x'), '--checkpoint', 'c' * 40)
-        self.assertIn('budget', out['error'])
+        self.assertIn('STOPPED', out['error'])
+        # Raise the limit through an amendment of delegation.md only: no review needed, and the run goes on.
+        ws.draft({'delegation.md': proposal_set(cycles=9, stalled=5)['delegation.md']})
+        ws.ok('shown')
+        self.assertEqual(ws.ok('approve')['approval'], 'amended')
+        ws.start_cycle()
 
     def test_cycle_stage_and_ready_digest_rule(self):
         self.ws.start_cycle()
@@ -949,25 +1459,27 @@ class CycleTests(Base):
         self.ws.start_cycle(kind='beta')
         self.assertEqual(self.ws.record()['cycles'][-1]['kind'], 'beta')
 
-    def test_budget_limit_stops(self):
+    def test_an_old_record_with_budget_and_spend_never_stops_on_spend(self):
+        """Records written before the budget was removed keep `spent_usd` and `limits.budget_usd`; nothing acts on them."""
         self.ws.start_cycle()
         run = self.ws.record()
-        run['spent_usd'] = 10.5
+        run['spent_usd'] = 1e6
+        run['limits']['budget_usd'] = 1
         (self.ws.private / 'run.json').write_text(json.dumps(run))
         self.ws.evaluate('CONTINUE')
         run = self.ws.record()
-        self.assertEqual((run['status'], run['stopped_reason']), ('STOPPED', 'limit:budget'))
+        self.assertEqual((run['status'], run['stopped_reason']), ('ACTIVE', None))
+        self.ws.start_cycle()
+        self.assertEqual(core.limit_exceeded(self.ws.record(), mid_cycle=True), None)
 
-    def test_no_cap_budget_never_stops(self):
-        ws = Workspace()
-        self.addCleanup(ws.cleanup)
-        ws.approve_fresh(proposal_set(budget='no cap'))
-        ws.start_cycle()
-        run = ws.record()
-        run['spent_usd'] = 1e6
-        (ws.private / 'run.json').write_text(json.dumps(run))
-        ws.evaluate('CONTINUE')
-        self.assertEqual(ws.record()['status'], 'ACTIVE')
+    def test_limit_exceeded_knows_cycles_and_stalled_only(self):
+        run = dict(limits=dict(max_cycles=1, max_stalled_cycles=1), stalled_cycles=0, spent_usd=99,
+                   cycles=[dict(id='c1', kind='development', evaluation='CONTINUE')])
+        self.assertEqual(core.limit_exceeded(run), 'cycles')
+        self.assertIsNone(core.limit_exceeded(run, count_cycles=False))
+        run['stalled_cycles'] = 1
+        self.assertEqual(core.limit_exceeded(run, count_cycles=False), 'stalled')
+        self.assertFalse(hasattr(core, 'add_spent'))
 
     def test_pending_amendment_applied_at_evaluate(self):
         self.ws.start_cycle()
@@ -1106,7 +1618,7 @@ class EventTests(Base):
         self.ws.blocked('event', '--actor', 'L1', '--kind', 'x', '--cycle', 'c9', '--data', self.ws.file('{}'))
         self.ws.blocked('event', '--actor', 'L1', '--kind', 'x', '--data', str(self.ws.path / 'missing'))
         self.assertEqual(len(self.ws.events()), 1)
-        self.ws.ok('shown'); self.ws.ok('approve'); self.ws.start_cycle()
+        self.ws.review(); self.ws.ok('shown'); self.ws.ok('approve'); self.ws.start_cycle()
         self.ws.ok('event', '--actor', 'L1', '--kind', 'answer', '--cycle', 'c1', '--data', self.ws.file('{"a": 1}'))
         self.assertEqual(self.ws.events()[-1]['cycle_id'], 'c1')
 
@@ -1115,7 +1627,7 @@ class StopAndArchiveTests(Base):
     def test_stop_abort(self):
         self.ws.draft()
         self.ws.blocked('stop', '--reason', 'abort')
-        self.ws.ok('shown'); self.ws.ok('approve')
+        self.ws.review(); self.ws.ok('shown'); self.ws.ok('approve')
         self.ws.blocked('stop', '--reason', 'whatever')
         out = self.ws.ok('stop', '--reason', 'abort')
         self.assertEqual(out['status'], 'STOPPED')
@@ -1145,15 +1657,16 @@ class StopAndArchiveTests(Base):
 
     def test_stop_limit_reason(self):
         self.ws.approve_fresh()
-        self.ws.ok('stop', '--reason', 'limit:budget')
+        self.ws.ok('stop', '--reason', 'limit:cycles')
         run = self.ws.record()
-        self.assertEqual(run['stopped_reason'], 'limit:budget')
+        self.assertEqual(run['stopped_reason'], 'limit:cycles')
         self.assertEqual(self.ws.events()[-1]['actor'], 'L1')
 
     def test_archive(self):
         self.ws.draft()
         self.ws.blocked('archive')
-        self.ws.ok('shown'); self.ws.ok('approve')
+        self.ws.review(); self.ws.ok('shown'); self.ws.ok('approve')
+        (self.ws.private / 'interview.md').write_text('# Interview\n')
         self.ws.blocked('archive')
         self.ws.ok('event', '--actor', 'host', '--kind', 'turn', '--data', self.ws.file('raw', '.log'))
         (self.ws.private / 'workgraph.yaml').write_text('nodes: []\n')
@@ -1163,7 +1676,7 @@ class StopAndArchiveTests(Base):
         self.assertEqual(out['archived'], run_id)
         dest = self.ws.private / 'archive' / run_id
         for name in (*NAMES, *('shown/' + n for n in NAMES), *('approved/' + n for n in NAMES),
-                     'run.json', 'events.jsonl', 'turns/event-1.log', 'workgraph.yaml'):
+                     'run.json', 'events.jsonl', 'turns/event-1.log', 'workgraph.yaml', 'interview.md'):
             self.assertTrue((dest / name).is_file(), name)
             self.assertFalse((self.ws.private / name).exists(), name)
         self.assertEqual(stat.S_IMODE(dest.stat().st_mode), 0o700)
@@ -1175,6 +1688,7 @@ class StopAndArchiveTests(Base):
 class OwnerAndLockTests(Base):
     def test_live_other_owner_blocks_draft_and_approve(self):
         self.ws.draft()
+        self.ws.review()
         other = subprocess.Popen(['sleep', '30'])
         self.addCleanup(other.kill)
         (self.ws.private / 'owner.json').write_text(json.dumps(dict(pid=other.pid, started='x')))
@@ -1192,6 +1706,7 @@ class OwnerAndLockTests(Base):
         dead = subprocess.Popen(['true'])
         dead.wait()
         (self.ws.private / 'owner.json').write_text(json.dumps(dict(pid=dead.pid, started='x')))
+        self.ws.review()
         self.ws.ok('shown')
         self.ws.ok('approve')
         self.assertEqual(json.loads((self.ws.private / 'owner.json').read_text())['pid'], os.getpid())
@@ -1234,16 +1749,8 @@ time.sleep(1.0)
 
 
 class HelperTests(Base):
-    def test_private_dir_and_spent(self):
+    def test_private_dir(self):
         self.assertEqual(store.private_dir(self.ws.path), self.ws.path / '.dryforge' / 'ouroboros')
-        self.ws.approve_fresh()
-        st = store.Store(self.ws.path)
-        with st.transaction():
-            run = st.read_run()
-            st.write_run(core.add_spent(run, 0.25))
-        self.assertEqual(self.ws.record()['spent_usd'], 0.25)
-        with self.assertRaises(core.RecordError):
-            core.add_spent(run, -1)
 
     def test_store_set_helpers(self):
         self.ws.draft()
@@ -1253,6 +1760,8 @@ class HelperTests(Base):
         self.assertFalse(st.is_legacy())
         self.assertEqual(st.read_shown(), {name: None for name in NAMES})
         self.assertIn('workgraph.yaml', store.RUN_FILES)
+        self.assertIn('interview.md', store.RUN_FILES)
+        self.assertEqual(st.read_approved(), {name: None for name in NAMES})
         for legacy in ('proposal.md', 'proposal.shown.md', 'proposal.approved.md'):
             self.assertIn(legacy, store.RUN_FILES)
 
@@ -1266,6 +1775,10 @@ class HelperTests(Base):
         self.assertTrue(hasattr(ports, 'HostSession'))
         for name in ('start', 'send', 'terminate', 'result'):
             self.assertTrue(callable(getattr(ports.HostSession, name)), name)
+        import inspect
+        for name in ('start', 'send'):
+            param = inspect.signature(getattr(ports.HostSession, name)).parameters['effort']
+            self.assertIsNone(param.default, name)
 
 
 if __name__ == '__main__':

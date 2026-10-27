@@ -17,8 +17,12 @@ STAGES = ('ready', 'go', 'review', 'done')
 DECISIONS = ('CONTINUE', 'REPLAN', 'ESCALATE', 'COMPLETE')
 ACTORS = ('human', 'L1', 'L2', 'host')
 PROPOSAL_FILES = ('scenario.md', 'validation.md', 'spec.md', 'delegation.md')
+CONTENT_FILES = PROPOSAL_FILES[:3]  # what the user's intent lives in; delegation.md is L1's bounds
 VALIDATION_FIELDS = ('behavior', 'environment', 'evidence', 'cost')
 DEFAULT_MODELS = dict(l2='default', l3='default')
+EFFORTS = ('default', 'low', 'medium', 'high', 'xhigh', 'max')  # `default`: the host's choice, no flag
+REVIEW_KINDS = ('intent', 'gate')
+DISPOSITIONS = ('open', 'settled', 'technical')
 HOST = 'claude'
 
 
@@ -43,19 +47,29 @@ def digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def set_digest(parts) -> str:
-    """The combined digest of the proposal set: SHA-256 over `<name>\\n<byte length>\\n<bytes>` for each file in the
-    fixed order scenario, validation, spec, delegation. `parts` is a dict or a list of (name, bytes); all four
-    files must be present."""
+def _files_digest(parts, names) -> str:
     by_name = dict(parts)
-    missing = [n for n in PROPOSAL_FILES if by_name.get(n) is None]
+    missing = [n for n in names if by_name.get(n) is None]
     require(not missing, 'proposal set is incomplete: ' + ', '.join(missing))
     h = hashlib.sha256()
-    for name in PROPOSAL_FILES:
+    for name in names:
         data = by_name[name]
         h.update(f'{name}\n{len(data)}\n'.encode())
         h.update(data)
     return h.hexdigest()
+
+
+def set_digest(parts) -> str:
+    """The combined digest of the proposal set: SHA-256 over `<name>\\n<byte length>\\n<bytes>` for each file in the
+    fixed order scenario, validation, spec, delegation. `parts` is a dict or a list of (name, bytes); all four
+    files must be present."""
+    return _files_digest(parts, PROPOSAL_FILES)
+
+
+def content_digest(parts) -> str:
+    """The set digest's recipe over scenario, validation and spec only (delegation.md left out): what a gate
+    review is bound to. `parts` is a dict or a list of (name, bytes); the three files must be present."""
+    return _files_digest(parts, CONTENT_FILES)
 
 
 def models(run: dict) -> dict:
@@ -64,11 +78,31 @@ def models(run: dict) -> dict:
     return {key: found.get(key) or 'default' for key in DEFAULT_MODELS}
 
 
+def limits(run: dict) -> dict | None:
+    """The run's {max_cycles, max_stalled_cycles}; a `budget_usd` left in an older record is not reported."""
+    found = run.get('limits')
+    return None if found is None else {key: found[key] for key in ('max_cycles', 'max_stalled_cycles') if key in found}
+
+
+def effort(run: dict) -> str:
+    """The run's effort level; a record without the field behaves as `default`."""
+    return run.get('effort') or 'default'
+
+
+def last_review(run: dict, kind: str) -> dict | None:
+    """The newest `reviews[]` entry of `kind`, or None; a record without the field has no reviews."""
+    for entry in reversed(run.get('reviews') or []):
+        if entry.get('kind') == kind:
+            return entry
+    return None
+
+
 def new_run(workspace: str) -> dict:
     run_id = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S') + '-' + secrets.token_hex(3)
     return dict(run_id=run_id, workspace=workspace, status='DRAFT', proposal_digest_shown=None, approvals=[],
-                limits=None, models=dict(DEFAULT_MODELS), spent_usd=0, stalled_cycles=0, beta_cycles=0, host=HOST,
-                session=dict(id=None, started=None, reason=None, cost_total_usd=0), cycles=[], stopped_reason=None, stopped_at=None)
+                limits=None, models=dict(DEFAULT_MODELS), effort='default', stalled_cycles=0, beta_cycles=0, host=HOST,
+                session=dict(id=None, started=None, reason=None, cost_total_usd=0), cycles=[], stopped_reason=None,
+                stopped_at=None, reviews=[])
 
 
 # ── proposal set ─────────────────────────────────────────────────────────────
@@ -236,7 +270,7 @@ def parse_spec(text: str) -> dict:
 
 
 def parse_limits(body: str, file: str = 'delegation.md') -> dict:
-    """Lenient: a line naming each limit followed by its value."""
+    """Lenient: a line naming each limit followed by its value. Other lines (an old `budget` line) are ignored."""
     def grab(pattern, label):
         for line in body.splitlines():
             m = re.search(pattern, line, re.I)
@@ -245,13 +279,23 @@ def parse_limits(body: str, file: str = 'delegation.md') -> dict:
         raise RecordError(f'{file}: limits section lacks "{label}"')
     cycles = grab(r'max\s+cycles\b\D*?(\d+)', 'max cycles: <int>')
     stalled = grab(r'max\s+stalled\s+cycles\b\D*?(\d+)', 'max stalled cycles: <int>')
-    budget = grab(r'budget\b[^\d\n]*?(no cap|\d+(?:\.\d+)?)', 'budget usd: <number>|no cap')
-    usd = None if budget.lower() == 'no cap' else (int(budget) if budget.isdigit() else float(budget))
-    return dict(max_cycles=int(cycles), max_stalled_cycles=int(stalled), budget_usd=usd)
+    return dict(max_cycles=int(cycles), max_stalled_cycles=int(stalled))
+
+
+def _parse_effort(models_body: str, file: str) -> str:
+    """The `effort: <level>` line of `## Models`: `default` or one of the host's levels."""
+    for line in models_body.splitlines():
+        m = re.match(r'^\s*(?:[-*+]\s+)?[*_`]*effort[*_`]*\s*:\s*(.*)$', line, re.I)
+        if m:
+            value = _unwrap(m.group(1)).lower()
+            require(value in EFFORTS, f"{file}: `## Models` line '{line.strip()}' does not name an effort level; "
+                                      f"use one of {', '.join(EFFORTS)}")
+            return value
+    raise RecordError(f'{file}: `## Models` lacks `effort: <level or default>`')
 
 
 def parse_delegation(text: str) -> dict:
-    """{delegated_judgment, models: {l2, l3}, limits, workspace}."""
+    """{delegated_judgment, models: {l2, l3}, effort, limits, workspace}."""
     file = 'delegation.md'
     found = sections(text)
     judgment = _nonempty_section(found, 'Delegated judgment', file)
@@ -266,11 +310,12 @@ def parse_delegation(text: str) -> dict:
                 found_models[key.lower()] = 'default' if value.lower() == 'default' else value
                 break
         require(key.lower() in found_models, f'{file}: `## Models` lacks `{key}: <model or default>`')
+    level = _parse_effort(models_body, file)
     limits = parse_limits(_section(found, 'Limits', file), file)
     workspace = _unwrap(_nonempty_section(found, 'Workspace', file).splitlines()[0])
     workspace = re.sub(_BULLET, '', workspace).strip().strip('`')
     require(workspace.startswith('/'), f'{file}: `## Workspace` is not an absolute path: {workspace!r}')
-    return dict(delegated_judgment=judgment, models=found_models, limits=limits, workspace=workspace)
+    return dict(delegated_judgment=judgment, models=found_models, effort=level, limits=limits, workspace=workspace)
 
 
 PARSERS = {'scenario.md': parse_scenario, 'validation.md': parse_validation, 'spec.md': parse_spec,
@@ -278,8 +323,8 @@ PARSERS = {'scenario.md': parse_scenario, 'validation.md': parse_validation, 'sp
 
 
 def check_set(texts: dict) -> dict:
-    """Run the completeness rules of the four files; return {limits, models} from delegation.md. Refuses with the
-    file name and the first missing or invalid item."""
+    """Run the completeness rules of the four files; return {limits, models, effort} from delegation.md. Refuses
+    with the file name and the first missing or invalid item."""
     for name in PROPOSAL_FILES:
         require(name in texts and texts[name] is not None, f'{name}: file missing from the proposal set')
     parsed = {name: PARSERS[name](texts[name]) for name in PROPOSAL_FILES}
@@ -287,7 +332,8 @@ def check_set(texts: dict) -> dict:
     for item in parsed['validation.md']['items']:
         require(item['cost'] != 'slow/hard' or item['id'] in checks,
                 f"spec.md: `## Efficient checks` has no `{item['id']}: <check>` entry for the slow/hard item {item['id']}")
-    return dict(limits=parsed['delegation.md']['limits'], models=parsed['delegation.md']['models'])
+    delegation = parsed['delegation.md']
+    return dict(limits=delegation['limits'], models=delegation['models'], effort=delegation['effort'])
 
 
 # ── transitions ─────────────────────────────────────────────────────────────
@@ -307,17 +353,70 @@ def redraft(run: dict) -> dict:
     return run
 
 
-def approve(run: dict, current_digest: str, texts: dict) -> tuple[dict, str]:
+def _check_findings(doc) -> list:
+    """The validated findings list of a review file: {"findings": [{text, disposition, id?, note?}]}."""
+    require(isinstance(doc, dict), 'findings file must be a JSON object {"findings": [...]}')
+    findings = doc.get('findings')
+    require(isinstance(findings, list), 'findings must be a list')
+    for n, item in enumerate(findings, 1):
+        require(isinstance(item, dict), f'finding {n} is not an object')
+        text = item.get('text')
+        require(isinstance(text, str) and text.strip() != '', f'finding {n}: `text` must be a non-empty string')
+        disposition = item.get('disposition')
+        require(disposition in DISPOSITIONS,
+                f'finding {n}: disposition must be one of {", ".join(DISPOSITIONS)}, not {disposition!r}')
+        for key in ('id', 'note'):
+            require(item.get(key) is None or isinstance(item[key], str), f'finding {n}: `{key}` must be a string')
+    return findings
+
+
+def review(run: dict, kind: str, doc, content: str, log_digest: str | None) -> tuple[dict, dict, list]:
+    """Record an independent review of the current set; return (run, entry, findings). `content` is the content
+    digest of the current set, `log_digest` the SHA-256 of interview.md (None when absent). The entry is
+    {kind, time, content_digest, log_digest, findings, open}; it passes when `open` is 0. Older entries are kept.
+    This is bookkeeping by L1, never an approval."""
+    require(kind in REVIEW_KINDS, f'review kind must be one of {", ".join(REVIEW_KINDS)}')
+    require(run['status'] != 'COMPLETE', 'run is COMPLETE; archive it and draft a new proposal')
+    findings = _check_findings(doc)
+    entry = dict(kind=kind, time=now(), content_digest=content, log_digest=log_digest, findings=len(findings),
+                 open=sum(1 for f in findings if f['disposition'] == 'open'))
+    run = copy.deepcopy(run)
+    run['reviews'] = list(run.get('reviews') or []) + [entry]
+    return run, dict(entry), findings
+
+
+def gate_required(run: dict, content: str, approved_content: str | None) -> bool:
+    """A gate review is required for the first approval and whenever scenario/validation/spec differ from the last
+    approved copies (no copies counts as different); not for an unchanged resume or a delegation-only revision."""
+    return run['status'] == 'DRAFT' or approved_content is None or approved_content != content
+
+
+def _require_gate(run: dict, content: str) -> None:
+    gate = last_review(run, 'gate')
+    require(gate is not None, 'review the current set', reason='no_gate_review', content_digest=content)
+    require(gate.get('content_digest') == content, 'review the current set', reason='stale',
+            reviewed_content_digest=gate.get('content_digest'), content_digest=content)
+    require(gate.get('open') == 0, 'review the current set', reason='open_findings', open=gate.get('open'))
+
+
+def approve(run: dict, current_digest: str, texts: dict, *, content_digest: str,
+            approved_content_digest: str | None) -> tuple[dict, str]:
     """Return (run, action) with action ∈ {activated, resumed, amended, unchanged}. `texts` is the proposal set
     (file name → text); its completeness is checked before any activation, amendment or resume. Digest rules:
     DRAFT → activated; ACTIVE with the last approved digest → unchanged; STOPPED with the last approved
-    digest → resumed (ACTIVE again, same authority); a newer shown digest on ACTIVE or STOPPED → amended."""
+    digest → resumed (ACTIVE again, same authority); a newer shown digest on ACTIVE or STOPPED → amended.
+    `content_digest` is the current set's content digest, `approved_content_digest` that of the approved copies
+    (None when there are none); when a gate review is required (`gate_required`) the last gate entry must match
+    the current content and have no open finding. Checks in order: COMPLETE, never shown, changed since shown,
+    gate review, completeness."""
     require(run['status'] != 'COMPLETE', 'run is COMPLETE; start a new proposal with draft')
     shown = run['proposal_digest_shown']
     require(shown is not None, 'proposal was never shown; show it and record shown first',
             current_digest=current_digest)
     require(shown == current_digest, 'proposal changed since it was shown; approval applies only to what was shown',
             shown_digest=shown, current_digest=current_digest)
+    if gate_required(run, content_digest, approved_content_digest):
+        _require_gate(run, content_digest)
     last = run['approvals'][-1]['digest'] if run['approvals'] else None
     if run['status'] == 'ACTIVE' and last == current_digest:
         return copy.deepcopy(run), 'unchanged'
@@ -332,6 +431,7 @@ def approve(run: dict, current_digest: str, texts: dict) -> tuple[dict, str]:
     run['approvals'].append(dict(time=now(), digest=current_digest, applied=action != 'amended'))
     run['limits'] = checked['limits']
     run['models'] = checked['models']
+    run['effort'] = checked['effort']
     run['status'] = 'ACTIVE'
     run['stopped_reason'] = None
     run['stopped_at'] = None
@@ -361,8 +461,6 @@ def limit_exceeded(run: dict, *, mid_cycle: bool = False, count_cycles: bool = T
         return 'cycles'
     if run['stalled_cycles'] >= lim['max_stalled_cycles']:
         return 'stalled'
-    if lim['budget_usd'] is not None and run['spent_usd'] > lim['budget_usd']:
-        return 'budget'
     return None
 
 
@@ -456,19 +554,14 @@ def stop(run: dict, reason: str) -> dict:
     return run
 
 
-def add_spent(run: dict, usd: float) -> dict:
-    """Add one turn's cost. Callers (session commands) must add each turn exactly once."""
-    require(isinstance(usd, (int, float)) and usd >= 0, 'cost must be a non-negative number')
-    run = copy.deepcopy(run)
-    run['spent_usd'] = run['spent_usd'] + usd
-    return run
-
-
-def summary(run: dict, proposal_digest: str | None, event_count: int, legacy: bool = False) -> dict:
+def summary(run: dict, proposal_digest: str | None, event_count: int, legacy: bool = False,
+            content: str | None = None) -> dict:
+    """The `show` report. `content` is the current set's content digest (None for an incomplete set)."""
     cycle = open_cycle(run)
     turn = run.get('turn')
     return dict(status=run['status'], run_id=run['run_id'], legacy=legacy, proposal_digest_shown=run['proposal_digest_shown'],
-                proposal_digest=proposal_digest, limits=run['limits'], models=models(run), spent_usd=run['spent_usd'],
+                proposal_digest=proposal_digest, content_digest=content, limits=limits(run), models=models(run),
+                effort=effort(run), reviews={kind: last_review(run, kind) for kind in REVIEW_KINDS},
                 stalled_cycles=run['stalled_cycles'], beta_cycles=int(run.get('beta_cycles', 0)), session=run['session'],
                 stopped_reason=run['stopped_reason'], stopped_at=run['stopped_at'],
                 cycle=dict(id=cycle['id'], stage=cycle['stage'], kind=cycle['kind']) if cycle else None,
