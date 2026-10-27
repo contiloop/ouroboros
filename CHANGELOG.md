@@ -1,27 +1,28 @@
 # Changelog
 
-## Unreleased — cycle-aware runtime delegation
+## Unreleased — rebuild from the concept
 
-- Invoke installed Dryforge skills natively: Codex resolves `dryforge:*` via `skills/list` and
-  attaches the selected skill; Claude sends `/dryforge:*` after checking session commands, with
-  optional explicit installed-plugin loading. Remove bundled-procedure text injection from L2.
-  Missing skills reject dispatch before Go start, preserving approval and the existing session.
-
-- Remove the outer L2 role prompt and stage-specific behavior overlays. Pass ordinary caller
-  messages unchanged; keep Dryforge procedure loading and controller-side approval/session checks.
-- Remove CONTRIBUTING, SECURITY and LICENSE files, including packaged license copies and their
-  build requirements. Keep upstream attribution and license metadata; link README license
-  references to the Apache text instead of a removed local file.
-- Separate the human runtime grant from L1's exact per-cycle branch/worktree/archive bindings.
-  Policy v4 distinguishes final integration, cycle feature branches and L3 task branches;
-  old policies retain their scope. Additional in-scope repair tasks are assigned by L1.
-- Keep the same L2 through result rework, acceptance and cleanup. Recheck phase, decisions,
-  exact targets, Git state and the approved document bytes at callback recording and consumption.
-- Preserve approval identity after the three documents move to the pinned archive. Final
-  integration requires the accepted feature commit and unchanged integration target.
-- Add real local Git/SQLite regressions through sibling-task merges, rework, cleanup, final
-  integration and the next Ready. These use synthetic host callbacks/consent, not live model E2E.
-  General protected-metadata and unsupported-command permissions remain host-controlled.
+- Remove the bundled `ready`, `go` and `migration` skills and their build mappings. `src/skills/`
+  now contains `init` and `approve` only; L1 invokes the user's installed Dryforge plugin and
+  reports a missing plugin instead of substituting procedure text.
+- Remove the legacy runtime: the per-call permission classifier and policy versions 1–4, the
+  five-schema intent ledger, the SQLite mailbox, the Claude SDK and Codex app-server adapters, and
+  their tests. Legacy `.dryforge/mission/` ledgers are ignored, not migrated.
+- Add a private run record under the target project's git-ignored `.dryforge/ouroboros/`
+  (`proposal.md`, `run.json`, append-only `events.jsonl`, raw turn results) with explicit limits:
+  max cycles, max stalled cycles and a USD budget or explicit "no cap". Reaching a limit stops the
+  run; a revised proposal approved again resumes it.
+- Run L2 as one persistent headless Claude Code session (`claude -p`, resumed between turns) in
+  the target project, with every host tool pre-allowed by list and the user's deny rules intact.
+  Ready and Go of one cycle use the same session; the session is kept across cycles by default.
+- Delegate fully after `approve`: L1 answers worker questions, approves Ready documents, merges,
+  pushes and spends within the budget without further consent. Clarification is folded in, a scope
+  change is a re-approved proposal applied between cycles, and "stop" aborts immediately.
+- Fold the still-true parts of `docs/MISSION.md` and `docs/RUNTIME_POLICY.md` into `README.md` and
+  delete both files; mark the translated READMEs as pending against the English one.
+- Claude Code is the supported execution host. The Codex package is built and installable, but
+  `approve` reports that no Codex host adapter exists yet. Grok, Agent Plugins and Antigravity
+  packages are format-only. A full unattended run is not yet live-verified.
 
 ## v1.4.1 (2026-10-24) — L1-managed Migration preparation
 

@@ -2,70 +2,64 @@
 
 Ouroboros is a repository of **skill text plus a small Python runtime**, packaged for several
 coding-agent hosts. There is no server, database service or network listener. Everything runs inside
-the user's host session (Claude Code or Codex) or as a local same-user subprocess.
+the user's host session (Claude Code) or as a local same-user subprocess that it starts.
 
 ## Repository topology
 
 ```
 src/skills/            canonical skills (single source of truth)
-   ├── init/           L1 entry: SKILL.md + references/ + scripts/ (the Python runtime lives here)
-   ├── approve/        L1 handoff entry (text only; reuses init's references and scripts)
-   ├── ready/ go/ migration/   bundled Dryforge-derived copies (legacy; slated for removal)
+   ├── init/           L1 entry: SKILL.md + references/ (interview, orchestration, runtime) + scripts/ (the runtime)
+   └── approve/        L1 handoff entry (text only; reuses init's references and scripts)
 platform/<host>/       per-host manifest and overlay inputs (not skills)
 build/build.sh         copies src/skills + platform inputs → five generated packages
 claude/  codex/plugin/  grok/  agent-plugin/  antigravity/   generated packages, committed
 .claude-plugin/ .agents/plugins/ .grok-plugin/ .github/plugin/   marketplace manifests pointing at the packages
 ci/                    unittest suite + verify.py (consistency and reproducible build)
-docs/                  project documentation and the older product docs MISSION.md, RUNTIME_POLICY.md, RESEARCH_MCP_SETUP.md
+docs/                  project documentation for agents and RESEARCH_MCP_SETUP.md
 ```
 
 Dependency direction is strictly `src/skills` → generated packages. Nothing reads from a generated
 package except the host that installs it and `ci/verify.py`, which compares packages back to the
-source. Hosts discover the plugin through a marketplace manifest at the repository root, which points
-at the matching generated package directory.
+source. Hosts discover the plugin through a marketplace manifest at the repository root.
 
-## Runtime components (current implementation)
+## Runtime components
 
 All runtime code sits under `src/skills/init/scripts/` and is copied verbatim into every package.
-It is standard-library Python 3.11+ with one optional third-party dependency.
+It is standard-library Python 3.11+ (POSIX), structured as ports and adapters:
 
 | Component | Role | Depends on |
 | --- | --- | --- |
-| `mission_state.py` | Append-only JSON ledger of the user's intent, approval, cycles, decisions and runtime grants. Pure state machine with a CLI (`draft`, `apply`, `show`, `digest`, `migration-digest`, and the legacy `init` that creates an ACTIVE ledger directly). | `runtime_permissions`, `runtime_cycle`, `migration_artifacts` (lazy imports for validation) |
-| `worker_runtime.py` | CLI controller for an external L2 session: `start/resume/stop/status/send/answer/wait/events`. Spawns a detached `__serve` process per worker. | `runtime_bridge` |
-| `runtime_bridge/store.py` | SQLite mailbox (`messages`, `requests`, `events`, `workers`) under `.dryforge/mission/runtime/`. Idempotent message IDs, single-controller OS lock, record/consume double check of delegated answers. | sqlite3, fcntl |
-| `runtime_bridge/controller.py` | The serve loop: claims queued messages, re-validates ledger binding at dispatch, forwards to the host adapter, relays questions/permissions back as pending requests, records the `go` event immediately before sending Go. | `store`, `adapters`, `mission_state`, `runtime_permissions` |
-| `runtime_bridge/adapters.py` | Host transports. `ClaudeAdapter` drives `claude-agent-sdk` (resume by session ID, hooks, `can_use_tool` callback). `CodexAdapter` speaks newline-JSON-RPC to `codex app-server --listen stdio://` (thread/turn lifecycle, child-thread tracking, `skills/list` resolution). | `store` |
-| `runtime_permissions.py`, `runtime_git.py`, `runtime_cycle.py`, `runtime_merge.py` | Classifier for delegated tool requests: maps a host callback (Claude tool input or Codex approval request) to one named operation and an observed scope, validated against a human-granted policy object (versions 1–4) and real Git state (worktree registration, index digest, branch ancestry). | git CLI |
-| `migration_artifacts.py` | Which paths count as documentation for a delegated Migration and how to digest them. | — |
+| `ouroboros_cli.py` | The one entry point L1 calls. Sixteen commands: record (doctor, draft, shown, show, approve, cycle-start, cycle-stage, evaluate, event, stop, archive) and session (start, send, wait, status, stop); JSON on stdout, `BLOCKED` + exit 2 on refusal, a refusal never changes state. Every command takes `--workspace` and `--owner`. | `ouroboros.core`, `ouroboros.store`, `ouroboros.adapters` |
+| `ouroboros/core.py` | Pure rules over the run record: proposal parsing (required sections, limits), shown/approve/amend digest rules, cycle open/stage/evaluate, stalled and limit accounting, stop, summary. Functions take a record and return a new one; nothing touches disk. | — |
+| `ouroboros/store.py` | The private directory `<workspace>/.dryforge/ouroboros/`: 0700/0600 modes, the `git check-ignore` guard, the transactional `fcntl` lock, the owner record, `events.jsonl` appends, payload spill to `turns/`, archive of finished runs. | git CLI |
+| `ouroboros/ports.py` | `HostSession` protocol (`start`, `send`, `alive`, `terminate`, `result`, `doctor`) and the `Turn` value (pid + raw output path). The only thing the CLI knows about a host. | — |
+| `ouroboros/adapters/claude.py` | The Claude Code implementation: builds `claude -p … --output-format json [--resume id] --allowedTools … --max-turns N`, launches it detached through `/bin/sh` so the exit code survives, parses the JSON result, terminates a process group, parses `claude plugin list` for `doctor`. Tunables are module constants. | `claude` CLI |
+| `ouroboros/adapters/__init__.py` | `for_host(name)` lookup; `claude` is the only host today. | — |
 
-### Representative flow: one cycle through the external runtime
+### One cycle through the runtime
 
 ```
-L1 (host session)                controller (__serve)                 host adapter            L2
- │ worker_runtime start ──────▶ create worker row, spawn serve ──▶ connect (SDK / app-server) ─▶ session id
- │ mission_state apply start    bind real session id
- │ worker_runtime send --kind ready --ledger … --cycle c1
- │                              validate binding (ACTIVE, stage, same session)
- │                              resolve installed skill (slash_commands / skills/list)
- │                              prompt = "/dryforge:ready <goal>" or "$dryforge:ready" + skill input
- │                              ──────────────────────────────────▶ run turn ───────────────▶ Ready
- │ wait --id … ◀── pending request (question / permission) ◀── relay() ◀── can_use_tool / requestApproval
- │ answer --request-id … (principal L1 or human, basis) ─▶ store.answer → take_answer rechecks → host resumes
- │ result --id … ◀── TURN_COMPLETE (text, session id)
- │ mission_state apply ready/approve (digest of handoff.md+spec.md+plan.md)
- │ send --kind go  ── controller re-validates docs digest, records `go` event, then dispatches
+L1 (user's Claude Code session)                      ouroboros_cli.py                      claude -p (L2, detached)
+ │ cycle-start --kind development …        ──▶ run.json: cycle c1 open, stage ready
+ │ session-start --skill ready --message m ──▶ launch `/dryforge:ready <m>` [--resume id] ──▶ turns/1.json, 1.err, 1.exit
+ │ session-wait  (run as a background shell command; L1 ends its turn)
+ │   ◀── parsed result {state, session_id, text, cost_usd, permission_denials} ◀── process exit
+ │ session-send --message answer           ──▶ `--resume <id>` turn 2 …
+ │ cycle-stage --stage go --ready-digest d ──▶ run.json
+ │ session-start --skill go --message m    ──▶ `/dryforge:go <m>` in the same session
+ │ cycle-stage --stage review --checkpoint c; evaluate --decision CONTINUE --basis b
 ```
 
-The ledger (`state.json`) and the mailbox (`mailbox.sqlite3`) are the only persistent state; both
-live under the target project's git-ignored `.dryforge/mission/`. Nothing is written into the
-Ouroboros repository at runtime.
+The record (`run.json`, `events.jsonl`, `turns/`) is the only persistent state and lives under the
+target project's git-ignored `.dryforge/ouroboros/`. Nothing is written into the Ouroboros
+repository at runtime, and the legacy `.dryforge/mission/` directory is never read.
 
-### Native path
+### Why a headless process and not a subagent
 
-When the host itself can hold a persistent L2 session (Claude Code subagents, Codex native
-threads), L1 may skip `worker_runtime.py` entirely and drive Dryforge through the host's own
-mechanism. The ledger is still the record of intent and decisions in that case.
+Installed Dryforge skills are user-invocable only; a Claude Code subagent cannot see them and has no
+question tool. A headless `claude -p` process receives `/dryforge:<kind>` as its user message, so the
+host loads the real skill, and `--resume` keeps one session across Ready, Go and later cycles
+(decision 0008).
 
 ## Packaging topology
 
@@ -79,16 +73,15 @@ mechanism. The ledger is still the record of intent and decisions in that case.
 | `agent-plugin/` | `disable-model-invocation: true` only; Agent Plugins 1.0 manifest | `.github/plugin/marketplace.json` |
 | `antigravity/` | byte-identical skills + `rules/invocation.md` manual-only rule | manifest with `$schema`, `name`, `description` only |
 
-Only Claude Code and Codex are supported execution hosts. The other three packages are produced
-for format compatibility; nothing in the runtime targets them.
+Claude Code is the only execution host with an adapter. The Codex package installs and its `init`
+works (it only writes the draft), but `approve` reports the missing adapter. The other three packages
+are produced for format compatibility only.
 
 ## External dependencies
 
 | Dependency | Used by | Required? |
 | --- | --- | --- |
-| git ≥ any modern version | runtime (workspace must be a git root), verify.py, Dryforge itself | yes |
-| Python 3.11+ (POSIX) | all scripts, tests | yes |
-| Installed Dryforge plugin on the L2 host | every cycle | yes |
-| `claude-agent-sdk==0.2.173` | `ClaudeAdapter` only | optional, user-installed |
-| `codex` CLI with `app-server` | `CodexAdapter` only | optional, user-installed |
-| Grep MCP, Context7 MCP | Dryforge's research stage | optional |
+| git | runtime (workspace must be a git root with `.dryforge/` ignored), verify.py, Dryforge itself | yes |
+| Python 3.11+ (POSIX `fcntl`) | all scripts, tests | yes |
+| `claude` CLI 2.1+ with the Dryforge plugin installed and enabled | every cycle (checked by `doctor`) | yes, on the execution host |
+| Grep MCP, Context7 MCP | Dryforge's research stage inside L2 | optional |

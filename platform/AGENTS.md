@@ -28,9 +28,9 @@ built).
   `interface`, `onboardingSkill`.
 - Every `codex/skills/<name>/agents/openai.yaml` has `policy:\n  allow_implicit_invocation: false`,
   an `interface` with `display_name`, and mentions `Ouroboros` but never `Dryforge`.
-- One `openai.yaml` must exist for every directory in `src/skills/`; a new skill without it fails
-  the build. Removing a skill means removing its overlay too, or `verify.py` reports a skills
-  mismatch.
+- One `openai.yaml` must exist for every directory in `src/skills/` (today `init` and `approve`);
+  a new skill without it fails the build. Removing a skill means removing its overlay too, or
+  `verify.py` reports a skills mismatch.
 - `antigravity/rules/invocation.md` must keep the three phrases `verify.py` checks: "Only invoke an
   ouroboros skill when the user explicitly enters", "Do not select or invoke ouroboros from semantic
   similarity", "Without an explicit ouroboros slash command".

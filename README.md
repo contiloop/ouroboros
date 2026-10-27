@@ -1,70 +1,79 @@
 # ⟲ Ouroboros
 
-Talk through what you want. Hand over the work when you are ready.
+Talk through what you want. Hand over the work once.
 
-Ouroboros keeps an agent, **L1**, in conversation with you while it manages development. You refine the goal together, approve the proposed scope, and let L1 run and review Ready–Go cycles until the agreed outcome is met. You can keep talking to L1 while it works.
+Ouroboros puts one agent, **L1**, in charge of a development goal inside your coding-agent session. You refine the goal together, approve the proposal once, and L1 runs Dryforge Ready–Go cycles in a persistent worker session until the goal is met. After approval L1 decides everything the goal requires; you can keep talking to it, and you can stop it at any time.
 
 [한국어](README_ko.md) · [日本語](README_ja.md) · [中文](README_zh.md)
 
 ## Start with a conversation
 
-| Codex | Claude Code | What happens |
-| --- | --- | --- |
-| `$ouroboros:init` | `/ouroboros:init` | Start talking with L1. Refine the outcome, completion criteria, constraints and decisions you want to delegate. The proposal remains editable; development cycles have not started. |
-| `$ouroboros:approve` | `/ouroboros:approve` | Approve the proposal you reviewed. L1 takes responsibility for planning cycles, answering worker questions, reviewing Ready documents, running Go and checking results. |
+| Command | What happens |
+| --- | --- |
+| `/ouroboros:init` | Start or continue talking with L1. Together you settle the goal, observable completion criteria, constraints, priorities, non-goals, the judgment you delegate, the workspace, and explicit limits. The proposal stays editable; no cycle runs. |
+| `/ouroboros:approve` | Approve the proposal exactly as it was last shown. From here L1 owns execution and never asks for consent again. |
 
-For example, start with: “I want a local memo CLI that keeps my notes between runs. Help me work out the details.” Continue the conversation until the proposal matches your intent, then invoke `approve`.
+For example, start with: “I want a local memo CLI that keeps my notes between runs. Help me work out the details.” Continue until the proposal matches your intent, then invoke `/ouroboros:approve`.
 
-Approval is a handoff, not the end of the conversation. L1 incorporates further clarification within the agreed scope and discusses the impact of changes that need a new decision. It handles already delegated decisions without asking you to approve each cycle or routine tool request again.
+Every proposal states its **limits**: a maximum number of cycles, a maximum number of stalled cycles, and a spend budget in USD (a number, or your explicit choice of “no cap”). `approve` refuses an incomplete proposal, and if the proposal file changed after it was shown, `approve` shows the diff and records nothing.
+
+### After approval
+
+Approval is a handoff, not the end of the conversation.
+
+- **L1 decides everything the goal requires.** It answers every worker question, approves Ready documents, allows worker tool requests, merges, pushes, tags, releases and spends within the stated budget. No category of action is reserved for you during execution; L1 records its decisions as its own and never presents them as yours.
+- **Clarification is folded in.** Anything within the agreed scope goes into the next message to the worker or the next cycle.
+- **A scope change is a new proposal.** If the goal, completion criteria, constraints, priorities or non-goals change, L1 shows the revised proposal and you approve it again with `/ouroboros:approve`. The amendment takes effect between cycles.
+- **“Stop” aborts immediately.** L1 terminates the running worker, records the run as stopped and lists what was left half-done for you to inspect. It cleans nothing up on abort.
+- **Limits end the run.** When the cycle limit, the stalled-cycle limit or the budget is reached, L1 reports and stops. A revised proposal, approved again, resumes it.
+
+Nothing executes before `approve`. Before it, L1 only reads the project and edits the draft.
 
 ## The cycle
 
-After the handoff, L1 invokes the installed **Dryforge Ready and Go skills**. Codex uses `$dryforge:ready` / `$dryforge:go` with native skill attachments; Claude Code uses `/dryforge:ready` / `/dryforge:go`:
+L1 runs each cycle through the **installed Dryforge plugin**. Ouroboros ships no copy of Dryforge; if the plugin is missing or disabled, L1 reports that and starts nothing.
 
-1. **L1 creates an L2 agent session and requests Ready.** It supplies the cycle goal and relevant user intent. The Ready skill does not itself create the agent.
-2. **L2 follows Dryforge Ready.** It investigates existing solutions and prepares the specification, plan and handoff documents. L2 asks L1 its questions; L1 answers from the user's intent and delegated authority. Decisions lacking sufficient grounding or authority return to the user.
-3. **L1 reviews Ready and requests Go in the same L2 session.** It asks for revisions where needed, approves the actual documents when satisfactory, then hands Dryforge Go to the agent that retains the Ready context.
-4. **L2 carries out Go implementation and verification.** It works directly or creates L3 agents for scoped assignments as the procedure requires. It gathers tests and independent review and reports the result to L1.
-5. **L1 evaluates the result against the overall goal.** It requests corrections, chooses the next cycle or reports completion with evidence.
+1. **L1 chooses one bounded outcome** from the approved intent, the previous checkpoints and the remaining completion criteria, and records the cycle start.
+2. **L1 sends `/dryforge:ready` to the L2 worker session** with the cycle goal, the relevant requirements and decisions from the proposal, the project path and the checkpoint, as ordinary caller text. When L2 asks a question, L1 answers it from the proposal and its own judgment and records the basis.
+3. **L1 reviews the actual Ready documents** (`handoff.md`, `spec.md`, `plan.md` in the target project, not L2's summary), sends corrections back, and on approval sends `/dryforge:go` **in the same session**.
+4. **L2 implements and verifies** under Dryforge Go, directly or through the L3 task agents Dryforge creates, and reports back.
+5. **L1 reviews the result**: requirement coverage, that the project's verification actually ran, independent review evidence and open issues. In-scope corrections go back to the same session. Acceptance lets L2 finish Dryforge's archive, integration and cleanup; L1 records the resulting commit as the checkpoint.
+6. **L1 evaluates**: `CONTINUE`, `REPLAN`, `ESCALATE` or `COMPLETE`. `COMPLETE` requires evidence for every completion criterion. A finished cycle is not a finished goal.
 
-Your `ouroboros:approve` hands responsibility to L1. The later Ready approval is L1's review of a particular cycle's documents. A finished cycle is not automatically a finished goal.
+The L2 session is kept across cycles by default. L1 starts a fresh session when there is none, after a `REPLAN`, when the recorded session cannot be resumed, or when its context is near the limit; every session change is recorded with its reason. On an interruption L1 inspects the workspace and documents and resumes the **same** session; uncertain writes are never replayed.
 
-For an existing codebase that needs initial project documentation, L1 can first assign **Dryforge Migration** (`dryforge:migration`) within the approved scope. L1 answers its questions, reviews the documents and independent review, and arranges the accepted checkpoint. Migration writes documentation; it does not implement product code or commit by itself. Ready–Go then starts in a fresh worker session. New or already prepared projects skip this step. [Migration operation](src/skills/init/references/orchestration.md#migration)
+For an existing codebase without project documentation for agents, L1 can first run Dryforge Migration in a fresh session within the approved scope, then start Ready–Go in another fresh session. Migration writes documentation only. The full loop is described in [the L1 procedure](src/skills/init/references/orchestration.md).
 
 ## Architecture
 
 ```mermaid
 flowchart TB
     U["You"]
-    L1["L1 agent<br/>Intent · answers · approvals · outcome evaluation"]
-    L2["L2 agent · same session<br/>Dryforge Ready → Dryforge Go<br/>Plan · implement · verify · delegate"]
-    L3["L3 agents<br/>Scoped research · implementation · independent review"]
-    U <-->|"Ongoing conversation"| L1
-    L1 -->|"Create session · request Ready<br/>Answer questions · approve and request Go"| L2
+    L1["L1 agent · your Claude Code session<br/>Intent · answers · approvals · evaluation"]
+    L2["L2 · one headless Claude Code session<br/>/dryforge:ready → /dryforge:go<br/>Plan · implement · verify · delegate"]
+    L3["L3 · Dryforge task agents<br/>Scoped research · implementation · independent review"]
+    U <-->|"Ongoing conversation · one approval · stop"| L1
+    L1 -->|"Ready request · answers · Go request"| L2
     L2 -->|"Questions · Ready documents · Go results"| L1
-    L2 -->|"Create as needed · assign tasks"| L3
+    L2 -->|"Create as needed"| L3
     L3 -->|"Task results · review evidence"| L2
 ```
 
 | Layer | Responsibility |
 | --- | --- |
-| **L1 — Your conversation partner and execution owner** | Understand and preserve your intent. Create L2, request Ready, answer questions, approve documents and request Go in the same L2 session. Evaluate results and select the next cycle. |
-| **L2 — The main agent running Dryforge Ready and Go** | Carry out one cycle in the same session, including direct implementation and verification. Exchange questions and approvals with L1, manage any L3 agents and own the cycle's result. |
-| **L3 — Task agents managed by L2** | Perform assigned research, implementation or review and return results to L2. Independent reviewers use a separate context from implementers. |
+| **L1 — your conversation partner and execution owner** | Runs in your session. Holds the proposal, creates and resumes L2, invokes installed Dryforge, answers questions, approves documents, accepts results, evaluates the goal, enforces the limits. |
+| **L2 — the Dryforge worker** | One persistent headless Claude Code session (`claude -p`, resumed between turns) in the target project. Runs Ready and Go of one cycle in the same session. Sees only an ordinary caller; nothing in its messages mentions Ouroboros, L1, the run record or you. |
+| **L3 — Dryforge's task agents** | Created and managed by L2 under Dryforge's own rules. L1 never manages L3 directly. |
 
-L2 also implements code. Under the existing Dryforge Go rules, it directly implements a single `MECHANICAL`/`NONE` task and delegates parallel or `RISKY` work to task agents. Direct implementation retains the required independent review. Keeping Ready and Go in the same session lets design context from Ready inform implementation decisions.
+**Permissions.** L2 gets every tool the host exposes pre-allowed by list (built-in tools and MCP tools); there is no bypass flag, so your deny rules, hooks and project settings still apply to L2 exactly as to a human caller. A denied tool call shows up in the turn result and L1 treats it as a result to act on, never as a question to relay to you. Ouroboros is not a sandbox: tests, Git hooks and package scripts run with your privileges, so use it in a trusted checkout.
 
-L1 fills the ordinary user's role for L2. L2 creates and manages its task agents; L1 does not directly manage individual L3 agents.
-
-Ready, Go and their task agents use the ordinary caller interface. They do not need a special workflow based on whether the caller is a person or L1. Routing, delegated authority and approval records belong to the outer runtime.
-
-Interviewing is part of L1's conversation with you. Its instructions can evolve without adding another agent or another user-facing stage. After a cycle, L1 can reuse a suitable worker session or start a fresh one with the accepted checkpoint.
+**Private records.** Each run lives in the target project's git-ignored `.dryforge/ouroboros/`: the proposal as shown, `run.json` (status, approvals, limits, spend, session, cycles) and an append-only `events.jsonl` with the actor of every decision (`human`, `L1`, `L2`, `host`). `init` adds `.dryforge/` to the project's `.gitignore` if it is missing. These records are never committed.
 
 ## Try it
 
 ### Claude Code
 
-Load the plugin from a checkout containing the `init` and `approve` skills:
+Claude Code is the supported execution host. Install and enable Dryforge, then load the plugin from a checkout:
 
 ```bash
 git clone --depth 1 https://github.com/contiloop/ouroboros.git ~/ouroboros
@@ -76,43 +85,35 @@ Use `/ouroboros:init`, talk through the proposal, then use `/ouroboros:approve`.
 
 ### Codex
 
-Register this checkout through Codex's local marketplace flow using `.agents/plugins/marketplace.json`, which points to `codex/plugin/`. Enable the `ouroboros` plugin, then select **`$ouroboros:init`** followed by **`$ouroboros:approve`** when the proposal is ready.
+The Codex package (`codex/plugin/`, registered through `.agents/plugins/marketplace.json`) is built and installable, and `$ouroboros:init` holds the conversation. There is no Codex host adapter yet: `$ouroboros:approve` reports that and starts no run.
 
-Install and enable Dryforge for the host running L2 as well. The L1 loop invokes that installed
-plugin; the bundled `ouroboros:ready` / `ouroboros:go` copies are not its backend.
-For external Claude workers, see the explicit plugin-loading option in [runtime setup](src/skills/init/references/runtime-bridge.md).
+### Other packages
 
-### Other workflows and packages
-
-For a single cycle you supervise directly, use `ouroboros:ready` followed by `ouroboros:go`. The `migration` skill onboards an existing project into the development workflow; replacing a worker does not require it.
-
-The repository also generates packages for Grok, Agent Plugins and Antigravity. Packaging support and live execution support are separate: the host must provide the sessions, task agents and decision relay needed for the workflow.
+The repository also generates packages for Grok, Agent Plugins and Antigravity. They are format-only: valid to install, with no execution support.
 
 **Optional research tools:** Grep MCP and Context7 MCP help with public code search and library documentation. Neither is required or automatically installed. See [MCP setup](docs/RESEARCH_MCP_SETUP.md).
 
 ## Current status
 
-Ouroboros is experimental. The implementation includes the conversation draft and approval handoff, cycle and permission checks, and an optional runtime bridge for Claude SDK and Codex App Server sessions. Automated checks cover state transitions, transport behavior and package consistency.
+Ouroboros is experimental and is being rebuilt from its concept. The current implementation covers the `init` conversation, the `approve` handoff, the private run record with its limits and amendments, and the headless Claude Code worker. Automated tests cover run-record transitions, the worker command line and result parsing against a fake `claude`, skill-text contracts and package consistency; they never call a live model.
 
-On Codex, live checks have confirmed discovery of the new commands and L1 handling a child approval after the parent turn ends. A complete fresh `init → approve → Ready–Go → final outcome` run is still unverified. Formal goal amendments currently commit at evaluated cycle boundaries; further conversation remains available during a cycle.
+A complete unattended `init → approve → cycles → COMPLETE` run on Claude Code is **not yet live-verified**. See [docs/tracking/status.md](docs/tracking/status.md) for what is built, what is verified and what remains.
 
 ## Guides and development
 
-- [Conversation, handoff and cycle operation](docs/MISSION.md)
-- [Persistent sessions and runtime setup](src/skills/init/references/runtime-bridge.md)
-- [Delegated execution scope](src/skills/init/references/runtime-bridge.md#execution-scope)
+- [Business rules](docs/business-rules.md) — vocabulary, lifecycle, invariants, edge cases
+- [Security](docs/security.md) — trust model and authority after approval
+- [Architecture](docs/architecture.md) and [operations](docs/operations.md)
 
-`src/skills/` is the source of truth. It contains `init`, `approve`, `ready`, `go` and `migration`. The five platform packages are generated from it using `build/build.sh`.
+`src/skills/` is the source of truth. It contains `init` and `approve` only; the five platform packages are generated from it with `build/build.sh` and never edited by hand.
 
 ```bash
-PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s ci -p 'test_*.py'
+TMPDIR=/private/tmp PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s ci -p 'test_*.py'
 bash build/build.sh
 # Commit source and generated outputs before the clean-tree reproducibility check.
-python3 ci/verify.py
+python3 -B ci/verify.py
 ```
 
 ## Credits and license
 
-Ouroboros builds on [Dryforge](https://github.com/prekuter/dryforge) by **prekuter** under [Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0). Ouroboros is maintained as an independent project; its source includes code and procedures derived from Dryforge. The original [English](README.upstream.md) and [Korean](README_ko.upstream.md) READMEs are preserved for reference.
-
-Existing `.dryforge/` state paths and internal mission identifiers are retained for compatibility. The public `mission` command has been replaced by `init` and `approve`; existing run records are not reset by that change.
+Ouroboros builds on [Dryforge](https://github.com/prekuter/dryforge) by **prekuter** under [Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0). Ouroboros is an independent project that invokes the user's installed Dryforge; it no longer ships Dryforge-derived skills. The original [English](README.upstream.md) and [Korean](README_ko.upstream.md) READMEs are preserved for reference.

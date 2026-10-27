@@ -3,8 +3,7 @@
 Ouroboros is a coding-agent plugin that puts one agent, **L1**, in charge of a user's development
 goal: L1 talks with the user until the goal is clear, takes a single approval, and then runs
 development cycles through an installed **Dryforge** worker until the goal is met. The shipped
-runtime still enforces human-only operations and per-call tool policies; that enforcement is legacy
-and is being removed, so the behavior below is the one the code must converge on.
+runtime implements exactly the behavior below.
 
 ## Vocabulary
 
@@ -12,7 +11,7 @@ and is being removed, so the behavior below is the one the code must converge on
 | --- | --- |
 | **User** | The human who owns the goal. Talks only to L1. Never talks to L2/L3 directly. |
 | **L1** | The Ouroboros agent. The user's continuing counterpart and the owner of execution after approval. Runs in the user's host session (Claude Code or Codex). |
-| **L2** | A Dryforge main-agent session that L1 creates for one cycle. Runs Dryforge Ready, then Dryforge Go, in the *same* session. May implement directly or spawn L3. |
+| **L2** | A headless Claude Code session that L1 creates in the target project and keeps across cycles. Runs Dryforge Ready, then Dryforge Go, in the *same* session. May implement directly or spawn L3. |
 | **L3** | Task agents (implementers, researchers, independent reviewers) that L2 creates under Dryforge's own rules. L1 never manages L3 directly. |
 | **Dryforge** | A separately installed plugin providing the `ready`, `go` and `migration` skills. Ouroboros invokes the *installed* copy through the host's native skill mechanism. Ouroboros does not ship, patch or substitute its own copy. |
 | **Proposal** | The editable statement of goal, completion evidence, constraints, delegated judgment, workspace and execution scope that L1 builds with the user during `init`. |
@@ -50,7 +49,7 @@ init  ──(conversation, revisable)──▶  Proposal  ──approve──▶
 
 ### Delegation after approval — **full, with no exceptions**
 - Once the user has approved, **L1 holds complete authority to finish the goal.** It answers every
-  worker question, approves Ready documents, grants every tool/permission request a worker raises,
+  worker question, approves Ready documents, acts on any permission denial a turn reports,
   merges, pushes, tags, and performs any other action the goal requires. The user is not asked to
   confirm individual cycles, tool calls, merges or releases.
 - The user's role during execution is to receive progress and results and to add clarification.
@@ -64,9 +63,10 @@ init  ──(conversation, revisable)──▶  Proposal  ──approve──▶
 ### Running a cycle
 1. **Choose work.** From the approved intent, prior checkpoints and remaining criteria, L1 selects a
    bounded outcome that advances at least one completion criterion. One cycle targets one repository.
-2. **Prepare L2.** L1 creates (or, after an evaluated cycle, reuses) an L2 session that can run
-   installed Dryforge skills, relay questions back to L1, spawn L3 agents, and access the workspace.
-   L1 records the real session identity; a process ID or a one-shot summary is not a session.
+2. **Prepare L2.** L1 continues the run's recorded L2 session by default; it starts a fresh one
+   only when none exists, after REPLAN, when the session cannot be resumed, when its context is near
+   its limit, or for Migration. L1 records the real session identity; a process ID or a one-shot
+   summary is not a session.
 3. **Ready.** L1 explicitly invokes the installed Dryforge `ready` skill in L2 with the cycle goal,
    relevant original requirements and decisions, project path and checkpoint. L2 asks questions; L1
    answers them from the user's intent.
@@ -124,5 +124,7 @@ init  ──(conversation, revisable)──▶  Proposal  ──approve──▶
 | Installed Dryforge skill not found in L2's host | Report the missing capability to the user; do not start Go; keep the existing session. |
 | L2 asks a question outside the approved scope | L1 decides under full delegation if the goal still determines the answer; brings it to the user only if the goal itself is ambiguous. |
 | A cycle ends with failing tests | Not acceptable; L1 requests rework in the same L2 or replans. |
-| Cycle limit or stall limit reached | L1 reports and stops; the limits are those stated in the proposal. |
-| Worker session lost mid-cycle | Reconcile effects, resume the same session if the host supports it; otherwise explicit replacement with handoff of the checkpoint and decisions. |
+| Cycle limit, stall limit or budget reached | L1 reports and the run is STOPPED; the limits are those stated in the proposal. A revised proposal approved again resumes it. |
+| Worker session lost mid-cycle | Reconcile effects, resume the same session; otherwise explicit, recorded replacement with the checkpoint and decisions. |
+| User asks to stop | The running turn is killed at once, the run is STOPPED with its last stage and checkpoint, half-done branches and worktrees are listed, nothing is cleaned up. `approve` again (same or revised proposal) resumes it; `archive` then `init` starts a different goal. |
+| Project without `.dryforge/` in `.gitignore` at `init` | L1 appends that one line (uncommitted) and says so; the only pre-approval write outside `.dryforge/`. |

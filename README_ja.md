@@ -6,6 +6,8 @@ Ouroboros では **L1** がユーザーとの対話を続けながら開発全�
 
 [English](README.md) · [한국어](README_ko.md) · [中文](README_zh.md)
 
+> この翻訳が更新されるまでは、[英語版 README](README.md) が現在の基準文書です。
+
 ## 使い方
 
 | Codex | Claude Code | 動作 |
@@ -23,7 +25,7 @@ Ouroboros では **L1** がユーザーとの対話を続けながら開発全�
 
 既存の Go 規則に従い、単一の `MECHANICAL`/`NONE` タスクは L2 が直接実装し、並列または `RISKY` な作業は下位エージェントに委任します。必要な独立レビューは維持します。同じセッションを使うことで、Ready の設計コンテキストを実装時の判断に引き継げます。
 
-L1 はインストール済みの Dryforge スキルを呼び出します。Codex では `$dryforge:ready`・`$dryforge:go` とスキル添付、Claude Code では `/dryforge:ready`・`/dryforge:go` を使います。L2 セッションを作るのは L1 であり、Ready スキル自体ではありません。L1 は L2 に対して通常のユーザーの役割を担い、個々の L3 の管理は L2 が担当します。L1 が判断できない意図や委任範囲外の決定はユーザーに確認します。一つのサイクルの完了が、全体の目標達成とは限りません。
+L1 はインストール済みの Dryforge スキルを呼び出します。Claude Code では `/dryforge:ready`・`/dryforge:go` を使います。Ouroboros は Dryforge の複製を同梱せず、未インストールなら L1 がそれを報告して何も開始しません。L2 セッションを作るのは L1 であり、Ready スキル自体ではありません。L1 は L2 に対して通常のユーザーの役割を担い、個々の L3 の管理は L2 が担当します。L1 が判断できない意図や委任範囲外の決定はユーザーに確認します。一つのサイクルの完了が、全体の目標達成とは限りません。
 
 Ready・Go とその作業者は、呼び出し元が人間か L1 かによって手順を変えません。インタビューは L1 との対話の一部であり、別のエージェントや追加の利用手順ではありません。
 
@@ -31,12 +33,12 @@ Ready・Go とその作業者は、呼び出し元が人間か L1 かによっ�
 
 ## インストールと現在の状態
 
-[英語のセットアップ手順](README.md#try-it)に従ってプラグインを読み込みます。Claude Code では `/ouroboros:init` → `/ouroboros:approve`、Codex では `$ouroboros:init` → `$ouroboros:approve` を使います。直接監督する単一サイクルには `ready` と `go` も利用できます。
+[英語のセットアップ手順](README.md#try-it)に従ってプラグインを読み込みます。Claude Code では `/ouroboros:init` → `/ouroboros:approve`、Codex 用のホストアダプターは未実装で、`$ouroboros:approve` はその旨を報告して実行を開始しません。
 
-実験版です。草案と承認の状態管理、サイクル・権限チェック、Claude SDK / Codex App Server 用の実行接続を含みます。Codex では新しいコマンドの認識と、親ターン終了後の子エージェントへの承認中継を確認済みです。新規セッションから最終目標までの完全な実機検証は未完了です。正式な目標変更は現在、評価済みのサイクル境界で反映します。
+実験版で、概念から作り直している途中です。草案と承認の状態管理、非公開の実行記録、Claude Code のヘッドレス作業セッションを含みます。Claude Code で `init → approve → サイクル → 最終目標` まで無人で完走する実機検証は未完了です。正式な目標変更は現在、評価済みのサイクル境界で反映します。
 
-Grep MCP と Context7 MCP は任意（Optional）の調査ツールです。[MCP 設定](docs/RESEARCH_MCP_SETUP.md)、[対話とサイクル運用](docs/MISSION.md)も参照してください。
+Grep MCP と Context7 MCP は任意（Optional）の調査ツールです。[MCP 設定](docs/RESEARCH_MCP_SETUP.md)も参照してください。
 
 ## 原著作者とライセンス
 
-Ouroboros は **prekuter** による [Dryforge](https://github.com/prekuter/dryforge) を基にした独立プロジェクトで、[Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0) に従います。既存の `.dryforge/` 記録は維持します。公開 `mission` コマンドは `init` と `approve` に置き換わりましたが、既存の実行記録はリセットしません。
+Ouroboros は **prekuter** による [Dryforge](https://github.com/prekuter/dryforge) を基にした独立プロジェクトで、[Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0) に従います。

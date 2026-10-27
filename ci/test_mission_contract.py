@@ -1,10 +1,15 @@
-"""Packaging and authored policy checks, separate from live agent execution."""
+"""Packaging and authored policy checks for the skill text, separate from live agent execution."""
 import unittest
 from pathlib import Path
-from skill_text import skill_text
 
 ROOT=Path(__file__).resolve().parents[1]
 PACKAGES=('claude/skills','codex/plugin/skills','grok/skills','agent-plugin/skills','antigravity/skills')
+SKILL_TEXT=('init/SKILL.md','approve/SKILL.md','init/references/interview.md',
+            'init/references/orchestration.md','init/references/runtime.md')
+
+
+def text(rel):
+    return (ROOT/'src/skills'/rel).read_text(encoding='utf-8')
 
 
 class MissionContractTest(unittest.TestCase):
@@ -14,42 +19,42 @@ class MissionContractTest(unittest.TestCase):
             self.assertFalse((root/'mission').exists())
             self.assertTrue((root/'init/SKILL.md').is_file())
             self.assertTrue((root/'approve/SKILL.md').is_file())
-        init = (ROOT/'src/skills/init/SKILL.md').read_text()
-        approve = (ROOT/'src/skills/approve/SKILL.md').read_text()
-        self.assertIn('references/interview.md', init)
-        self.assertIn('Do not launch cycle workers', init)
-        self.assertIn('expected_proposal_digest', approve)
-        self.assertIn('../init/references/orchestration.md', approve)
-        self.assertIn('conversation remains open', init)
+            for legacy in ('ready','go','migration'):
+                self.assertFalse((root/legacy).exists(), f'{package}/{legacy} must not ship')
+        init=text('init/SKILL.md')
+        for s in ('references/interview.md','references/runtime.md','.gitignore','Do not start any worker session','conversation stays open'):
+            self.assertIn(s,init)
+        approve=text('approve/SKILL.md')
+        for s in ('exactly as last shown','../init/references/orchestration.md','no further consent','Codex'):
+            self.assertIn(s,approve)
 
-    def test_mission_is_one_cycle_not_a_sector_loop(self):
-        t=(ROOT/'src/skills/init/references/orchestration.md').read_text()
-        for s in ('one ready-go cycle','L1 chooses the next cycle','same L2 session','REUSE','SPAWN','migration','CONTINUE','REPLAN','ESCALATE','COMPLETE'):
+    def test_loop_vocabulary_and_commands(self):
+        t=text('init/references/orchestration.md')
+        for s in ('/dryforge:ready','/dryforge:go','/dryforge:migration','same','session-wait','background',
+                  'CONTINUE','REPLAN','ESCALATE','COMPLETE','session-stop','stop --reason abort','doctor',
+                  '--fresh','cycle-start','evaluate','$CLAUDE_PID'):
             self.assertIn(s,t)
+        r=text('init/references/runtime.md')
+        for cmd in ('doctor','draft','shown','show','approve','cycle-start','cycle-stage','evaluate','event',
+                    'stop','archive','session-start','session-send','session-wait','session-status','session-stop'):
+            self.assertIn(f'`{cmd}',r)
+        self.assertIn('budget',text('init/references/interview.md'))
 
-    def test_ready_go_do_not_identify_their_decision_provider(self):
-        for skill in ('ready','go'):
-            t=(ROOT/f'src/skills/{skill}/SKILL.md').read_text()
-            self.assertIn('## Caller interface',t)
-            self.assertNotIn('../init/references/cycle-contract.md',t)
-            self.assertNotIn('Mission mode',t)
-            self.assertNotIn('L1',t)
+    def test_legacy_wording_is_gone(self):
+        for rel in SKILL_TEXT:
+            t=text(rel)
+            for s in ('human-only','runtime_policy','bind_runtime','worker_runtime.py','mission_state.py',
+                      'runtime-bridge.md','ouroboros:ready','ouroboros:go','bundled','policy v','SDK',
+                      'bypassPermissions','dangerously-skip'):
+                self.assertNotIn(s,t,f'{rel} still mentions {s!r}')
 
-    def test_go_lifecycle_preserves_original_dispatch(self):
-        t=skill_text(ROOT/'src/skills/go/SKILL.md')
-        for s in ('agent-lifecycle.md','single-task `MECHANICAL`/`NONE`','single `RISKY`','≤8','Final review'):
-            self.assertIn(s,t)
-        t=(ROOT/'src/skills/go/references/agent-lifecycle.md').read_text()
-        for s in ('RESUME','SPAWN','FRESH_REVIEW','same task','worktree pool','negative feasibility'):
-            self.assertIn(s,t)
-
-    def test_no_auto_approval_hook_claim(self):
-        t=(ROOT/'src/skills/init/references/runtime-bridge.md').read_text()
-        self.assertIn('No auto-go-on-stop hook',t)
-        self.assertIn('SDK controller',t)
-        self.assertIn('scripts/worker_runtime.py',t)
-        self.assertIn('not certified',t)
-        self.assertIn('AskUserQuestion',t)
+    def test_frontmatter_has_no_host_keys(self):
+        for rel in ('init/SKILL.md','approve/SKILL.md'):
+            head=text(rel).split('---')[1]
+            self.assertIn('name: '+rel.split('/')[0],head)
+            self.assertIn('description:',head)
+            for key in ('allowed-tools','disable-model-invocation'):
+                self.assertNotIn(key,head)
 
     def test_platform_mission_files_identical(self):
         source=ROOT/'src/skills/init'
@@ -59,33 +64,6 @@ class MissionContractTest(unittest.TestCase):
                 target=ROOT/package/'init'/f.relative_to(source)
                 with self.subTest(path=str(target)):
                     self.assertEqual(f.read_bytes(),target.read_bytes())
-
-    def test_lifecycle_and_modified_references_mirrored(self):
-        for rel in ('go/references/agent-lifecycle.md','go/references/orchestration.md',
-                    'go/references/implementer-prompt.md','go/references/reviewer-prompt.md'):
-            for package in PACKAGES:
-                self.assertEqual((ROOT/'src/skills'/rel).read_bytes(),(ROOT/package/rel).read_bytes())
-
-    def test_readmes_link_mission_and_keep_optional_mcp(self):
-        for language in ('','_ko'):
-            t=(ROOT/f'README{language}.md').read_text()
-            for token in ('/init','docs/MISSION.md','Context7 MCP','Grep MCP','Optional'):
-                self.assertIn(token.lower(),t.lower())
-
-    def test_preserved_workflows_are_loaded_and_mirrored(self):
-        for skill in ('ready','go'):
-            entry=(ROOT/f'src/skills/{skill}/SKILL.md').read_text()
-            self.assertIn('Force-load the complete `references/workflow.md`',entry)
-            source=(ROOT/f'src/skills/{skill}/references/workflow.md').read_bytes()
-            for package in PACKAGES:
-                self.assertEqual(source,(ROOT/package/skill/'references/workflow.md').read_bytes())
-
-    def test_packaged_cli_is_runnable(self):
-        import subprocess
-        import sys
-        for package in PACKAGES:
-            result=subprocess.run([sys.executable,str(ROOT/package/'init/scripts/mission_state.py'),'--help'],capture_output=True,text=True)
-            self.assertEqual(result.returncode,0,result.stderr)
 
 
 if __name__=='__main__':unittest.main()
