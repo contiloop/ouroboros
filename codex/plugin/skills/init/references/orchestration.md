@@ -32,12 +32,15 @@ started. Never paste Dryforge procedure text or substitute another procedure.
 4. **Wait.** Every turn runs detached. Run `session-wait` as a background shell command, end your
    turn with a one-line progress note for the user, and continue when the host tells you the wait
    finished. Then read the parsed result (`state`, `text`, `permission_denials`, `cost_usd`).
-   - a question in the text → answer it from the proposal and your own judgment with
-     `session-send`, and record it: `event --actor L1 --kind answer`;
+   - a question in the text → record it (`event --actor L2 --kind question`), answer it from the
+     proposal and your own judgment with `session-send`, and record the answer with its basis
+     (`event --actor L1 --kind answer`);
    - `COMPLETE` but the stage is not finished (turn limit, no question) → send a short continue
      message;
    - `INTERRUPTED` → inspect the workspace and `.dryforge/` of the target, then resume the same
-     session with `session-send`; replacing the session is a recorded decision (`--fresh`);
+     session with `session-send` and record `event --actor L1 --kind resume` with what you found;
+     replacing the session is a recorded decision: `session-start --skill <stage> --fresh
+     --reason <why>`, which re-sends `/dryforge:<stage>` to a new session;
    - a permission denial is part of the result: decide the next message yourself, never ask the
      user to allow anything;
    - `run_status: STOPPED` → the turn's cost took the run over its budget; report it and stop.

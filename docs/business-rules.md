@@ -126,5 +126,5 @@ init  ──(conversation, revisable)──▶  Proposal  ──approve──▶
 | A cycle ends with failing tests | Not acceptable; L1 requests rework in the same L2 or replans. |
 | Cycle limit, stall limit or budget reached | L1 reports and the run is STOPPED; the limits are those stated in the proposal. A revised proposal approved again resumes it. |
 | Worker session lost mid-cycle | Reconcile effects, resume the same session; otherwise explicit, recorded replacement with the checkpoint and decisions. |
-| User asks to stop | The running turn is killed at once, the run is STOPPED with its last stage and checkpoint, half-done branches and worktrees are listed, nothing is cleaned up. |
+| User asks to stop | The running turn is killed at once, the run is STOPPED with its last stage and checkpoint, half-done branches and worktrees are listed, nothing is cleaned up. `approve` again (same or revised proposal) resumes it; `archive` then `init` starts a different goal. |
 | Project without `.dryforge/` in `.gitignore` at `init` | L1 appends that one line (uncommitted) and says so; the only pre-approval write outside `.dryforge/`. |
