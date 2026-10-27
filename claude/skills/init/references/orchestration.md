@@ -1,75 +1,77 @@
 # L1 execution
 
-You own the user's goal across cycles. Act as the caller of ordinary Dryforge skills: choose work,
-answer questions, review outcomes and continue until the goal is met. L2 is the Dryforge main
-agent assigned **one ready-go cycle**; it may implement or delegate to L3. L2 controls L3.
-Paths below resolve from the init skill root. Read conditional references only when needed.
+You own the user's goal across cycles. You act as the ordinary caller of the installed Dryforge
+skills: choose work, create and keep one worker session (**L2**), answer its questions, review its
+documents and results, and continue until every completion criterion has evidence. L2 is a
+headless Claude Code session in the target project; it runs Dryforge Ready and Go in the same
+session and manages its own task agents (**L3**). You never manage L3 directly. All record and
+session commands are in `runtime.md`; every command takes `--workspace <git root>` and
+`--owner <pid>` where the pid is this host process (`$CLAUDE_PID` on Claude Code).
 
-## Run the loop
+## Preconditions (once per run)
 
-1. **Choose work.** Read the approved intent, original decisions, accepted checkpoint and remaining
-   limits. Select a bounded outcome advancing a success criterion, one cycle per working repository.
-   Use the accepted branch/commit; an unmerged feature is unavailable in a checkout of main.
-   An existing project needing initial harness preparation uses Migration below within delegated scope. New or already prepared projects go directly to Ready.
-2. **Prepare L2.** Verify persistent session identity, question/approval relay, installed skills,
-   L3 tools, workspace access and enforceable limits. Use native sessions when supported; otherwise
-   consult `references/runtime-bridge.md` for `scripts/worker_runtime.py`. If neither works, report
-   the missing capability; never auto-install clients or weaken permissions. Record the real ID.
-   REUSE only after a completed, evaluated cycle with children quiescent and verified context
-   headroom; otherwise SPAWN with the accepted checkpoint. Keep the same L2 session throughout
-   Ready, Go, corrections, result acceptance and cleanup.
-3. **Request Ready.** Send the cycle goal, relevant original requirements/decisions, project path
-   and checkpoint/harness pointers. Explicitly invoke the installed skill as below. Give L2 ordinary
-   caller messages; keep L1 identity, private state and approval bookkeeping outside its prompt.
-4. **Decide and approve.** Answer within delegated judgment using user intent and evidence. Research
-   technical unknowns; ask the human only for a consequential decision outside that scope. Read
-   the actual spec, plan and handoff plus independent review evidence. Request corrections or
-   approve their exact combined digest. Changed documents require renewed review. Invoke Go in
-   the same L2 session. For runtime policy v4, bind cycle targets before Go using
-   `references/runtime-bridge.md#execution-scope`; distinguish integration, cycle and task branches.
-5. **Review results.** Check requirement coverage, actual tests, independent review and unresolved
-   issues. Request in-scope corrections through `rework` and an ordinary message to the same L2.
-   Acceptance preserves Dryforge's gates. After acceptance, let that L2 finish authorized archive,
-   integration and cleanup; receive the final commit/branch, archive, checks and child status.
-   Keep raw logs in files. A turn ending or Transport receipts never prove cycle completion.
-6. **Continue.** Record and evaluate the checkpoint: CONTINUE or REPLAN when more work is needed,
-   ESCALATE for a real human boundary, COMPLETE only with evidence for all success criteria.
-   Routine progress updates need no human reply. Enforce the approved cycle/stall/time/cost limits;
-   report unknown telemetry. L1 chooses the next cycle.
+Run `doctor --host claude`. If `claude` is missing or the `dryforge` plugin is not installed and
+enabled, report the missing capability to the user and stop; the run stays `ACTIVE`, nothing is
+started. Never paste Dryforge procedure text or substitute another procedure.
 
-## Invoke installed Dryforge skills
+## The loop
 
-| Host | Ready / Go / Migration |
-| --- | --- |
-| Codex | Resolve `dryforge:<kind>` with workspace `skills/list`; send `$dryforge:<kind>` plus the native `skill` input with its returned name/path and the caller's prompt. |
-| Claude Code | Invoke `/dryforge:<kind> <caller prompt>`; verify the command is available in that session. |
-
-The host loads the skill. Missing skills are a capability gap; do not paste procedure files or
-substitute bundled Ouroboros copies. Session creation does not create a Git worktree. Dryforge
-owns task worktree execution; L1 selects permitted targets when the runtime policy requires it.
+1. **Choose work.** From the approved proposal, prior checkpoints and the remaining criteria,
+   select one bounded outcome in the one workspace that advances at least one criterion. Record it
+   with `cycle-start --kind development --goal <file> --checkpoint <commit>` (`--kind migration`
+   for a Migration cycle). If a previous cycle is still open (for example after an abort that was
+   later resumed), close it first with `evaluate`.
+2. **Session.** Use the recorded session by default; design context carries across cycles. Start
+   a fresh session (`--fresh --reason <why>`) only when there is none, after a `REPLAN`, when the
+   recorded session cannot be resumed, when the last results show the context near its limit, or
+   for Migration (which always gets a fresh session, and the Ready after it another fresh one).
+3. **Ready.** `session-start --skill ready --message <file>` sends `/dryforge:ready` followed by
+   your message, so the host loads the installed skill. The message is ordinary caller text:
+   the cycle goal, the relevant requirements and decisions from the proposal, the project path and
+   checkpoint. Nothing about Ouroboros, L1, the record or approvals goes into it.
+4. **Wait.** Every turn runs detached. Run `session-wait` as a background shell command, end your
+   turn with a one-line progress note for the user, and continue when the host tells you the wait
+   finished. Then read the parsed result (`state`, `text`, `permission_denials`, `cost_usd`).
+   - a question in the text → answer it from the proposal and your own judgment with
+     `session-send`, and record it: `event --actor L1 --kind answer`;
+   - `COMPLETE` but the stage is not finished (turn limit, no question) → send a short continue
+     message;
+   - `INTERRUPTED` → inspect the workspace and `.dryforge/` of the target, then resume the same
+     session with `session-send`; replacing the session is a recorded decision (`--fresh`);
+   - a permission denial is part of the result: decide the next message yourself, never ask the
+     user to allow anything.
+5. **Review Ready.** Read the actual `.dryforge/handoff.md`, `spec.md` and `plan.md` in the target
+   project, not L2's summary. Request corrections with `session-send`. When they are right, record
+   `cycle-stage --stage go --ready-digest <sha256 of the three files>` and send
+   `session-start --skill go --message <file>` (`/dryforge:go`) in the **same** session. Changed
+   documents need a fresh look before Go.
+6. **Review Go.** Check requirement coverage, that the project's verification really ran (output,
+   exit code), independent review evidence and open issues. In-scope corrections go back to the
+   same session. On acceptance let L2 finish Dryforge's own archive, integration and cleanup, then
+   record `cycle-stage --stage review --checkpoint <commit>`. A turn ending proves nothing; Git
+   state and documents do.
+7. **Evaluate.** `evaluate --decision CONTINUE|REPLAN|ESCALATE|COMPLETE --basis <file>`. `COMPLETE`
+   needs evidence for every completion criterion in the basis. `ESCALATE` means a real user
+   decision is needed; say what it is. A finished cycle is not a finished goal. The record stops the
+   run when a limit is reached; report it and stop.
 
 ## Keep intent and execution connected
 
-Continue listening to the user. Apply in-scope clarification without another handoff; review the
-impact of changed goals/authority before dependent work proceeds. Stop affected work when needed
-and preserve unrelated progress. At an evaluated cycle boundary, record a reviewed goal change directly with `amend` and
-the actual human approval. No separate skill request or result protocol is needed.
+Keep listening. In-scope clarification goes into the next message or cycle. A changed goal is a
+proposal revision approved by the user (`interview.md`); it applies at the next cycle boundary.
+When the user asks to stop: `session-stop`, then `stop --reason abort`, and list what was left
+half-done (task branches, worktrees). Clean nothing up on abort.
 
-Use the relevant section of `references/runtime-bridge.md` for state records and tool decisions. Record L1 decisions as L1;
-never turn a worker claim into human approval. Already delegated requests need no new consent.
-Host controls and explicit human-only boundaries still apply.
-
-On interruption, reconcile effects and live children, then resume the recorded L2. Replacing it
-with a summary is a handoff, requiring an explicit abort/replacement decision during an active
-cycle. Do not replay uncertain writes. Context compaction may require rereading approved artifacts;
-a session ID alone does not guarantee memory. A fresh checkout needs accepted Git content and
-explicit transfer of trusted ignored `.dryforge/` state; a new session does not justify Migration.
+Record your decisions as L1 with their basis. Never turn a worker claim into a user approval.
+Already delegated decisions need no new consent. The host's own permission settings remain in
+force for L2 exactly as for a human caller.
 
 ## Migration
 
-When an existing project needs initial harness documentation and preparation is delegated, assign
-installed `dryforge:migration` to a fresh worker. Answer its questions and review the actual docs,
-checks and independent review. Accept the reviewed result, then arrange its authorized Git
-checkpoint separately: Migration itself writes docs, not product code or commits. Reconcile that
-worker and start Ready in a fresh session with the accepted checkpoint. Prepared projects retain
-their harness; a missing ignored marker in another checkout alone does not justify Migration.
+When an existing project has no documentation for agents, run one Migration cycle first:
+`cycle-start --kind migration`, a fresh session, `session-start --skill migration`
+(`/dryforge:migration`), answer its
+questions, review the produced documents and independent review, then arrange the Git checkpoint
+of those documents yourself (Migration writes documentation, not product code, and does not
+commit). Evaluate the cycle, then start Ready in another fresh session. Prepared projects keep
+their documentation; a new checkout alone is no reason to migrate again.

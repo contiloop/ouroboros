@@ -1,13 +1,43 @@
 # Intent conversation
 
-Start from the user's words, corrections and project context. Clarify only uncertainties that
-would materially change the outcome; research technical facts instead of asking for preferences.
-Use concrete examples rather than a fixed questionnaire. Preserve original excerpts alongside
-your interpretation, distinguishing known, tentative and approved decisions.
+Start from the user's words, corrections and the project itself. Build a model of what they are
+trying to achieve, what they value, what constrains them and which facts they have given. Clarify
+only uncertainties that would materially change the outcome; research technical facts instead of
+asking for preferences. Use concrete examples rather than a questionnaire. Lead every question with
+a recommended answer. Keep original excerpts beside your interpretation and distinguish what is
+known, tentative and agreed.
 
-Maintain a revisable goal, observable success criteria, priorities, constraints and non-goals.
-Agree what L1 may decide and what needs the human, including the local execution scope and
-finite guards needed to carry the work through. Present one reviewable handoff for
-`ouroboros:approve`; routine delegated operations should not cause repeated permission questions.
-Keep listening during execution. Future interview methods may replace this procedure while
-preserving the user's intent and control of delegation.
+## The proposal
+
+A markdown file with these `##` sections (all required; `approve` refuses an incomplete one):
+
+| Section | Content |
+| --- | --- |
+| Goal | the intended outcome in the user's terms |
+| Completion criteria | observable evidence that the goal is met; one bullet per criterion |
+| Constraints | what must hold (compatibility, style, platforms, data, time) |
+| Priorities | what wins when criteria compete |
+| Non-goals | what is explicitly out of scope |
+| Delegated judgment | what L1 decides without asking; default: everything after approval |
+| Workspace | absolute path of the target git root (one repository per run) |
+| Limits | `max cycles: N`, `max stalled cycles: N`, `budget usd: <number>` or `budget usd: no cap` |
+
+Add a line about Migration when the project is an existing codebase without documentation for
+agents (L1 will run the installed Dryforge `migration` first).
+
+The limits are the only thing that bounds L1 after approval, so they must be explicit. The run
+stops when the cycle count or the stalled-cycle count reaches its limit, or when summed worker cost
+exceeds the budget; the user can raise a limit by revising the proposal and approving again.
+
+## Showing and recording
+
+Every time the proposal is shown to the user, write it with `draft --proposal <file>` and then run
+`shown`. Approval binds to the shown version: if the file changes afterwards, `approve` shows the
+difference instead of approving.
+
+## While the run is active
+
+The user may keep talking. Clarification inside the agreed scope goes into the next worker message
+or the next cycle with no new approval. A change to goal, completion criteria, constraints,
+priorities or non-goals is a proposal revision: update the file, show it, and the user's next
+`approve` records the amendment, applied at the next cycle boundary.
