@@ -53,7 +53,8 @@ settings and hooks apply to it exactly as to a human caller; no bypass flag is e
 Every event in `events.jsonl` carries its actor (`human`, `L1`, `L2` or `host`), kind, cycle and
 data; L1 records the basis of its decisions in the event data. Kinds written by the runtime: draft,
 shown, approve, amend, amend_applied, cycle_start, cycle_stage, evaluate, stop, archive, session,
-turn, turn_result, interrupt; L1 adds question/answer/decision events with `event`. Raw turn output
+turn, turn_result, interrupt, question, answer, unanswered; L1 adds decision events (and `answer`
+for plain-text questions) with `event`. Raw turn output
 goes to `turns/` and large payloads are referenced by path and SHA-256.
 
 ## Sensitive data

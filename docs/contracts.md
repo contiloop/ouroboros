@@ -88,6 +88,7 @@ reason, cost_total_usd}`, `cycles[] {id, goal, kind, started, session_id, stage,
 ready_digest, evaluation}`, `stopped_reason`, `stopped_at`, `turn_count`, `turn`.
 **Events (`events.jsonl`):** `{time, actor, kind, cycle_id, data}`; kinds written by the CLI:
 `draft`, `shown`, `approve`, `amend`, `amend_applied`, `cycle_start`, `cycle_stage`, `evaluate`,
-`stop`, `archive`, `session`, `turn`, `turn_result`, `interrupt`, plus whatever L1 records with `event`.
+`stop`, `archive`, `session`, `turn`, `turn_result`, `interrupt`, `question`, `answer`, `unanswered`,
+plus whatever L1 records with `event`.
 **Owner (`owner.json`):** `{pid, session_id, started}`; a live foreign pid blocks `draft`, `approve`
 and every `session-*` command; a dead pid is replaced.

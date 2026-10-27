@@ -81,18 +81,26 @@
     value to `spent_usd`, so the run reached 3.89 after turn 2 and went STOPPED `limit:budget`
     although the session had cost 1.99; the proposal was amended to `budget usd: 20`
     (`draft`/`shown`/`approve` → `amended`, ACTIVE, session kept) to finish the procedure. Final
-    `show`: `spent_usd` 5.94 recorded, actual session cost 2.05. Not fixed in this cycle.
+    `show`: `spent_usd` 5.94 recorded, actual session cost 2.05. The runtime now charges each turn
+    the delta against the session's last reported total (`session.cost_total_usd`); the 5.94 figure
+    predates that change.
   - Multi-select and `other` answers: not host-verified.
 
-## Detached turns: the `/bin/sh` wrapper and pid semantics
-- The adapter launches `claude` through `/bin/sh -c 'umask 077; … >N.json 2>N.err; echo $? >N.exit'`
-  in a new session so the exit code survives the short-lived CLI that started it (the umask keeps
-  the three files 0600). The recorded pid is the shell's; `session-stop` signals its process group.
-  `alive()` consults the `.exit` file first: once it exists the turn is over, whatever the pid says;
-  only without it does `os.kill(pid, 0)` decide, so a pid reused by an unrelated process cannot make
-  a finished turn look RUNNING. A killed turn leaves no `.exit` file.
+## Detached turns: the `/bin/sh` wrapper, the relay and pid semantics
+- The adapter launches the relay through `/bin/sh -c 'umask 077; python3 -B relay.py … -- claude …
+  2>>N.err; echo $? >N.exit'` in a new session so the exit code survives the short-lived CLI that
+  started it; the umask keeps every file under `turns/` 0600. The relay is the shell's child and
+  `claude` is the relay's child. `N.json` is written by the relay from the stream's `result` event;
+  `.exit` is written by the shell after the relay exits. The recorded pid is the shell's; `session-stop`
+  signals its process group. `alive()` consults the `.exit` file first: once it exists the turn is
+  over, whatever the pid says; without it the shell pid and then the process group decide, so a pid
+  reused by an unrelated process cannot make a finished turn look RUNNING and a group still being
+  taken down still counts as alive. A killed turn leaves no `.exit` file.
+- Relay take-down signals `claude`'s pid, not the group: claude shares the wrapper's group and a group
+  kill from inside would also kill the shell and lose `.exit`. A grandchild of claude that ignores
+  its parent's death can survive a relay-initiated take-down; `session-stop` kills the whole group.
 - `session-wait` does not hold the record lock while blocking; settlement of a result happens inside
-  a transaction and is idempotent (`turn.cost_recorded`, `turn.state != RUNNING`).
+  a transaction and is idempotent (`turn.cost_recorded`, `turn.state` not in {RUNNING, QUESTION}).
 
 ## Owner pid is the host process, not the CLI
 - Each CLI call is a short-lived process. `--owner` must carry the L1 host's pid (`$CLAUDE_PID` on
