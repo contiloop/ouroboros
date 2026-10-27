@@ -26,4 +26,4 @@ shell command. Tool permission is an allow-list (`--allowedTools` with the built
 - The runtime is a thin port/adapter around the `claude` CLI; a Codex adapter implements the same
   `HostSession` protocol later.
 - A permission denial is part of a turn's result for L1 to act on, never a question for the user.
-- `--owner` must carry the L1 host pid so the second-L1 refusal works (`docs/engineering-notes.md`).
+- `--owner` must carry the L1 host pid: every CLI call is a short-lived process, so recording its own pid would make every owner stale and the second-L1 refusal would never fire.

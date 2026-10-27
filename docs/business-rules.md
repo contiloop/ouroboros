@@ -49,7 +49,7 @@ init  ──(conversation, revisable)──▶  Proposal  ──approve──▶
 
 ### Delegation after approval — **full, with no exceptions**
 - Once the user has approved, **L1 holds complete authority to finish the goal.** It answers every
-  worker question, approves Ready documents, grants every tool/permission request a worker raises,
+  worker question, approves Ready documents, acts on any permission denial a turn reports,
   merges, pushes, tags, and performs any other action the goal requires. The user is not asked to
   confirm individual cycles, tool calls, merges or releases.
 - The user's role during execution is to receive progress and results and to add clarification.

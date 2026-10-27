@@ -15,10 +15,10 @@
   subprocess the user started. There is no network listener, no multi-tenant surface and no
   credential store of its own. The runtime is **not** a sandbox against hostile project code: tests,
   Git hooks and package scripts run with the user's full privileges.
-- **The host's own permission system is the outer boundary.** Ouroboros never bypasses, widens or
-  persistently amends host permissions (no bypass modes, no session-wide allows, no permission-rule
-  updates, no network-permission escalation). When a host callback asks for a decision, Ouroboros
-  answers that exact callback.
+- **The host's own permission system is the outer boundary.** L2 receives a fixed tool allow-list
+  at launch; nothing bypasses, widens or persistently edits host permission rules, and the user's
+  deny rules plus the target project's settings and hooks apply to L2 as to any caller. A denied
+  tool call is part of the turn result for L1 to act on, never a prompt to anyone.
 - **A JSON "principal" field is not authentication.** Records that say a decision came from the
   human or from L1 are bookkeeping for audit, not proof. Anyone who can write to the user's files can
   forge them. The design relies on the host session being the user's.
@@ -29,7 +29,7 @@
 | --- | --- | --- |
 | Before `approve` (draft) | Human only | Conversation, read-only inspection, draft edits. **No** cycle, Migration, Ready or Go. No tool authority beyond reading. |
 | `approve` | Human only | Activates the exact proposal last shown. Cannot be issued by L1, L2 or any worker. |
-| After `approve` (active) | **L1, without exception** | Every action the goal requires: answering worker questions, approving Ready documents, allowing worker tool/permission requests, local Git operations, merge to the integration branch, push, tags, releases, spending within the proposal's stated budget, deleting its own task branches/worktrees. |
+| After `approve` (active) | **L1, without exception** | Every action the goal requires: answering worker questions, approving Ready documents, acting on permission denials reported in turn results, local Git operations, merge to the integration branch, push, tags, releases, spending within the proposal's stated budget, deleting its own task branches/worktrees. |
 | Goal/scope change | Human | Changing goal, completion criteria, constraints, priorities or non-goals is recorded only with the human's approval, between cycles. |
 | Abort of an active cycle | Human | Stopping L1's execution before the goal is met. |
 

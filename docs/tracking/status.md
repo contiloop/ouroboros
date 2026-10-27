@@ -21,16 +21,17 @@ packaging-only.
 | Run record (`run.json`, `events.jsonl`, owner, lock, archive) and record commands | built, unit-tested | `ci/test_run_record.py` (48 tests) |
 | Claude Code host adapter: headless `claude -p` turns, resume, allow-list, parse, stop, doctor | built, unit-tested against a fake `claude`; `doctor` checked once against the real host | `ci/test_claude_adapter.py` (22 tests) |
 | Skill text for the rebuilt loop (`init`, `approve`, interview, orchestration, runtime guide) | written, contract-pinned | `ci/test_mission_contract.py`, `ci/test_runtime_contract.py` |
-| Host facts the design rests on (skill loads headlessly, resume, allow-list behavior) | live-probed once on 2026-10-27 | `docs/engineering-notes.md` |
+| Host facts the design rests on (skill loads headlessly, resume, allow-list behavior) | live-probed once on 2026-10-27 with claude 2.1.311 | probe results recorded in the engineering notes |
 | README and product docs for the new model | done; translations patched minimally | `ci/test_ouroboros_branding.py` |
 | Five-platform build, manifest/version/marketplace validation, reproducible-build check | passes | `build/build.sh`, `ci/verify.py` |
 
 ## Remaining (in order)
 
 1. **Live run on Claude Code:** `init → approve → ≥2 cycles → COMPLETE` with no human input after
-   approve, on a trusted sample project with Dryforge installed. Record the evidence under
-   `.dryforge/verification/` and fold findings into the notes. Expect to tune `MAX_TURNS`, the
-   session-reuse threshold and the proposal wording from what the run shows.
+   approve, on a trusted sample project with Dryforge installed. Record commands, exit codes and
+   observed behavior in the engineering notes and this file. Expect to tune `MAX_TURNS`, when to
+   start a fresh session (the parsed result now carries `usage`), and the proposal wording from what
+   the run shows.
 2. **Codex adapter** behind the same `HostSession` port (`codex exec` or app-server), then a live
    run on Codex.
 3. **Release:** version bump in the five manifests, changelog heading, full rewrites of

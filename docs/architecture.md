@@ -29,7 +29,7 @@ It is standard-library Python 3.11+ (POSIX), structured as ports and adapters:
 
 | Component | Role | Depends on |
 | --- | --- | --- |
-| `ouroboros_cli.py` | The one entry point L1 calls. Sixteen commands (`docs/contracts.md`); JSON on stdout, `BLOCKED` + exit 2 on refusal, a refusal never changes state. Every command takes `--workspace` and `--owner`. | `ouroboros.core`, `ouroboros.store`, `ouroboros.adapters` |
+| `ouroboros_cli.py` | The one entry point L1 calls. Sixteen commands: record (doctor, draft, shown, show, approve, cycle-start, cycle-stage, evaluate, event, stop, archive) and session (start, send, wait, status, stop); JSON on stdout, `BLOCKED` + exit 2 on refusal, a refusal never changes state. Every command takes `--workspace` and `--owner`. | `ouroboros.core`, `ouroboros.store`, `ouroboros.adapters` |
 | `ouroboros/core.py` | Pure rules over the run record: proposal parsing (required sections, limits), shown/approve/amend digest rules, cycle open/stage/evaluate, stalled and limit accounting, stop, summary. Functions take a record and return a new one; nothing touches disk. | — |
 | `ouroboros/store.py` | The private directory `<workspace>/.dryforge/ouroboros/`: 0700/0600 modes, the `git check-ignore` guard, the transactional `fcntl` lock, the owner record, `events.jsonl` appends, payload spill to `turns/`, archive of finished runs. | git CLI |
 | `ouroboros/ports.py` | `HostSession` protocol (`start`, `send`, `alive`, `terminate`, `result`, `doctor`) and the `Turn` value (pid + raw output path). The only thing the CLI knows about a host. | — |
