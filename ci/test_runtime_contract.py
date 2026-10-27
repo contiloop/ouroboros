@@ -8,7 +8,7 @@ ROOT=Path(__file__).resolve().parents[1]
 PACKAGES=('claude/skills','codex/plugin/skills','grok/skills','agent-plugin/skills','antigravity/skills')
 SCRIPTS=('scripts/ouroboros_cli.py','scripts/ouroboros/__init__.py','scripts/ouroboros/core.py',
          'scripts/ouroboros/store.py','scripts/ouroboros/ports.py','scripts/ouroboros/adapters/__init__.py',
-         'scripts/ouroboros/adapters/claude.py')
+         'scripts/ouroboros/adapters/claude.py','scripts/ouroboros/relay.py')
 
 
 class RuntimeContractTests(unittest.TestCase):
