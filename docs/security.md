@@ -32,7 +32,7 @@
 | Before `approve` (draft) | Human only | Conversation, read-only inspection, draft edits. **No** cycle, Migration, Ready or Go. No tool authority beyond reading. |
 | `approve` | Human only | Activates the exact proposal set last shown. Cannot be issued by L1, L2 or any worker. |
 | After `approve` (active) | **L1, without exception** | Every action the goal requires: answering worker questions, approving Ready documents, acting on permission denials reported in turn results, local Git operations, merge to the integration branch, push, tags, releases, spending within the stated budget, deleting its own task branches/worktrees. The one thing L1 asks of the human afterwards is a **verification only a human can make** during the beta test (a visual check, a device, an external account), raised as ESCALATE and recorded as `verified`; it is not a consent and grants nothing. |
-| Goal/scope change | Human | Changing goal, completion criteria, constraints, priorities or non-goals is recorded only with the human's approval, between cycles. |
+| Goal/scope change | Human | Changing the scenarios, validation items, the product's shape, delegation, models or limits is recorded only with the human's approval (a revised set approved again). |
 | Abort of an active cycle | Human | Stopping L1's execution before the goal is met. |
 
 **Explicitly not allowed, at any stage:**

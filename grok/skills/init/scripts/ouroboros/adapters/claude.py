@@ -47,6 +47,7 @@ SUBAGENT_MODEL_VAR = 'CLAUDE_CODE_SUBAGENT_MODEL'
 DEFAULT_MODEL = 'default'
 
 
+# Twin of core.models(): the adapter must not import core, so the default fallback is repeated here.
 def turn_models(models: dict | None) -> dict:
     """The `{l2, l3}` names applied to one turn; a missing or empty entry is `default`."""
     found = models or {}

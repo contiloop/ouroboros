@@ -23,7 +23,7 @@ runtime implements exactly the behavior below.
 ## Lifecycle
 
 ```
-init  ──(conversation, revisable)──▶  Proposal  ──approve──▶  ACTIVE  ──cycles──▶  COMPLETE
+init  ──(interview, revisable)──▶  Proposal set  ──approve──▶  ACTIVE  ──work graph · cycles · beta test──▶  COMPLETE
                                                                   │
                                                                   └─ user may keep talking; L1 folds in-scope clarification into work
 ```
@@ -104,7 +104,7 @@ shown to the user as progress, never as a question.
 ### The beta test
 When every node is done, L1 opens a **beta cycle** (no worker turns; not counted toward `max
 cycles`) and runs the scenarios end to end itself, as the user would: for each validation item the
-Evidence check, or the efficient check from `spec.md` for slow/hard items, recording each result as a
+Evidence check, or the efficient check from `.dryforge/ouroboros/spec.md` for slow/hard items, recording each result as a
 `beta` event. An item only a human can check (visual, device, external account) is raised as
 ESCALATE naming the exact check; the user's answer is recorded as a `verified` event and the beta
 test continues in a new beta cycle (this ESCALATE is not a stalled cycle). A failed item leads to
@@ -143,9 +143,9 @@ the worker process so Dryforge's task agents use it; `default` means the host's 
   a capability gap to report, not a reason to paste procedure text into a prompt.
 - **Evidence over claims.** Acceptance, completion and recovery decisions rest on actual documents,
   actual test output, actual Git state and independent review, never on a worker's self-report.
-- **Intent changes commit at cycle boundaries.** An approved change to goal, completion criteria,
-  constraints, priorities or non-goals is recorded once, between cycles, with the user's actual
-  approval. In-scope clarification during a cycle needs no such record.
+- **Intent changes are approved revisions.** A change to the scenarios, validation items, the
+  product's shape, delegation, models or limits is recorded once, with the user's actual approval;
+  limits and models apply at the next check or turn, content changes shape the next cycle. In-scope clarification during a cycle needs no such record.
 
 ## Edge cases
 

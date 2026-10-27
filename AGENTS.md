@@ -6,7 +6,7 @@ validation, spec, delegation), `approve`
 is the single human handoff, and from then on L1 plans a work graph, runs installed-Dryforge
 Ready–Go cycles in one persistent headless worker session, and finally beta-tests the result
 itself. Small repository: skill text under
-`src/skills/`, ~1.1k lines of standard-library Python runtime (run record + Claude Code adapter), a
+`src/skills/`, ~2k lines of standard-library Python runtime (run record, relay, Claude Code adapter), a
 bash build that emits five host packages, and a unittest suite. Maintained by one person;
 experimental; rebuilt from its concept on 2026-10-27, live run still pending (see
 `docs/tracking/status.md`).

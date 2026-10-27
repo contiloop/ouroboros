@@ -70,20 +70,22 @@ def cmd_draft(store: Store, a) -> dict:
     with store.transaction():
         check_owner(store, a.owner)
         run = store.read_run() if store.has_run() else None
-        if run is not None and store.is_legacy():
+        legacy = run is not None and store.is_legacy()
+        if legacy:
             require(run['status'] != 'ACTIVE',
                     'legacy single-file run is ACTIVE; stop it first (stop --reason abort), then draft')
-            store.archive(run)
-            run = None
-        elif run is not None and run['status'] == 'COMPLETE':
+        starts_new = run is None or legacy or run['status'] == 'COMPLETE'
+        if starts_new:
+            # Every refusal comes before the archive so a refused draft changes nothing.
+            missing = [_flag(n) for n in PROPOSAL_FILES if n not in parts]
+            require(not missing, 'a new draft needs all four files; missing ' + ', '.join(missing))
+        if starts_new and run is not None:
             store.archive(run)
             run = None
         if run is not None:
             run = core.redraft(run)
             store.clear_shown()
         else:
-            missing = [_flag(n) for n in PROPOSAL_FILES if n not in parts]
-            require(not missing, 'a new draft needs all four files; missing ' + ', '.join(missing))
             run = core.new_run(str(store.workspace))
         store.write_owner(a.owner)
         store.write_set(parts)
@@ -106,7 +108,6 @@ def _proposed(store: Store) -> dict:
 
 
 def cmd_shown(store: Store, a) -> dict:
-    _proposed(store)
     with store.transaction():
         run = store.read_run()
         parts = _proposed(store)

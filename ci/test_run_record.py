@@ -370,6 +370,28 @@ class DraftTests(Base):
         self.assertEqual(kinds[-1], 'archive')
         self.assertEqual(self.ws.kinds(), ['draft'])
 
+    def test_subset_draft_on_a_complete_run_is_refused_and_changes_nothing(self):
+        self.ws.approve_fresh()
+        self.ws.start_cycle(kind='beta')
+        self.ws.evaluate('COMPLETE')
+        before = self.ws.record()
+        kinds = self.ws.kinds()
+        out = self.ws.blocked('draft', *self.ws.draft_args({'scenario.md': proposal_set()['scenario.md']}))
+        self.assertIn('a new draft needs all four files', out['error'])
+        self.assertEqual(self.ws.record(), before)
+        self.assertEqual(self.ws.kinds(), kinds)
+        self.assertFalse((self.ws.private / 'archive').exists())
+
+    def test_subset_draft_on_a_legacy_record_is_refused_and_changes_nothing(self):
+        self.ws.approve_fresh()
+        self.ws.make_legacy('STOPPED')
+        before = (self.ws.private / 'run.json').read_text()
+        out = self.ws.blocked('draft', *self.ws.draft_args({'spec.md': proposal_set()['spec.md']}))
+        self.assertIn('a new draft needs all four files', out['error'])
+        self.assertEqual((self.ws.private / 'run.json').read_text(), before)
+        self.assertTrue((self.ws.private / 'proposal.md').is_file())
+        self.assertFalse((self.ws.private / 'archive').exists())
+
     def test_archive_then_draft_starts_a_different_goal_after_a_stop(self):
         self.ws.approve_fresh()
         self.ws.ok('stop', '--reason', 'abort')

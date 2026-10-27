@@ -36,7 +36,8 @@ nodes:
 One node = one cycle (Ready → Go). Every workflow label and every validation item belongs to at
 least one node; tell the user about any that do not (information, not a question). If the node
 count exceeds `max cycles` in `delegation.md`, say so before starting; the limits still apply as
-written. Show the graph to the user once, then start the loop. This file is the only document you
+written. Show the graph to the user once it is written and again whenever its nodes or statuses
+change, then start the loop. This file is the only document you
 edit on your own after approval; a change to the four documents is a revision the user approves
 (`interview.md`). Keep `status` current: `active` at `cycle-start`, `done` or `replanned` at
 `evaluate`; a REPLAN or a failed beta test adds or rewrites nodes.
@@ -59,7 +60,7 @@ edit on your own after approval; a change to the four documents is a revision th
    scenarios this node serves, quoted from `scenario.md`; the validation items it must satisfy,
    quoted from `validation.md` with their evidence expectations, and the request that the worker
    verify them as part of its work and leave the evidence in the project; the outline blocks it
-   touches, from `spec.md`; what earlier nodes delivered and the checkpoint. Never quote
+   touches, from `.dryforge/ouroboros/spec.md`; what earlier nodes delivered and the checkpoint. Never quote
    `delegation.md`, the record, or anything about Ouroboros, L1 or approvals. The models in
    `delegation.md` are applied by the runtime (`--model` for L2, the subagent model for L3) on every
    turn.
@@ -109,7 +110,7 @@ You are the user's stand-in: run the result the way the scenarios describe and j
    (`session-start`/`session-send` are refused while it is open) and does not count toward
    `max cycles`.
 2. For each item in `validation.md`, in the workspace, run the Evidence check yourself (for a
-   `slow/hard` item, the efficient check from `spec.md`). Record each result with
+   `slow/hard` item, the efficient check from `.dryforge/ouroboros/spec.md`). Record each result with
    `event --actor L1 --kind beta --data <file>` holding `{item, command, exit_code, observed, verdict}`.
 3. An item you cannot execute (something only a human can see or hold: a visual check, a device, an
    external account) → `evaluate --decision ESCALATE --basis <file>` naming those items and the

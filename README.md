@@ -36,12 +36,12 @@ Nothing executes before `approve`. Before it, L1 only reads the project and edit
 
 L1 runs each cycle through the **installed Dryforge plugin**. Ouroboros ships no copy of Dryforge; if the plugin is missing or disabled, L1 reports that and starts nothing.
 
-1. **L1 chooses one bounded outcome** from the approved intent, the previous checkpoints and the remaining completion criteria, and records the cycle start.
-2. **L1 sends `/dryforge:ready` to the L2 worker session** with the cycle goal, the relevant requirements and decisions from the proposal, the project path and the checkpoint, as ordinary caller text. When L2 asks a question, L1 answers it from the proposal and its own judgment and records the basis.
+1. **L1 takes the next node of its work graph** whose dependencies are done, and records the cycle start.
+2. **L1 sends `/dryforge:ready` to the L2 worker session** with the node's goal and the scenarios, workflow and validation items it serves, quoted, plus the project path and the checkpoint, as ordinary caller text. When L2 asks a question, L1 answers it from the proposal and its own judgment and records the basis.
 3. **L1 reviews the actual Ready documents** (`handoff.md`, `spec.md`, `plan.md` in the target project, not L2's summary), sends corrections back, and on approval sends `/dryforge:go` **in the same session**.
 4. **L2 implements and verifies** under Dryforge Go, directly or through the L3 task agents Dryforge creates, and reports back.
 5. **L1 reviews the result**: requirement coverage, that the project's verification actually ran, independent review evidence and open issues. In-scope corrections go back to the same session. Acceptance lets L2 finish Dryforge's archive, integration and cleanup; L1 records the resulting commit as the checkpoint.
-6. **L1 evaluates**: `CONTINUE`, `REPLAN`, `ESCALATE` or `COMPLETE`. `COMPLETE` requires evidence for every completion criterion. A finished cycle is not a finished goal.
+6. **L1 evaluates**: `CONTINUE`, `REPLAN` or `ESCALATE`, and updates the node. A finished node is not a finished goal: `COMPLETE` is the evaluation of the beta cycle in which L1 has run the scenarios itself and every validation item has a verdict.
 
 The L2 session is kept across cycles by default. L1 starts a fresh session when there is none, after a `REPLAN`, when the recorded session cannot be resumed, or when its context is near the limit; every session change is recorded with its reason. On an interruption L1 inspects the workspace and documents and resumes the **same** session; uncertain writes are never replayed.
 
