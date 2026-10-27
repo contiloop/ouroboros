@@ -32,8 +32,9 @@ It is standard-library Python 3.11+ (POSIX), structured as ports and adapters:
 | `ouroboros_cli.py` | The one entry point L1 calls. Sixteen commands: record (doctor, draft, shown, show, approve, cycle-start, cycle-stage, evaluate, event, stop, archive) and session (start, send, wait, status, stop); JSON on stdout, `BLOCKED` + exit 2 on refusal, a refusal never changes state. Every command takes `--workspace` and `--owner`. | `ouroboros.core`, `ouroboros.store`, `ouroboros.adapters` |
 | `ouroboros/core.py` | Pure rules over the run record: proposal parsing (required sections, limits), shown/approve/amend digest rules, cycle open/stage/evaluate, stalled and limit accounting, stop, summary. Functions take a record and return a new one; nothing touches disk. | — |
 | `ouroboros/store.py` | The private directory `<workspace>/.dryforge/ouroboros/`: 0700/0600 modes, the `git check-ignore` guard, the transactional `fcntl` lock, the owner record, `events.jsonl` appends, payload spill to `turns/`, archive of finished runs. | git CLI |
-| `ouroboros/ports.py` | `HostSession` protocol (`start`, `send`, `alive`, `terminate`, `result`, `doctor`) and the `Turn` value (pid + raw output path). The only thing the CLI knows about a host. | — |
-| `ouroboros/adapters/claude.py` | The Claude Code implementation: builds `claude -p … --output-format json [--resume id] --allowedTools … --max-turns N`, launches it detached through `/bin/sh` so the exit code survives, parses the JSON result, terminates a process group, parses `claude plugin list` for `doctor`. Tunables are module constants. | `claude` CLI |
+| `ouroboros/ports.py` | `HostSession` protocol (`start`, `send`, `alive`, `terminate`, `result`, `questions`, `answer`, `session_id`, `doctor`) and the `Turn` value (pid + raw output path). The only thing the CLI knows about a host. | — |
+| `ouroboros/adapters/claude.py` | The Claude Code implementation: builds `claude -p --input-format stream-json --output-format stream-json --verbose --permission-prompt-tool stdio [--resume id] --allowedTools … --max-turns N`, launches the relay detached through `/bin/sh` so the exit code survives, reads open questions and results from the turn files, terminates a process group, parses `claude plugin list` for `doctor`. Tunables are module constants; `AskUserQuestion` is deliberately absent from the allow-list so it reaches the channel. | `claude` CLI, `relay.py` |
+| `ouroboros/relay.py` | One per turn, standard library only, run by path. Spawns `claude`, sends the user message on stdin, mirrors every stream event to `turns/<n>.stream.jsonl`, writes `turns/<n>.init.json`, turns each AskUserQuestion request into `turns/<n>.q<k>.json` and waits (no tokens spent) for `turns/<n>.a<k>.json`, allows every other permission request at once (`turns/<n>.auto.json`), writes the final result to `turns/<n>.json`, owns claude's lifetime. | `claude` CLI |
 | `ouroboros/adapters/__init__.py` | `for_host(name)` lookup; `claude` is the only host today. | — |
 
 ### One cycle through the runtime
@@ -43,8 +44,11 @@ L1 (user's Claude Code session)                      ouroboros_cli.py           
  │ cycle-start --kind development …        ──▶ run.json: cycle c1 open, stage ready
  │ session-start --skill ready --message m ──▶ launch `/dryforge:ready <m>` [--resume id] ──▶ turns/1.json, 1.err, 1.exit
  │ session-wait  (run as a background shell command; L1 ends its turn)
- │   ◀── parsed result {state, session_id, text, cost_usd, permission_denials} ◀── process exit
- │ session-send --message answer           ──▶ `--resume <id>` turn 2 …
+ │   ◀── {state: QUESTION, round 1, questions[…]}      ◀── relay wrote turns/1.q1.json (claude waits)
+ │ session-answer --answers a.json          ──▶ turns/1.a1.json ──▶ relay sends the control response
+ │ session-wait  (background again)
+ │   ◀── parsed result {state, session_id, text, cost_usd, …} ◀── process exit
+ │ session-send --message m2               ──▶ `--resume <id>` turn 2 …
  │ cycle-stage --stage go --ready-digest d ──▶ run.json
  │ session-start --skill go --message m    ──▶ `/dryforge:go <m>` in the same session
  │ cycle-stage --stage review --checkpoint c; evaluate --decision CONTINUE --basis b
@@ -55,6 +59,7 @@ target project's git-ignored `.dryforge/ouroboros/`. Nothing is written into the
 repository at runtime, and the legacy `.dryforge/mission/` directory is never read.
 
 ### Why a headless process and not a subagent
+
 
 Installed Dryforge skills are user-invocable only; a Claude Code subagent cannot see them and has no
 question tool. A headless `claude -p` process receives `/dryforge:<kind>` as its user message, so the
@@ -85,3 +90,10 @@ are produced for format compatibility only.
 | Python 3.11+ (POSIX `fcntl`) | all scripts, tests | yes |
 | `claude` CLI 2.1+ with the Dryforge plugin installed and enabled | every cycle (checked by `doctor`) | yes, on the execution host |
 | Grep MCP, Context7 MCP | Dryforge's research stage inside L2 | optional |
+
+### Why the streaming control channel
+
+Structured questions work because the session is started through the streaming control channel
+with the stdio permission-prompt tool: the question tool exists in that mode, its calls arrive as
+control requests, and the relay answers them from L1's answer file (decision 0009). The same channel
+carries permission requests for tools outside the allow-list; the relay allows those automatically.

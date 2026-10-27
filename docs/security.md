@@ -15,10 +15,12 @@
   subprocess the user started. There is no network listener, no multi-tenant surface and no
   credential store of its own. The runtime is **not** a sandbox against hostile project code: tests,
   Git hooks and package scripts run with the user's full privileges.
-- **The host's own permission system is the outer boundary.** L2 receives a fixed tool allow-list
-  at launch; nothing bypasses, widens or persistently edits host permission rules, and the user's
-  deny rules plus the target project's settings and hooks apply to L2 as to any caller. A denied
-  tool call is part of the turn result for L1 to act on, never a prompt to anyone.
+- **The host's own permission system is the outer boundary.** L2 receives a tool allow-list at
+  launch, and any permission request that still reaches the control channel is allowed by the relay
+  at once and recorded. In effect L2 may use every tool except those the user's deny rules forbid:
+  deny rules, the target project's settings and hooks apply to L2 as to any caller and are the real
+  boundary; nothing bypasses or persistently edits host permission rules. Structured questions from
+  the worker travel the same channel and are answered by L1, never by a human.
 - **A JSON "principal" field is not authentication.** Records that say a decision came from the
   human or from L1 are bookkeeping for audit, not proof. Anyone who can write to the user's files can
   forge them. The design relies on the host session being the user's.
@@ -40,17 +42,19 @@
 - Writing private run records (`.dryforge/`) into Git.
 
 **How the worker gets its authority.** L2 is a headless Claude Code process started in the target
-project with every built-in and MCP tool pre-allowed by list (`--allowedTools`). The user's own deny
-rules and the target project's settings and hooks apply to it exactly as to a human caller; no
-bypass flag is ever used (decision 0008). A denied call appears in the turn result and is L1's to
-handle, never a question for the user.
+project through the streaming control channel, with the built-in and MCP tools pre-allowed by list
+(`--allowedTools`) and every remaining permission request allowed automatically by the relay and
+listed in the turn result (`auto_allowed`). The user's own deny rules and the target project's
+settings and hooks apply to it exactly as to a human caller; no bypass flag is ever used (decisions
+0008, 0009). The worker's structured questions reach L1 as `QUESTION` results and L1 answers them.
 
 ## Audit
 
 Every event in `events.jsonl` carries its actor (`human`, `L1`, `L2` or `host`), kind, cycle and
 data; L1 records the basis of its decisions in the event data. Kinds written by the runtime: draft,
 shown, approve, amend, amend_applied, cycle_start, cycle_stage, evaluate, stop, archive, session,
-turn, turn_result, interrupt; L1 adds question/answer/decision events with `event`. Raw turn output
+turn, turn_result, interrupt, question, answer, unanswered; L1 adds decision events (and `answer`
+for plain-text questions) with `event`. Raw turn output
 goes to `turns/` and large payloads are referenced by path and SHA-256.
 
 ## Sensitive data

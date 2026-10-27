@@ -31,10 +31,16 @@ started. Never paste Dryforge procedure text or substitute another procedure.
    checkpoint. Nothing about Ouroboros, L1, the record or approvals goes into it.
 4. **Wait.** Every turn runs detached. Run `session-wait` as a background shell command, end your
    turn with a one-line progress note for the user, and continue when the host tells you the wait
-   finished. Then read the parsed result (`state`, `text`, `permission_denials`, `cost_usd`).
-   - a question in the text → record it (`event --actor L2 --kind question`), answer it from the
-     proposal and your own judgment with `session-send`, and record the answer with its basis
-     (`event --actor L1 --kind answer`);
+   finished. The wait ends either when the turn finishes or when the worker asks a question. Read
+   the result (`state`, `text`, `questions`, `permission_denials`, `cost_usd`).
+   - `QUESTION` → the worker asked with its question tool; the result carries the questions, each
+     with its options. Choose from the proposal and your own judgment, write a JSON object mapping
+     each question text to a label (a list of labels for a multi-select question, or
+     `{"other": "<your text>"}`), run `session-answer --answers <file> --basis <file>` with your
+     reasons, then `session-wait` again. The question and your answer are recorded automatically.
+     A turn may ask several times; answer each round the same way;
+   - a question in plain text (`COMPLETE` with a question in `text`) → answer it with
+     `session-send` and record the basis with `event --actor L1 --kind answer`;
    - `COMPLETE` but the stage is not finished (turn limit, no question) → send a short continue
      message;
    - `INTERRUPTED` → inspect the workspace and `.dryforge/` of the target, then resume the same
@@ -63,8 +69,11 @@ started. Never paste Dryforge procedure text or substitute another procedure.
 
 Keep listening. In-scope clarification goes into the next message or cycle. A changed goal is a
 proposal revision approved by the user (`interview.md`); it applies at the next cycle boundary.
-When the user asks to stop: `session-stop`, then `stop --reason abort`, and list what was left
-half-done (task branches, worktrees). Clean nothing up on abort.
+When the user asks to stop: `session-stop` (an open question is recorded as unanswered), then
+`stop --reason abort`, and list what was left half-done (task branches, worktrees). Clean nothing up
+on abort. A session stopped in the middle of a question can be continued later with `session-send`
+on the same session (verified on Claude Code). If you take over a run another L1 left (for example
+after the host was closed), `show` tells you whether a question is still open; answer it or stop.
 
 Record your decisions as L1 with their basis. Never turn a worker claim into a user approval.
 Already delegated decisions need no new consent. The host's own permission settings remain in

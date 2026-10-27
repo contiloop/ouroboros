@@ -10,3 +10,4 @@
 | [0006](0006-minimal-policy-files.md) | Drop LICENSE/CONTRIBUTING/SECURITY files during the experimental stage | 2026-10-25 (recorded 2026-10-27) |
 | [0007](0007-english-project-docs.md) | Project documentation is written in English | 2026-10-27 |
 | [0008](0008-headless-l2-session-and-allowlist.md) | L2 is a headless Claude Code session with a tool allow-list, kept across cycles | 2026-10-27 |
+| [0009](0009-structured-questions-relay.md) | Structured questions reach L1 through the control channel; remaining permission requests are auto-allowed | 2026-10-27 |

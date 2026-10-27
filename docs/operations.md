@@ -50,8 +50,9 @@ python3 -B $S --workspace /abs/proj --owner $CLAUDE_PID shown
 python3 -B $S --workspace /abs/proj --owner $CLAUDE_PID approve
 python3 -B $S --workspace /abs/proj --owner $CLAUDE_PID cycle-start --kind development --goal goal.md --checkpoint <commit>
 python3 -B $S --workspace /abs/proj --owner $CLAUDE_PID session-start --skill ready --message msg.md
-python3 -B $S --workspace /abs/proj --owner $CLAUDE_PID session-wait            # blocks; run in the background
-python3 -B $S --workspace /abs/proj --owner $CLAUDE_PID session-send --message answer.md
+python3 -B $S --workspace /abs/proj --owner $CLAUDE_PID session-wait            # blocks; run in the background; may return QUESTION
+python3 -B $S --workspace /abs/proj --owner $CLAUDE_PID session-answer --answers answers.json --basis why.md
+python3 -B $S --workspace /abs/proj --owner $CLAUDE_PID session-send --message next.md
 python3 -B $S --workspace /abs/proj --owner $CLAUDE_PID evaluate --decision CONTINUE --basis basis.md
 ```
 

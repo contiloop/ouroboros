@@ -15,6 +15,11 @@
 - Run L2 as one persistent headless Claude Code session (`claude -p`, resumed between turns) in
   the target project, with every host tool pre-allowed by list and the user's deny rules intact.
   Ready and Go of one cycle use the same session; the session is kept across cycles by default.
+- Drive the worker session through the host's streaming control channel so Dryforge's structured
+  questions reach L1: `session-wait` returns `QUESTION`, `session-answer` answers it, questions and
+  answers are recorded; permission requests outside the allow-list are allowed automatically and
+  listed. Verified once against the real host, including resuming a session stopped mid-question.
+  Budget accounting charges each turn's share of the host's cumulative session cost.
 - Delegate fully after `approve`: L1 answers worker questions, approves Ready documents, merges,
   pushes and spends within the budget without further consent. Clarification is folded in, a scope
   change is a re-approved proposal applied between cycles, and "stop" aborts immediately.

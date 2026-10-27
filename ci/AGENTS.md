@@ -7,7 +7,9 @@
   `source` targets, Agent Plugins 1.0 schema fields, Codex root/overlay agreement, Grok/Antigravity
   manual-only rules, Codex `allow_implicit_invocation: false`, and a reproducible rebuild from a
   clean tree. `--tag vX.Y.Z` adds the release-tag check.
-- `fixtures/fake_claude.py` — env-driven stand-in for the `claude` CLI (`FAKE_CLAUDE_LOG`,
+- `fixtures/fake_claude.py` — env-driven stand-in for the `claude` CLI that speaks the streaming
+  control protocol (`FAKE_CLAUDE_QUESTIONS`, `FAKE_CLAUDE_MULTI`, `FAKE_CLAUDE_PERMISSION`,
+  `FAKE_CLAUDE_PIDFILE`, `FAKE_CLAUDE_LOG`,
   `FAKE_CLAUDE_SLEEP`, `FAKE_CLAUDE_MODE`, `FAKE_CLAUDE_SESSION`, `FAKE_CLAUDE_COST`,
   `FAKE_CLAUDE_DRYFORGE`). Tests copy it to a temp `bin/claude` first on `PATH`. It is not Claude
   and must never be wired as a host.

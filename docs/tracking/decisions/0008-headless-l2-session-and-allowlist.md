@@ -13,6 +13,8 @@ every later turn and kept across cycles by default (fresh only on REPLAN, loss, 
 Migration). Every turn runs detached; L1 waits with a blocking `session-wait` run as a background
 shell command. Tool permission is an allow-list (`--allowedTools` with the built-in tools plus
 `mcp__*`), never a bypass flag; the user's deny rules and the target project's settings still apply.
+Since decision 0009 the allow-list is not a ceiling: remaining permission requests are allowed
+automatically by the relay, so the deny rules are the effective boundary.
 
 ## Alternatives
 - **Claude Code subagent as L2.** Rejected: cannot invoke the installed skill, no question relay.

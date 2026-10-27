@@ -46,7 +46,7 @@ def new_run(workspace: str) -> dict:
     run_id = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S') + '-' + secrets.token_hex(3)
     return dict(run_id=run_id, workspace=workspace, status='DRAFT', proposal_digest_shown=None, approvals=[],
                 limits=None, spent_usd=0, stalled_cycles=0, host=HOST,
-                session=dict(id=None, started=None, reason=None), cycles=[], stopped_reason=None, stopped_at=None)
+                session=dict(id=None, started=None, reason=None, cost_total_usd=0), cycles=[], stopped_reason=None, stopped_at=None)
 
 
 # ── proposal ───────────────────────────────────────────────────────────────
@@ -256,9 +256,11 @@ def add_spent(run: dict, usd: float) -> dict:
 
 def summary(run: dict, proposal_digest: str | None, event_count: int) -> dict:
     cycle = open_cycle(run)
+    turn = run.get('turn')
     return dict(status=run['status'], run_id=run['run_id'], proposal_digest_shown=run['proposal_digest_shown'],
                 proposal_digest=proposal_digest, limits=run['limits'], spent_usd=run['spent_usd'],
                 stalled_cycles=run['stalled_cycles'], session=run['session'], stopped_reason=run['stopped_reason'],
                 stopped_at=run['stopped_at'],
                 cycle=dict(id=cycle['id'], stage=cycle['stage'], kind=cycle['kind']) if cycle else None,
+                turn=dict(n=turn['n'], state=turn['state'], kind=turn['kind'], question=turn.get('question')) if turn else None,
                 counts=dict(cycles=len(run['cycles']), approvals=len(run['approvals']), events=event_count))

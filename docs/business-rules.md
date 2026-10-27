@@ -49,7 +49,8 @@ init  ──(conversation, revisable)──▶  Proposal  ──approve──▶
 
 ### Delegation after approval — **full, with no exceptions**
 - Once the user has approved, **L1 holds complete authority to finish the goal.** It answers every
-  worker question, approves Ready documents, acts on any permission denial a turn reports,
+  worker question (structured or plain text), approves Ready documents, acts on anything a turn
+  reports (automatically allowed permission requests included),
   merges, pushes, tags, and performs any other action the goal requires. The user is not asked to
   confirm individual cycles, tool calls, merges or releases.
 - The user's role during execution is to receive progress and results and to add clarification.
@@ -122,7 +123,9 @@ init  ──(conversation, revisable)──▶  Proposal  ──approve──▶
 | User invokes `approve` with no draft | Show that nothing was proposed; start `init` conversation. No approval recorded. |
 | Proposal edited after it was shown, then `approve` | Show the diff; approval applies only to what the user has seen. |
 | Installed Dryforge skill not found in L2's host | Report the missing capability to the user; do not start Go; keep the existing session. |
+| L2 asks a structured question (its question tool) | The turn pauses, L1 receives the questions with their options, answers from the proposal and its judgment (`session-answer`), and the turn continues. Several rounds per turn are possible. Question and answer are recorded. |
 | L2 asks a question outside the approved scope | L1 decides under full delegation if the goal still determines the answer; brings it to the user only if the goal itself is ambiguous. |
+| User stops while a question is open | The question is recorded as unanswered; the same session can be continued later. |
 | A cycle ends with failing tests | Not acceptable; L1 requests rework in the same L2 or replans. |
 | Cycle limit, stall limit or budget reached | L1 reports and the run is STOPPED; the limits are those stated in the proposal. A revised proposal approved again resumes it. |
 | Worker session lost mid-cycle | Reconcile effects, resume the same session; otherwise explicit, recorded replacement with the checkpoint and decisions. |

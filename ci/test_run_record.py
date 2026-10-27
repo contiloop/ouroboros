@@ -155,7 +155,7 @@ class DraftTests(Base):
         self.assertIsNone(run['proposal_digest_shown'])
         self.assertEqual(run['approvals'], [])
         self.assertEqual(run['host'], 'claude')
-        self.assertEqual(run['session'], dict(id=None, started=None, reason=None))
+        self.assertEqual(run['session'], dict(id=None, started=None, reason=None, cost_total_usd=0))
         self.assertEqual(run['spent_usd'], 0)
         self.assertEqual((priv / 'proposal.md').read_text(), proposal())
         self.assertEqual(self.ws.kinds(), ['draft'])

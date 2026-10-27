@@ -49,28 +49,46 @@ the workspace.
 | `archive` | — | moves a finished run under `archive/<run_id>/` |
 | `session-start` | `--skill ready\|go\|migration --message <file> [--fresh --reason <text>]` | detached turn; message = `/dryforge:<skill> ` + file text; `--resume` of the recorded session unless `--fresh`; refused while a limit is exceeded, and `go --fresh` is refused while the open cycle has a recorded `session_id` (Ready ran there) |
 | `session-send` | `--message <file>` | detached `--resume` turn with the file text; refused while a limit is exceeded |
-| `session-wait` | `[--timeout <s>]` | blocks until the turn exits; prints the parsed result, or `{state: RUNNING, waited}` on timeout |
-| `session-status` | — | `{state: RUNNING, pid, turn}` or the parsed result; never blocks |
+| `session-wait` | `[--timeout <s>]` | blocks until the turn exits **or the worker asks a structured question**; prints the parsed result, `{state: QUESTION, round, questions}` for an open question, or `{state: RUNNING, waited}` on timeout |
+| `session-answer` | `--answers <file> [--basis <file>]` | answers the open question round: JSON object `{"<question text>": "<label>" \| ["<label>", …] (multiSelect) \| {"other": "<text>"}}`; every question must be answered, an unknown question or a non-option answer is BLOCKED; writes `turns/<n>.a<k>.json`, records `question` (L2) and `answer` (L1) events, turn back to RUNNING |
+| `session-status` | — | `{state: RUNNING, pid, turn}`, `{state: QUESTION, …}` or the parsed result; never blocks |
 | `session-stop` | — | SIGTERM the process group (outside the record lock), SIGKILL after 5 s; turn `STOPPED`; a turn that has already exited is settled like `session-status` instead |
 
-**Parsed turn result:** `state` (`COMPLETE` | `INTERRUPTED` | `STOPPED`), `session_id`, `text`,
-`num_turns`, `cost_usd`, `usage` (`input_tokens`, `cache_read_input_tokens`,
+**Worker process and channel.** Each turn runs `claude -p --input-format stream-json --output-format
+stream-json --verbose --permission-prompt-tool stdio [--resume <id>] --allowedTools … --max-turns N`
+under a relay (`ouroboros/relay.py`) that holds its stdin/stdout, sends the message, mirrors every
+event to `turns/<n>.stream.jsonl`, writes `turns/<n>.init.json` (session id, slash commands),
+`turns/<n>.q<k>.json` for each structured question round, forwards `turns/<n>.a<k>.json` as the
+answer, allows any other permission request automatically (listed in `turns/<n>.auto.json`), and
+writes the final result to `turns/<n>.json`. `session-start`/`session-send` are refused while a
+question is open. Turn states: `RUNNING`, `QUESTION`, `COMPLETE`, `INTERRUPTED`, `STOPPED`.
+
+**Parsed turn result:** `state` (`QUESTION` | `COMPLETE` | `INTERRUPTED` | `STOPPED`), `session_id`, `text`,
+`questions` (answered rounds), `skills` (the `dryforge:` commands the session saw), `auto_allowed[]`
+({tool_name, tool_use_id}), `stream_path`,
+`num_turns`, `cost_usd` (this turn's charge), `cost_total_usd` (the host's cumulative total for the
+session, as reported), `usage` (`input_tokens`, `cache_read_input_tokens`,
 `cache_creation_input_tokens`, `output_tokens`; a count the host did not report is null),
 `permission_denials`, `is_error`, `subtype`, `raw_path`, `stderr_path`, `exit_code`, `text_path`,
 `reason`, `turn`, `pid`, `kind`, plus `run_status` and `stopped_reason` of the run after the turn.
 INTERRUPTED covers non-zero exit, empty or non-JSON output, a missing session id, `is_error`, or a
 session id that differs from the recorded one. Any turn that names a session id binds it when none
-is recorded yet (an INTERRUPTED first turn included). Cost is added to `spent_usd` once per turn;
-when the sum then exceeds `budget_usd` the run is set STOPPED `limit:budget` (a `stop` event, actor
-L1) and the result shows `run_status: STOPPED`.
+is recorded yet (an INTERRUPTED first turn included). The host reports `total_cost_usd` cumulatively
+over a resumed session, so `cost_usd` is the delta against `session.cost_total_usd` (the last total
+seen for the session; 0 for a fresh session; a smaller total than before is charged in full and
+becomes the new baseline). `cost_usd` is added to `spent_usd` once per turn; when the sum then
+exceeds `budget_usd` the run is set STOPPED `limit:budget` (a `stop` event, actor L1) and the result
+shows `run_status: STOPPED`. `session-stop` records its `stop` event with actor L1 (it is L1's
+action); only the run-level `stop --reason abort` is the human's.
 
 **Run record (`run.json`):** `run_id`, `workspace`, `status` ∈ {DRAFT, ACTIVE, COMPLETE, STOPPED},
 `proposal_digest_shown`, `approvals[] {time, digest, applied}`, `limits {max_cycles,
 max_stalled_cycles, budget_usd|null}`, `spent_usd`, `stalled_cycles`, `host`, `session {id, started,
-reason}`, `cycles[] {id, goal, kind, started, session_id, stage, checkpoint_before, checkpoint_after,
+reason, cost_total_usd}`, `cycles[] {id, goal, kind, started, session_id, stage, checkpoint_before, checkpoint_after,
 ready_digest, evaluation}`, `stopped_reason`, `stopped_at`, `turn_count`, `turn`.
 **Events (`events.jsonl`):** `{time, actor, kind, cycle_id, data}`; kinds written by the CLI:
 `draft`, `shown`, `approve`, `amend`, `amend_applied`, `cycle_start`, `cycle_stage`, `evaluate`,
-`stop`, `archive`, `session`, `turn`, `turn_result`, `interrupt`, plus whatever L1 records with `event`.
+`stop`, `archive`, `session`, `turn`, `turn_result`, `interrupt`, `question`, `answer`, `unanswered`,
+plus whatever L1 records with `event`.
 **Owner (`owner.json`):** `{pid, session_id, started}`; a live foreign pid blocks `draft`, `approve`
 and every `session-*` command; a dead pid is replaced.
