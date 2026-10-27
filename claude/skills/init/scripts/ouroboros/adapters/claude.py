@@ -1,9 +1,12 @@
-"""Claude Code adapter: drives the headless `claude` CLI (print mode, JSON output) as the L2 host session.
+"""Claude Code adapter: drives the headless `claude` CLI (print mode, stream-json in and out) as the L2 host session.
 
 Each turn is a detached process group started through `/bin/sh` so its exit code survives the short-lived
-CLI that launched it: stdout → `<n>.json`, stderr → `<n>.err`, exit code → `<n>.exit` next to it. Tool
-access is an allow-list (`--allowedTools`); the host's own deny rules still apply, and no bypass of the
-permission system is ever requested.
+CLI that launched it. The shell runs `ouroboros/relay.py`, which owns the `claude` child: it feeds the
+message, mirrors the event stream to `<n>.stream.jsonl`, relays the question tool through `<n>.q<k>.json` /
+`<n>.a<k>.json`, allows every other permission request at once (`<n>.auto.json`) and writes the final
+result to `<n>.json`. stderr → `<n>.err`, exit code → `<n>.exit`. Tool access is an allow-list
+(`--allowedTools`); the host's own deny rules still apply, and no bypass of the permission system is
+ever requested.
 """
 from __future__ import annotations
 
@@ -13,26 +16,35 @@ import shlex
 import shutil
 import signal
 import subprocess
+import sys
 import time
 from pathlib import Path
 
 from ..ports import Turn
 
 EXECUTABLE = 'claude'
+RELAY = Path(__file__).resolve().parent.parent / 'relay.py'
 # Tunable defaults. The allow-list is one comma-separated argument: the built-in tools plus every MCP tool.
+# `AskUserQuestion` must never be listed here: an allow-listed tool runs without a permission request, so
+# its questions would never reach the relay channel that hands them to L1.
 ALLOWED_TOOLS = 'Bash,Edit,Write,Read,Glob,Grep,Agent,WebFetch,WebSearch,NotebookEdit,Skill,TodoWrite,mcp__*'
+QUESTION_TOOL = 'AskUserQuestion'
 MAX_TURNS = 200
 MODEL: str | None = None
 STOP_GRACE = 5.0           # seconds between SIGTERM and SIGKILL in terminate()
 DOCTOR_TIMEOUT = 20.0      # seconds allowed for `claude --version` / `claude plugin list`
-RESULT_KEYS = ('session_id', 'text', 'num_turns', 'cost_usd', 'permission_denials', 'is_error', 'subtype', 'usage')
+RESULT_KEYS = ('session_id', 'text', 'num_turns', 'cost_usd', 'permission_denials', 'is_error', 'subtype', 'usage',
+               'skills', 'auto_allowed', 'questions', 'stream_path')
 USAGE_KEYS = ('input_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens', 'output_tokens')
+SKILL_PREFIX = 'dryforge:'
 
 
-def command_line(message: str, session_id: str | None, *, allowed_tools: str = ALLOWED_TOOLS,
-                 max_turns: int = MAX_TURNS, model: str | None = MODEL, executable: str = EXECUTABLE) -> list:
-    """The exact argv of one turn. `message` is the user message verbatim; nothing is added to it."""
-    argv = [executable, '-p', message, '--output-format', 'json']
+def command_line(session_id: str | None, *, allowed_tools: str = ALLOWED_TOOLS, max_turns: int = MAX_TURNS,
+                 model: str | None = MODEL, executable: str = EXECUTABLE) -> list:
+    """The exact argv of one turn. There is no prompt argument: the relay sends the user message on stdin as
+    the first stream-json line, and `--permission-prompt-tool stdio` routes tool requests to the same channel."""
+    argv = [executable, '-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose',
+            '--permission-prompt-tool', 'stdio']
     if session_id is not None:
         argv += ['--resume', session_id]
     argv += ['--allowedTools', allowed_tools, '--max-turns', str(max_turns)]
@@ -42,8 +54,42 @@ def command_line(message: str, session_id: str | None, *, allowed_tools: str = A
 
 
 def side_paths(raw_path: Path) -> tuple[Path, Path]:
-    """(stderr file, exit-code file) of a turn whose stdout goes to `raw_path`."""
+    """(stderr file, exit-code file) of a turn whose result goes to `raw_path`."""
     return raw_path.with_suffix('.err'), raw_path.with_suffix('.exit')
+
+
+def aux_path(raw_path: Path, suffix: str) -> Path:
+    """`turns/<n>.<suffix>` beside the result file `turns/<n>.json`."""
+    return raw_path.with_name(f'{raw_path.stem}.{suffix}')
+
+
+def _read_json(path: Path):
+    try:
+        return json.loads(path.read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return None
+
+
+def _write_json(path: Path, obj) -> None:
+    tmp = path.with_name(path.name + '.tmp')
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, 'w', encoding='utf-8') as f:
+        json.dump(obj, f, ensure_ascii=False)
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, path)
+
+
+def _bundles(raw_path: Path) -> list:
+    """Every question bundle of the turn in order: (round, bundle dict, answered?)."""
+    out = []
+    k = 1
+    while True:
+        q_path = aux_path(raw_path, f'q{k}.json')
+        if not q_path.exists():
+            return out
+        bundle = _read_json(q_path)
+        out.append((k, bundle if isinstance(bundle, dict) else None, aux_path(raw_path, f'a{k}.json').exists()))
+        k += 1
 
 
 def _exit_code(raw_path: Path) -> int | None:
@@ -77,16 +123,23 @@ class ClaudeAdapter:
         exe = self.executable()
         if exe is None:
             raise FileNotFoundError(f'{EXECUTABLE} is not on PATH')
-        argv = command_line(message, session_id, allowed_tools=self.allowed_tools, max_turns=self.max_turns,
+        argv = command_line(session_id, allowed_tools=self.allowed_tools, max_turns=self.max_turns,
                             model=self.model, executable=exe)
         err_path, exit_path = side_paths(raw_path)
-        for p in (raw_path, err_path, exit_path):
-            p.unlink(missing_ok=True)
-        # `"$@"` carries the argv untouched; the wrapper only redirects and records the exit code. The umask
-        # keeps the three files it creates private (0600) like the rest of the record.
-        script = (f'umask 077; {shlex.quote(exe)} "$@" >{shlex.quote(str(raw_path))} 2>{shlex.quote(str(err_path))}; '
+        for p in raw_path.parent.glob(f'{raw_path.stem}.*'):
+            p.unlink(missing_ok=True)  # the result, .err, .exit and every relay file of a reused turn number
+        msg_path = aux_path(raw_path, 'msg')
+        fd = os.open(msg_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            f.write(message)
+        # `"$@"` carries the claude argv untouched to the relay; the wrapper only collects stderr and records
+        # the exit code. The relay is the only writer of `<n>.json`; its stdout is not redirected anywhere.
+        # The umask keeps every file created under turns/ private (0600) like the rest of the record.
+        relay = [sys.executable, '-B', str(RELAY), '--turn', raw_path.stem, '--dir', str(raw_path.parent),
+                 '--message', str(msg_path), '--']
+        script = (f'umask 077; {" ".join(shlex.quote(a) for a in relay)} "$@" 2>>{shlex.quote(str(err_path))}; '
                   f'echo $? >{shlex.quote(str(exit_path))}')
-        proc = subprocess.Popen(['/bin/sh', '-c', script, 'sh', *argv[1:]], cwd=str(workspace),
+        proc = subprocess.Popen(['/bin/sh', '-c', script, 'sh', *argv], cwd=str(workspace),
                                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                 start_new_session=True, close_fds=True)
         return Turn(pid=proc.pid, raw_path=raw_path)
@@ -131,12 +184,38 @@ class ClaudeAdapter:
             while self.alive(turn) and time.monotonic() < deadline:
                 time.sleep(0.05)
 
+    # ── questions (the relay channel) ───────────────────────────────────
+    def questions(self, turn: Turn) -> dict | None:
+        """The open question bundle {round, questions, request_id} (its `q<k>` file has no `a<k>`), else None."""
+        for k, bundle, answered in _bundles(turn.raw_path):
+            if not answered and bundle is not None:
+                return dict(round=k, questions=bundle.get('questions') or [], request_id=bundle.get('request_id'),
+                            tool_use_id=bundle.get('tool_use_id'))
+        return None
+
+    def answer(self, turn: Turn, round_: int, answers: dict) -> None:
+        """Hand the wire-form answers (question text → string) of bundle `round_` to the relay."""
+        _write_json(aux_path(turn.raw_path, f'a{round_}.json'), dict(round=round_, answers=answers))
+
+    def session_id(self, turn: Turn) -> str | None:
+        """The session id of the turn's init event as soon as the relay has recorded it, else None."""
+        init = _read_json(aux_path(turn.raw_path, 'init.json'))
+        sid = init.get('session_id') if isinstance(init, dict) else None
+        return sid if isinstance(sid, str) and sid else None
+
     # ── result ───────────────────────────────────────────────────────────
     def result(self, turn: Turn) -> dict:
         err_path, _ = side_paths(turn.raw_path)
+        init = _read_json(aux_path(turn.raw_path, 'init.json'))
+        commands = init.get('slash_commands') if isinstance(init, dict) else None
+        auto = _read_json(aux_path(turn.raw_path, 'auto.json'))
         out = dict(state='INTERRUPTED', session_id=None, text=None, num_turns=None, cost_usd=0, permission_denials=[],
                    is_error=None, subtype=None, usage=parse_usage(None), raw_path=str(turn.raw_path),
-                   stderr_path=str(err_path), exit_code=_exit_code(turn.raw_path), reason=None)
+                   stderr_path=str(err_path), exit_code=_exit_code(turn.raw_path), reason=None,
+                   skills=[c for c in (commands if isinstance(commands, list) else []) if isinstance(c, str) and c.startswith(SKILL_PREFIX)],
+                   auto_allowed=auto if isinstance(auto, list) else [],
+                   questions=sum(1 for _, _, answered in _bundles(turn.raw_path) if answered),
+                   stream_path=str(aux_path(turn.raw_path, 'stream.jsonl')))
         try:
             raw = turn.raw_path.read_text(encoding='utf-8')
         except OSError:

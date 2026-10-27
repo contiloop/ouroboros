@@ -20,6 +20,7 @@ from ouroboros.ports import Turn  # noqa: E402
 from ouroboros.store import Store, _write_bytes, check_owner  # noqa: E402
 
 SKILLS = ('ready', 'go', 'migration')
+LIVE_STATES = ('RUNNING', 'QUESTION')
 WAIT_POLL = 0.05
 
 
@@ -191,8 +192,41 @@ def _turn_handle(store: Store, turn: dict) -> Turn:
 
 
 def _running(run: dict) -> dict | None:
+    """The live turn (RUNNING or QUESTION), else None."""
     turn = run.get('turn')
-    return turn if turn and turn.get('state') == 'RUNNING' else None
+    return turn if turn and turn.get('state') in LIVE_STATES else None
+
+
+def _claim(store: Store, a, run: dict) -> None:
+    """After `check_owner` passed: make `--owner` the recorded owner when a different (dead or absent) pid is
+    recorded, carrying the session id forward. Called only on paths that go on to write."""
+    owner = store.read_owner()
+    if owner is None or owner.get('pid') != a.owner:
+        store.write_owner(a.owner, session_id=run['session']['id'])
+
+
+def _bind_session_early(store: Store, a, run: dict, host, handle: Turn) -> bool:
+    """Record the session id a live turn has already announced, only while none is recorded. A later
+    mismatch is handled at settlement, never mid-turn. Returns True when the record changed."""
+    if run['session']['id'] is not None:
+        return False
+    sid = host.session_id(handle)
+    if not sid:
+        return False
+    run['session']['id'] = sid
+    store.write_owner(a.owner, session_id=sid)
+    cycle = core.open_cycle(run)
+    if cycle and cycle.get('session_id') is None:
+        cycle['session_id'] = sid
+    return True
+
+
+def _question_events(store: Store, run: dict, bundle: dict) -> None:
+    """A bundle the turn leaves open is recorded as asked (L2) and unanswered (L1)."""
+    cycle = core.open_cycle(run)
+    cycle_id = cycle['id'] if cycle else None
+    store.append_event('L2', 'question', cycle_id, bundle)
+    store.append_event('L1', 'unanswered', cycle_id, dict(round=bundle['round']))
 
 
 def _launch(store: Store, a, message: str, kind: str, fresh: bool, reason: str | None) -> dict:
@@ -204,6 +238,9 @@ def _launch(store: Store, a, message: str, kind: str, fresh: bool, reason: str |
         which = core.limit_exceeded(run, mid_cycle=True)
         require(which is None, f'limit already exceeded: {which}')
         running = _running(run)
+        if running is not None and running['state'] == 'QUESTION':
+            raise RecordError(f'turn {running["n"]} has an open question; answer or stop first', turn=running['n'],
+                              round=(running.get('question') or {}).get('round'))
         require(running is None, f'turn {running["n"] if running else ""} is still RUNNING; wait for it or stop it')
         session_id = run['session']['id']
         if kind == 'message':
@@ -218,6 +255,7 @@ def _launch(store: Store, a, message: str, kind: str, fresh: bool, reason: str |
                 'drop --fresh, or run ready in a fresh session first')
         host = _host(run)
         store.ensure_dir()
+        _claim(store, a, run)
         n = int(run.get('turn_count', 0)) + 1
         raw_path = store.turns_dir / f'{n}.json'
         try:
@@ -234,7 +272,8 @@ def _launch(store: Store, a, message: str, kind: str, fresh: bool, reason: str |
             if cycle:
                 cycle['session_id'] = None  # the cycle's session is the one its turns actually run in
         run['turn_count'] = n
-        run['turn'] = dict(n=n, pid=handle.pid, started=started, kind=kind, state='RUNNING', cost_recorded=False)
+        run['turn'] = dict(n=n, pid=handle.pid, started=started, kind=kind, state='RUNNING', cost_recorded=False,
+                           questions_answered=0)
         store.write_run(run)
         if fresh:
             store.append_event('L1', 'session', cycle_id, dict(reason=run['session']['reason'], turn=n))
@@ -259,29 +298,58 @@ def _stored_result(store: Store, run: dict) -> dict:
     """The recorded result of the last turn plus the run status it left behind (a budget stop shows here)."""
     turn = run['turn']
     out = {k: turn.get(k) for k in ('state', 'session_id', 'num_turns', 'cost_usd', 'usage', 'permission_denials',
-                                    'is_error', 'subtype', 'raw_path', 'stderr_path', 'exit_code', 'reason', 'text_path')}
+                                    'is_error', 'subtype', 'raw_path', 'stderr_path', 'exit_code', 'reason', 'text_path',
+                                    'skills', 'auto_allowed', 'questions', 'stream_path')}
     text_path = turn.get('text_path')
     out['text'] = (store.dir / text_path).read_text(encoding='utf-8') if text_path and (store.dir / text_path).is_file() else None
     return dict(out, turn=turn['n'], pid=turn['pid'], kind=turn['kind'], run_status=run['status'],
                 stopped_reason=run['stopped_reason'])
 
 
+def _live_status(store: Store, a, run: dict, host, handle: Turn) -> dict:
+    """The live turn's state: QUESTION with the open bundle (recorded in run.json) or RUNNING. Binds the
+    session id early when the host has announced it."""
+    turn = run['turn']
+    changed = _bind_session_early(store, a, run, host, handle)
+    bundle = host.questions(handle)
+    if bundle is not None:
+        question = dict(round=bundle['round'], questions=bundle['questions'])
+        if turn['state'] != 'QUESTION' or turn.get('question') != question:
+            turn.update(state='QUESTION', question=question)
+            changed = True
+    elif turn['state'] != 'RUNNING':
+        turn['state'] = 'RUNNING'
+        turn.pop('question', None)
+        changed = True
+    if changed:
+        store.write_run(run)
+    out = dict(state=turn['state'], pid=turn['pid'], turn=turn['n'], kind=turn['kind'])
+    if bundle is not None:
+        out.update(round=bundle['round'], questions=bundle['questions'])
+    return out
+
+
 def _settle(store: Store, a) -> dict:
-    """Parse the exited turn once: record session id, add cost once, store the result, append events."""
+    """Parse the exited turn once: record session id, add cost once, store the result, append events. A live
+    turn is reported as RUNNING or QUESTION instead."""
     with store.transaction():
         check_owner(store, a.owner)
         run = store.read_run()
         turn = run.get('turn')
         require(turn is not None, 'no turn has been started')
-        if turn['state'] != 'RUNNING':
+        if turn['state'] not in LIVE_STATES:
+            _claim(store, a, run)
             return _stored_result(store, run)
         host = _host(run)
         handle = _turn_handle(store, turn)
+        _claim(store, a, run)
         if host.alive(handle):
-            return dict(state='RUNNING', pid=turn['pid'], turn=turn['n'], kind=turn['kind'])
+            return _live_status(store, a, run, host, handle)
         parsed = host.result(handle)
         cycle = core.open_cycle(run)
         cycle_id = cycle['id'] if cycle else None
+        open_bundle = host.questions(handle)
+        turn.pop('question', None)
         recorded = run['session']['id']
         sid = parsed['session_id']
         if isinstance(sid, str) and sid:
@@ -311,6 +379,8 @@ def _settle(store: Store, a) -> dict:
             stop_event = dict(reason=run['stopped_reason'], stopped_at=run['stopped_at'], turn=turn['n'],
                               spent_usd=run['spent_usd'], budget_usd=run['limits']['budget_usd'])
         store.write_run(run)
+        if open_bundle is not None:
+            _question_events(store, run, open_bundle)
         store.append_event('host', 'turn_result', cycle_id, dict(parsed, turn=turn['n'], text_path=text_path))
         if parsed['state'] == 'INTERRUPTED':
             store.append_event('host', 'interrupt', cycle_id, dict(turn=turn['n'], reason=parsed['reason'],
@@ -321,19 +391,22 @@ def _settle(store: Store, a) -> dict:
 
 
 def cmd_session_wait(store: Store, a) -> dict:
+    """Block (without the record lock) until the live turn exits or opens a question, then settle or report it."""
     run = store.read_run()
     check_owner(store, a.owner)
     turn = _running(run)
+    waited = None
     if turn is not None:
         host, handle = _host(run), _turn_handle(store, turn)
         t0 = time.monotonic()
         deadline = None if a.timeout is None else t0 + a.timeout
-        while host.alive(handle) and (deadline is None or time.monotonic() < deadline):
+        while host.alive(handle) and host.questions(handle) is None and (deadline is None or time.monotonic() < deadline):
             time.sleep(WAIT_POLL)
-        if host.alive(handle):
-            return dict(state='RUNNING', waited=round(time.monotonic() - t0, 3), pid=turn['pid'], turn=turn['n'],
-                        kind=turn['kind'])
-    return _settle(store, a)
+        waited = round(time.monotonic() - t0, 3)
+    out = _settle(store, a)
+    if waited is not None and out.get('state') in LIVE_STATES:
+        out['waited'] = waited
+    return out
 
 
 def cmd_session_status(store: Store, a) -> dict:
@@ -341,8 +414,9 @@ def cmd_session_status(store: Store, a) -> dict:
 
 
 def cmd_session_stop(store: Store, a) -> dict:
-    """Terminate the RUNNING turn and record it STOPPED. A turn that has already exited is settled (parsed)
-    instead. The signal is sent outside the record lock; the record is updated in a second transaction."""
+    """Terminate the live (RUNNING or QUESTION) turn and record it STOPPED; an open question is recorded as
+    unanswered. A turn that has already exited is settled (parsed) instead. The signal is sent outside the
+    record lock; the record is updated in a second transaction."""
     with store.transaction():
         check_owner(store, a.owner)
         run = store.read_run()
@@ -357,16 +431,90 @@ def cmd_session_stop(store: Store, a) -> dict:
         check_owner(store, a.owner)
         run = store.read_run()
         turn = run.get('turn')
-        if turn is not None and turn['n'] == n and turn['state'] != 'RUNNING':
+        if turn is not None and turn['n'] == n and turn['state'] not in LIVE_STATES:
             return _stored_result(store, run)  # settled by another command meanwhile
         require(turn is not None and turn['n'] == n, f'turn {n} is no longer the current turn')
+        _claim(store, a, run)
         cycle = core.open_cycle(run)
+        open_bundle = host.questions(handle)
+        turn.pop('question', None)
         turn.update(state='STOPPED', finished=now())
         store.write_run(run)
+        if open_bundle is not None:
+            _question_events(store, run, open_bundle)
         store.append_event('human', 'stop', cycle['id'] if cycle else None,
                            dict(turn=turn['n'], pid=turn['pid'], kind=turn['kind']))
         return dict(state='STOPPED', turn=turn['n'], pid=turn['pid'], kind=turn['kind'], run_status=run['status'],
                     stopped_reason=run['stopped_reason'])
+
+
+def _wire_answers(questions: list, answers) -> dict:
+    """Validate L1's answers against the open bundle and return the host's wire form (question → string):
+    a label as is, a list of labels joined with ", ", {"other": text} as its text. Refuses on the first
+    offending key without applying anything."""
+    require(isinstance(answers, dict), 'answers must be a JSON object mapping question text to an answer')
+    by_text = {}
+    for q in questions:
+        if isinstance(q, dict) and isinstance(q.get('question'), str):
+            by_text[q['question']] = q
+    for key in answers:
+        require(key in by_text, f'unknown question: {key!r}', question=key)
+    wire = {}
+    for text, q in by_text.items():
+        require(text in answers, f'missing answer for question: {text!r}', question=text)
+        value = answers[text]
+        labels = [o.get('label') for o in (q.get('options') or []) if isinstance(o, dict)]
+        if isinstance(value, str):
+            require(value in labels, f'answer for {text!r} is not one of its options: {value!r}',
+                    question=text, options=labels)
+            wire[text] = value
+        elif isinstance(value, list):
+            require(bool(q.get('multiSelect')), f'answer for {text!r} is a list but the question is not multiSelect',
+                    question=text)
+            require(bool(value) and all(isinstance(v, str) for v in value), f'answer for {text!r} must list option labels',
+                    question=text)
+            bad = [v for v in value if v not in labels]
+            require(not bad, f'answer for {text!r} names options that do not exist: {bad!r}', question=text, options=labels)
+            wire[text] = ', '.join(value)
+        elif isinstance(value, dict):
+            require(set(value) == {'other'} and isinstance(value.get('other'), str) and value['other'].strip() != '',
+                    f'answer for {text!r} must be a label, a list of labels or {{"other": "<text>"}}', question=text)
+            wire[text] = value['other']
+        else:
+            raise RecordError(f'answer for {text!r} must be a label, a list of labels or {{"other": "<text>"}}',
+                              question=text)
+    return wire
+
+
+def cmd_session_answer(store: Store, a) -> dict:
+    """Answer the open question bundle of the live turn on L1's authority and let the turn continue."""
+    raw = read_text(a.answers)
+    basis = read_text(a.basis) if a.basis is not None else None
+    try:
+        answers = json.loads(raw)
+    except ValueError as exc:
+        raise RecordError(f'answers file is not JSON: {exc}')
+    with store.transaction():
+        check_owner(store, a.owner)
+        run = store.read_run()
+        turn = _running(run)
+        require(turn is not None, 'no open question: no turn is live')
+        host, handle = _host(run), _turn_handle(store, turn)
+        require(host.alive(handle), f'turn {turn["n"]} has exited; settle it with session-wait')
+        bundle = host.questions(handle)
+        require(bundle is not None, f'turn {turn["n"]} has no open question')
+        wire = _wire_answers(bundle['questions'], answers)
+        _claim(store, a, run)
+        host.answer(handle, bundle['round'], wire)
+        turn.update(state='RUNNING', questions_answered=int(turn.get('questions_answered', 0)) + 1)
+        turn.pop('question', None)
+        store.write_run(run)
+        cycle = core.open_cycle(run)
+        cycle_id = cycle['id'] if cycle else None
+        store.append_event('L2', 'question', cycle_id, bundle)
+        store.append_event('L1', 'answer', cycle_id, dict(round=bundle['round'], answers=answers, basis=basis))
+        return dict(state='RUNNING', turn=turn['n'], pid=turn['pid'], kind=turn['kind'], round=bundle['round'],
+                    answers=wire)
 
 
 def add_commands(sub) -> dict:
@@ -407,9 +555,12 @@ def add_commands(sub) -> dict:
     p.add_argument('--fresh', action='store_true')
     p.add_argument('--reason')
     cmd('session-send', cmd_session_send, 'launch a detached turn on the recorded session').add_argument('--message', required=True)
-    cmd('session-wait', cmd_session_wait, 'block until the running turn exits, then print its parsed result').add_argument('--timeout', type=float)
-    cmd('session-status', cmd_session_status, 'RUNNING or the parsed result of the last turn (non-blocking)')
-    cmd('session-stop', cmd_session_stop, 'terminate the running turn (SIGTERM, then SIGKILL) and record it; settles an exited one')
+    cmd('session-wait', cmd_session_wait, 'block until the live turn exits or asks a question, then print its result or the question').add_argument('--timeout', type=float)
+    cmd('session-status', cmd_session_status, 'RUNNING, QUESTION (with the open question) or the parsed result of the last turn (non-blocking)')
+    p = cmd('session-answer', cmd_session_answer, 'answer the open question bundle of the live turn and let it continue')
+    p.add_argument('--answers', required=True, help='JSON object: question text → label | [labels] (multiSelect) | {"other": text}')
+    p.add_argument('--basis', help='text file with the reasoning behind the answers (recorded with the answer event)')
+    cmd('session-stop', cmd_session_stop, 'terminate the live turn (SIGTERM, then SIGKILL) and record it; settles an exited one')
     return handlers
 
 
