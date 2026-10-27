@@ -29,15 +29,18 @@ class Turn:
 class HostSession(Protocol):
     """Start, continue, terminate and read turns of one host session."""
 
-    def start(self, workspace: Path, message: str, raw_path: Path, models: dict | None = None) -> Turn:
+    def start(self, workspace: Path, message: str, raw_path: Path, models: dict | None = None,
+              effort: str | None = None) -> Turn:
         """Launch a new session whose first user message is `message` (the leading `/dryforge:<kind>`
         selects the installed skill). Runs detached with cwd=workspace; the host's raw JSON result goes to
         `raw_path`. `models` is the run's `{l2, l3}`: the worker's own model and its subagents' model, each a
-        host model name or `default` (the host's choice); None means both default. Returns immediately."""
+        host model name or `default` (the host's choice); None means both default. `effort` is the run's effort
+        level for the worker (`low`…`max`); `default` or None means the host's choice. Returns immediately."""
 
-    def send(self, workspace: Path, session_id: str, message: str, raw_path: Path, models: dict | None = None) -> Turn:
-        """Launch one more turn on the existing `session_id` with `message` as the user message. `models` is
-        applied again: every turn is a new process, so an amendment takes effect at the next turn."""
+    def send(self, workspace: Path, session_id: str, message: str, raw_path: Path, models: dict | None = None,
+             effort: str | None = None) -> Turn:
+        """Launch one more turn on the existing `session_id` with `message` as the user message. `models` and
+        `effort` are applied again: every turn is a new process, so an amendment takes effect at the next turn."""
 
     def alive(self, turn: Turn) -> bool:
         """True while the turn's process is still running (RUNNING or QUESTION)."""

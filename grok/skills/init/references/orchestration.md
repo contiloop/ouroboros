@@ -61,9 +61,9 @@ edit on your own after approval; a change to the four documents is a revision th
    quoted from `validation.md` with their evidence expectations, and the request that the worker
    verify them as part of its work and leave the evidence in the project; the outline blocks it
    touches, from `.dryforge/ouroboros/spec.md`; what earlier nodes delivered and the checkpoint. Never quote
-   `delegation.md`, the record, or anything about Ouroboros, L1 or approvals. The models in
-   `delegation.md` are applied by the runtime (`--model` for L2, the subagent model for L3) on every
-   turn.
+   `delegation.md`, the record, or anything about Ouroboros, L1 or approvals. The models and the
+   effort level in `delegation.md` are applied by the runtime on every turn (`--model` for L2, the
+   subagent model for L3, `--effort` for the session).
 4. **Wait.** Every turn runs detached. Run `session-wait` as a background shell command, end your
    turn with a one-line progress note for the user, and continue when the host tells you the wait
    finished. The wait ends either when the turn finishes or when the worker asks a question. Read
@@ -83,8 +83,7 @@ edit on your own after approval; a change to the four documents is a revision th
      replacing the session is a recorded decision: `session-start --skill <stage> --fresh
      --reason <why>`, which re-sends `/dryforge:<stage>` to a new session;
    - a permission denial is part of the result: decide the next message yourself, never ask the
-     user to allow anything;
-   - `run_status: STOPPED` → the turn's cost took the run over its budget; report it and stop.
+     user to allow anything.
 5. **Review Ready.** Read the actual `.dryforge/handoff.md`, `spec.md` and `plan.md` in the target
    project, not L2's summary. Request corrections with `session-send`. When they are right, record
    `cycle-stage --stage go --ready-digest <sha256 of the three files>` and send
@@ -128,8 +127,8 @@ You are the user's stand-in: run the result the way the scenarios describe and j
 ## Keep intent and execution connected
 
 Keep listening. In-scope clarification goes into the next message or cycle. A change to the four
-documents is a revision approved by the user (`interview.md`); limits and models take effect at the
-next check or turn, content changes shape the next cycle.
+documents is a revision approved by the user (`interview.md`); limits, models and effort take effect
+at the next check or turn, content changes shape the next cycle.
 When the user asks to stop: `session-stop` (an open question is recorded as unanswered), then
 `stop --reason abort`, and list what was left half-done (task branches, worktrees). Clean nothing up
 on abort. A session stopped in the middle of a question can be continued later with `session-send`

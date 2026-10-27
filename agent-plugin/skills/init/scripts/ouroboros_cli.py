@@ -34,11 +34,17 @@ def _complete_set(parts: dict) -> bool:
     return all(parts.get(name) is not None for name in PROPOSAL_FILES)
 
 
+def _content_digest(parts: dict) -> str | None:
+    """The content digest of scenario/validation/spec, or None when one of them is absent."""
+    return core.content_digest(parts) if all(parts.get(n) is not None for n in core.CONTENT_FILES) else None
+
+
 def summary(store: Store) -> dict:
     run = store.read_run()
     parts = store.read_set()
-    return core.summary(run, core.set_digest(parts) if _complete_set(parts) else None, store.event_count(),
-                        legacy=store.is_legacy())
+    complete = _complete_set(parts)
+    return core.summary(run, core.set_digest(parts) if complete else None, store.event_count(),
+                        legacy=store.is_legacy(), content=core.content_digest(parts) if complete else None)
 
 
 def _flag(name: str) -> str:
@@ -122,6 +128,27 @@ def cmd_show(store: Store, a) -> dict:
     return summary(store)
 
 
+def cmd_review(store: Store, a) -> dict:
+    """Record an independent reviewer's verdict on the current set (kind intent or gate). L1 records it as
+    bookkeeping; it never approves anything. Bound to the content digest and to the interview log's digest."""
+    raw = read_text(a.findings)
+    try:
+        doc = json.loads(raw)
+    except ValueError as exc:
+        raise RecordError(f'findings file is not JSON: {exc}')
+    _proposed(store)
+    with store.transaction():
+        check_owner(store, a.owner)
+        parts = _proposed(store)
+        log = store.read_interview()
+        run, entry, findings = core.review(store.read_run(), a.kind, doc, core.content_digest(parts),
+                                           core.digest(log) if log is not None else None)
+        store.write_run(run)
+        items = store.event_payload(json.dumps(findings, ensure_ascii=False).encode('utf-8'))
+        store.append_event('L1', 'review', None, dict(entry, items=items))
+        return summary(store)
+
+
 def _set_diff(shown: dict, current: dict) -> tuple[list, dict]:
     """Names of the files that differ from their shown copies and a unified diff per changed file."""
     changed, diffs = [], {}
@@ -144,7 +171,8 @@ def cmd_approve(store: Store, a) -> dict:
         current = core.set_digest(parts)
         texts = {name: data.decode('utf-8', 'replace') for name, data in parts.items()}
         try:
-            run, action = core.approve(run, current, texts)
+            run, action = core.approve(run, current, texts, content_digest=core.content_digest(parts),
+                                       approved_content_digest=_content_digest(store.read_approved()))
         except RecordError as exc:
             if 'shown_digest' in exc.details:
                 exc.details['changed'], exc.details['diff'] = _set_diff(store.read_shown(), parts)
@@ -155,7 +183,8 @@ def cmd_approve(store: Store, a) -> dict:
         store.write_approved(parts)
         store.write_run(run)
         store.append_event('human', 'amend' if action == 'amended' else 'approve', None,
-                           dict(digest=current, limits=run['limits'], models=run['models'], action=action))
+                           dict(digest=current, limits=run['limits'], models=run['models'], effort=run['effort'],
+                                action=action))
         return dict(summary(store), approval=action)
 
 
@@ -304,15 +333,16 @@ def _launch(store: Store, a, message: str, kind: str, fresh: bool, reason: str |
                 'drop --fresh, or run ready in a fresh session first')
         host = _host(run)
         models = core.models(run)  # re-applied on every turn: an amendment takes effect at the next one
+        effort = core.effort(run)
         store.ensure_dir()
         _claim(store, a, run)
         n = int(run.get('turn_count', 0)) + 1
         raw_path = store.turns_dir / f'{n}.json'
         try:
             if fresh:
-                handle = host.start(store.workspace, message, raw_path, models)
+                handle = host.start(store.workspace, message, raw_path, models, effort=effort)
             else:
-                handle = host.send(store.workspace, session_id, message, raw_path, models)
+                handle = host.send(store.workspace, session_id, message, raw_path, models, effort=effort)
         except (OSError, ValueError) as exc:
             raise RecordError(f'could not launch the host session: {exc}')
         started = now()
@@ -323,13 +353,15 @@ def _launch(store: Store, a, message: str, kind: str, fresh: bool, reason: str |
                 cycle['session_id'] = None  # the cycle's session is the one its turns actually run in
         run['turn_count'] = n
         run['turn'] = dict(n=n, pid=handle.pid, started=started, kind=kind, state='RUNNING', cost_recorded=False,
-                           questions_answered=0, models=models)
+                           questions_answered=0, models=models, effort=effort)
         store.write_run(run)
         if fresh:
-            store.append_event('L1', 'session', cycle_id, dict(reason=run['session']['reason'], turn=n, models=models))
+            store.append_event('L1', 'session', cycle_id, dict(reason=run['session']['reason'], turn=n, models=models,
+                                                               effort=effort))
         store.append_event('L1', 'turn', cycle_id, dict(turn=n, pid=handle.pid, kind=kind, session_id=session_id,
-                                                        resumed=not fresh, raw_path=str(raw_path), models=models))
-        return dict(turn=n, pid=handle.pid, session_id=session_id, models=models)
+                                                        resumed=not fresh, raw_path=str(raw_path), models=models,
+                                                        effort=effort))
+        return dict(turn=n, pid=handle.pid, session_id=session_id, models=models, effort=effort)
 
 
 def cmd_session_start(store: Store, a) -> dict:
@@ -345,11 +377,13 @@ def cmd_session_send(store: Store, a) -> dict:
 
 
 def _stored_result(store: Store, run: dict) -> dict:
-    """The recorded result of the last turn plus the run status it left behind (a budget stop shows here)."""
+    """The recorded result of the last turn plus the run status it left behind. `cost_usd`/`cost_total_usd` are
+    information only; nothing acts on them."""
     turn = run['turn']
     out = {k: turn.get(k) for k in ('state', 'session_id', 'num_turns', 'cost_usd', 'cost_total_usd', 'usage', 'permission_denials',
                                     'is_error', 'subtype', 'raw_path', 'stderr_path', 'exit_code', 'reason', 'text_path',
                                     'skills', 'auto_allowed', 'questions', 'stream_path', 'models')}
+    out['effort'] = turn.get('effort') or 'default'  # a turn recorded before effort existed ran with the default
     text_path = turn.get('text_path')
     out['text'] = (store.dir / text_path).read_text(encoding='utf-8') if text_path and (store.dir / text_path).is_file() else None
     return dict(out, turn=turn['n'], pid=turn['pid'], kind=turn['kind'], run_status=run['status'],
@@ -380,9 +414,10 @@ def _live_status(store: Store, a, run: dict, host, handle: Turn) -> dict:
 
 
 def _settle(store: Store, a) -> dict:
-    """Parse the exited turn once: record session id, add cost once, store the result, append events. A live
-    turn is reported as RUNNING or QUESTION instead. The host's `total_cost_usd` is cumulative over a resumed
-    session, so the turn is charged the delta against the last total recorded for the session."""
+    """Parse the exited turn once: record session id, store the result, append events. A live turn is reported
+    as RUNNING or QUESTION instead. The host's `total_cost_usd` is cumulative over a resumed session, so the
+    turn's `cost_usd` is the delta against the last total recorded for the session; the baseline moves once per
+    turn (`cost_recorded`). Cost is information: no spend is accumulated and nothing stops on it."""
     with store.transaction():
         check_owner(store, a.owner)
         run = store.read_run()
@@ -420,22 +455,14 @@ def _settle(store: Store, a) -> dict:
             _write_bytes(store.dir / text_path, text.encode('utf-8'))
         total = parsed['cost_total_usd']
         previous = run['session'].get('cost_total_usd') or 0
-        # A total below the last one (a host reset) is charged in full and becomes the new baseline; a result
-        # that carried no figure (total 0) charges nothing and keeps the baseline.
+        # A total below the last one (a host reset) counts in full and becomes the new baseline; a result that
+        # carried no figure (total 0) counts nothing and keeps the baseline.
         parsed['cost_usd'] = total - previous if total >= previous else total
         if not turn.get('cost_recorded'):
             if total > 0:
                 run['session']['cost_total_usd'] = total
-            run = core.add_spent(run, parsed['cost_usd'])
-            turn = run['turn']
             turn['cost_recorded'] = True
         turn.update(parsed, text_path=text_path, finished=now())
-        stop_event = None
-        if run['status'] == 'ACTIVE' and core.limit_exceeded(run, mid_cycle=True) == 'budget':
-            run = core.stop(run, 'limit:budget')
-            turn = run['turn']
-            stop_event = dict(reason=run['stopped_reason'], stopped_at=run['stopped_at'], turn=turn['n'],
-                              spent_usd=run['spent_usd'], budget_usd=run['limits']['budget_usd'])
         store.write_run(run)
         if open_bundle is not None:
             _question_events(store, run, open_bundle)
@@ -443,8 +470,6 @@ def _settle(store: Store, a) -> dict:
         if parsed['state'] == 'INTERRUPTED':
             store.append_event('host', 'interrupt', cycle_id, dict(turn=turn['n'], reason=parsed['reason'],
                                                                    raw_path=parsed['raw_path']))
-        if stop_event is not None:
-            store.append_event('L1', 'stop', cycle_id, stop_event)
         return _stored_result(store, run)
 
 
@@ -590,7 +615,12 @@ def add_commands(sub) -> dict:
         p.add_argument(_flag(name), metavar='FILE', help=f'markdown file to store as {name}')
     cmd('shown', cmd_shown, 'record the combined digest of the four proposal files as shown; keeps copies under shown/')
     cmd('show', cmd_show, 'print the run summary')
-    cmd('approve', cmd_approve, 'approve the proposal set exactly as shown (activate, resume or amend the run); checks completeness')
+    p = cmd('review', cmd_review, 'record an independent review of the current set (intent or gate) bound to its content digest')
+    p.add_argument('--kind', required=True, help='intent | gate')
+    p.add_argument('--findings', required=True, metavar='FILE',
+                   help='JSON {"findings": [{"id", "text", "disposition": "open|settled|technical", "note"}]}')
+    cmd('approve', cmd_approve, 'approve the proposal set exactly as shown (activate, resume or amend the run); '
+        'requires a passing gate review of the current content; checks completeness')
     p = cmd('cycle-start', cmd_cycle_start, 'open a cycle (migration, development or beta)')
     p.add_argument('--kind', required=True)
     p.add_argument('--goal', required=True)
