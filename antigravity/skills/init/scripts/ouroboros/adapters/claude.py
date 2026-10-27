@@ -33,7 +33,7 @@ MAX_TURNS = 200
 MODEL: str | None = None
 STOP_GRACE = 5.0           # seconds between SIGTERM and SIGKILL in terminate()
 DOCTOR_TIMEOUT = 20.0      # seconds allowed for `claude --version` / `claude plugin list`
-RESULT_KEYS = ('session_id', 'text', 'num_turns', 'cost_usd', 'permission_denials', 'is_error', 'subtype', 'usage',
+RESULT_KEYS = ('session_id', 'text', 'num_turns', 'cost_usd', 'cost_total_usd', 'permission_denials', 'is_error', 'subtype', 'usage',
                'skills', 'auto_allowed', 'questions', 'stream_path')
 USAGE_KEYS = ('input_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens', 'output_tokens')
 SKILL_PREFIX = 'dryforge:'
@@ -209,7 +209,7 @@ class ClaudeAdapter:
         init = _read_json(aux_path(turn.raw_path, 'init.json'))
         commands = init.get('slash_commands') if isinstance(init, dict) else None
         auto = _read_json(aux_path(turn.raw_path, 'auto.json'))
-        out = dict(state='INTERRUPTED', session_id=None, text=None, num_turns=None, cost_usd=0, permission_denials=[],
+        out = dict(state='INTERRUPTED', session_id=None, text=None, num_turns=None, cost_usd=0, cost_total_usd=0, permission_denials=[],
                    is_error=None, subtype=None, usage=parse_usage(None), raw_path=str(turn.raw_path),
                    stderr_path=str(err_path), exit_code=_exit_code(turn.raw_path), reason=None,
                    skills=[c for c in (commands if isinstance(commands, list) else []) if isinstance(c, str) and c.startswith(SKILL_PREFIX)],
@@ -232,9 +232,11 @@ class ClaudeAdapter:
         if not isinstance(data, dict):
             out['reason'] = 'result is not a JSON object'
             return out
+        # `total_cost_usd` is the session's cumulative total; the caller charges this turn's delta as cost_usd.
         cost = data.get('total_cost_usd')
+        cost = cost if isinstance(cost, (int, float)) and cost >= 0 else 0
         out.update(session_id=data.get('session_id'), text=data.get('result'), num_turns=data.get('num_turns'),
-                   cost_usd=cost if isinstance(cost, (int, float)) and cost >= 0 else 0,
+                   cost_usd=cost, cost_total_usd=cost,
                    permission_denials=data.get('permission_denials') or [], is_error=bool(data.get('is_error')),
                    subtype=data.get('subtype'), usage=parse_usage(data.get('usage')))
         if not isinstance(out['session_id'], str) or not out['session_id']:

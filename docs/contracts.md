@@ -54,20 +54,25 @@ the workspace.
 | `session-stop` | — | SIGTERM the process group (outside the record lock), SIGKILL after 5 s; turn `STOPPED`; a turn that has already exited is settled like `session-status` instead |
 
 **Parsed turn result:** `state` (`COMPLETE` | `INTERRUPTED` | `STOPPED`), `session_id`, `text`,
-`num_turns`, `cost_usd`, `usage` (`input_tokens`, `cache_read_input_tokens`,
+`num_turns`, `cost_usd` (this turn's charge), `cost_total_usd` (the host's cumulative total for the
+session, as reported), `usage` (`input_tokens`, `cache_read_input_tokens`,
 `cache_creation_input_tokens`, `output_tokens`; a count the host did not report is null),
 `permission_denials`, `is_error`, `subtype`, `raw_path`, `stderr_path`, `exit_code`, `text_path`,
 `reason`, `turn`, `pid`, `kind`, plus `run_status` and `stopped_reason` of the run after the turn.
 INTERRUPTED covers non-zero exit, empty or non-JSON output, a missing session id, `is_error`, or a
 session id that differs from the recorded one. Any turn that names a session id binds it when none
-is recorded yet (an INTERRUPTED first turn included). Cost is added to `spent_usd` once per turn;
-when the sum then exceeds `budget_usd` the run is set STOPPED `limit:budget` (a `stop` event, actor
-L1) and the result shows `run_status: STOPPED`.
+is recorded yet (an INTERRUPTED first turn included). The host reports `total_cost_usd` cumulatively
+over a resumed session, so `cost_usd` is the delta against `session.cost_total_usd` (the last total
+seen for the session; 0 for a fresh session; a smaller total than before is charged in full and
+becomes the new baseline). `cost_usd` is added to `spent_usd` once per turn; when the sum then
+exceeds `budget_usd` the run is set STOPPED `limit:budget` (a `stop` event, actor L1) and the result
+shows `run_status: STOPPED`. `session-stop` records its `stop` event with actor L1 (it is L1's
+action); only the run-level `stop --reason abort` is the human's.
 
 **Run record (`run.json`):** `run_id`, `workspace`, `status` ∈ {DRAFT, ACTIVE, COMPLETE, STOPPED},
 `proposal_digest_shown`, `approvals[] {time, digest, applied}`, `limits {max_cycles,
 max_stalled_cycles, budget_usd|null}`, `spent_usd`, `stalled_cycles`, `host`, `session {id, started,
-reason}`, `cycles[] {id, goal, kind, started, session_id, stage, checkpoint_before, checkpoint_after,
+reason, cost_total_usd}`, `cycles[] {id, goal, kind, started, session_id, stage, checkpoint_before, checkpoint_after,
 ready_digest, evaluation}`, `stopped_reason`, `stopped_at`, `turn_count`, `turn`.
 **Events (`events.jsonl`):** `{time, actor, kind, cycle_id, data}`; kinds written by the CLI:
 `draft`, `shown`, `approve`, `amend`, `amend_applied`, `cycle_start`, `cycle_stage`, `evaluate`,

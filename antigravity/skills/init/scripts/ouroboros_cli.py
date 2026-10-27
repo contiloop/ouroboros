@@ -267,7 +267,7 @@ def _launch(store: Store, a, message: str, kind: str, fresh: bool, reason: str |
             raise RecordError(f'could not launch the host session: {exc}')
         started = now()
         if fresh:
-            run['session'] = dict(id=None, started=started, reason=reason or 'first')
+            run['session'] = dict(id=None, started=started, reason=reason or 'first', cost_total_usd=0)
             session_id = None
             if cycle:
                 cycle['session_id'] = None  # the cycle's session is the one its turns actually run in
@@ -297,7 +297,7 @@ def cmd_session_send(store: Store, a) -> dict:
 def _stored_result(store: Store, run: dict) -> dict:
     """The recorded result of the last turn plus the run status it left behind (a budget stop shows here)."""
     turn = run['turn']
-    out = {k: turn.get(k) for k in ('state', 'session_id', 'num_turns', 'cost_usd', 'usage', 'permission_denials',
+    out = {k: turn.get(k) for k in ('state', 'session_id', 'num_turns', 'cost_usd', 'cost_total_usd', 'usage', 'permission_denials',
                                     'is_error', 'subtype', 'raw_path', 'stderr_path', 'exit_code', 'reason', 'text_path',
                                     'skills', 'auto_allowed', 'questions', 'stream_path')}
     text_path = turn.get('text_path')
@@ -331,7 +331,8 @@ def _live_status(store: Store, a, run: dict, host, handle: Turn) -> dict:
 
 def _settle(store: Store, a) -> dict:
     """Parse the exited turn once: record session id, add cost once, store the result, append events. A live
-    turn is reported as RUNNING or QUESTION instead."""
+    turn is reported as RUNNING or QUESTION instead. The host's `total_cost_usd` is cumulative over a resumed
+    session, so the turn is charged the delta against the last total recorded for the session."""
     with store.transaction():
         check_owner(store, a.owner)
         run = store.read_run()
@@ -367,7 +368,14 @@ def _settle(store: Store, a) -> dict:
         if text is not None:
             text_path = f"turns/{turn['n']}.txt"
             _write_bytes(store.dir / text_path, text.encode('utf-8'))
+        total = parsed['cost_total_usd']
+        previous = run['session'].get('cost_total_usd') or 0
+        # A total below the last one (a host reset) is charged in full and becomes the new baseline; a result
+        # that carried no figure (total 0) charges nothing and keeps the baseline.
+        parsed['cost_usd'] = total - previous if total >= previous else total
         if not turn.get('cost_recorded'):
+            if total > 0:
+                run['session']['cost_total_usd'] = total
             run = core.add_spent(run, parsed['cost_usd'])
             turn = run['turn']
             turn['cost_recorded'] = True
@@ -442,7 +450,7 @@ def cmd_session_stop(store: Store, a) -> dict:
         store.write_run(run)
         if open_bundle is not None:
             _question_events(store, run, open_bundle)
-        store.append_event('human', 'stop', cycle['id'] if cycle else None,
+        store.append_event('L1', 'stop', cycle['id'] if cycle else None,
                            dict(turn=turn['n'], pid=turn['pid'], kind=turn['kind']))
         return dict(state='STOPPED', turn=turn['n'], pid=turn['pid'], kind=turn['kind'], run_status=run['status'],
                     stopped_reason=run['stopped_reason'])

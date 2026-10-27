@@ -182,7 +182,7 @@ class WaitAndStatusTests(Base):
         self.assertEqual(self.ws.events()[-1]['kind'], 'turn')
         self.assertEqual(self.ws.events()[-1]['cycle_id'], 'c1')
         out = self.ws.wait()
-        for key in ('state', 'session_id', 'text', 'num_turns', 'cost_usd', 'permission_denials', 'is_error',
+        for key in ('state', 'session_id', 'text', 'num_turns', 'cost_usd', 'cost_total_usd', 'permission_denials', 'is_error',
                     'subtype', 'raw_path', 'usage', 'run_status', 'stopped_reason', 'skills', 'auto_allowed',
                     'questions', 'stream_path'):
             self.assertIn(key, out)
@@ -284,14 +284,43 @@ class WaitAndStatusTests(Base):
         self.ws.ok('session-status'); self.ws.wait(); self.ws.ok('session-status')
         self.assertEqual(self.ws.record()['spent_usd'], 0.25)
         self.assertEqual(sum(1 for k in self.ws.kinds() if k == 'turn_result'), 1)
-        self.ws.send('more\n', env=dict(FAKE_CLAUDE_COST='0.25'))
+        self.ws.send('more\n', env=dict(FAKE_CLAUDE_COST='0.5'))
         self.ws.wait(); self.ws.wait()
         self.assertEqual(self.ws.record()['spent_usd'], 0.5)
+
+    def test_cost_is_the_delta_of_the_session_total(self):
+        self.ws.start('ready', 'x\n', env=dict(FAKE_CLAUDE_COST='1.0'))
+        out = self.ws.wait()
+        self.assertEqual((out['cost_usd'], out['cost_total_usd']), (1.0, 1.0))
+        run = self.ws.record()
+        self.assertEqual((run['spent_usd'], run['session']['cost_total_usd']), (1.0, 1.0))
+        self.ws.send('more\n', env=dict(FAKE_CLAUDE_COST='1.5'))
+        out = self.ws.wait()
+        self.assertEqual((out['cost_usd'], out['cost_total_usd']), (0.5, 1.5))
+        run = self.ws.record()
+        self.assertEqual((run['spent_usd'], run['session']['cost_total_usd']), (1.5, 1.5))
+        self.assertEqual((run['turn']['cost_usd'], run['turn']['cost_total_usd']), (0.5, 1.5))
+        ev = self.ws.events()[-1]
+        self.assertEqual((ev['kind'], ev['data']['cost_usd'], ev['data']['cost_total_usd']), ('turn_result', 0.5, 1.5))
+        # A fresh session starts from a zero baseline.
+        self.ws.start('ready', 'y\n', '--fresh', '--reason', 'replan', env=dict(FAKE_CLAUDE_COST='0.2'))
+        out = self.ws.wait()
+        self.assertEqual((out['cost_usd'], out['cost_total_usd']), (0.2, 0.2))
+        run = self.ws.record()
+        self.assertAlmostEqual(run['spent_usd'], 1.7)
+        self.assertEqual(run['session']['cost_total_usd'], 0.2)
+        # A total below the last one (a host reset) is charged in full and becomes the new baseline.
+        self.ws.send('z\n', env=dict(FAKE_CLAUDE_COST='0.1'))
+        out = self.ws.wait()
+        self.assertEqual(out['cost_usd'], 0.1)
+        run = self.ws.record()
+        self.assertAlmostEqual(run['spent_usd'], 1.8)
+        self.assertEqual(run['session']['cost_total_usd'], 0.1)
 
     def test_session_id_mismatch_is_an_interrupted_turn(self):
         self.ws.start('ready', 'x\n', env=dict(FAKE_CLAUDE_SESSION='s-1'))
         self.ws.wait()
-        self.ws.send('y\n', env=dict(FAKE_CLAUDE_SESSION='s-2'))
+        self.ws.send('y\n', env=dict(FAKE_CLAUDE_SESSION='s-2', FAKE_CLAUDE_COST='0.25'))
         out = self.ws.wait()
         self.assertEqual((out['state'], out['reason'], out['session_id']), ('INTERRUPTED', 'session id mismatch', 's-2'))
         run = self.ws.record()
@@ -334,9 +363,10 @@ class BudgetTests(Base):
         # Raising the budget lets the run continue.
         self.ws.draft(proposal_text(budget='20'))
         self.ws.ok('shown'); self.ws.ok('approve')
-        self.ws.send('more\n', env=dict(FAKE_CLAUDE_COST='1'))
+        self.ws.send('more\n', env=dict(FAKE_CLAUDE_COST='11.5'))  # session total; this turn costs 1
         out = self.ws.wait()
         self.assertEqual((out['state'], out['run_status']), ('COMPLETE', 'ACTIVE'))
+        self.assertEqual((out['cost_usd'], out['cost_total_usd']), (1.0, 11.5))
         self.assertEqual(self.ws.record()['spent_usd'], 11.5)
 
     def test_no_cap_budget_never_stops_a_turn(self):
@@ -356,7 +386,7 @@ class BudgetTests(Base):
         self.ws.start('ready', 'x\n', env=dict(FAKE_CLAUDE_COST='1'))
         out = self.ws.wait()
         self.assertEqual((out['state'], out['run_status']), ('COMPLETE', 'ACTIVE'))
-        self.ws.send('more\n', env=dict(FAKE_CLAUDE_COST='10'))  # the budget is still watched in the last cycle
+        self.ws.send('more\n', env=dict(FAKE_CLAUDE_COST='11'))  # session total; the budget is still watched in the last cycle
         out = self.ws.wait()
         self.assertEqual((out['run_status'], out['stopped_reason']), ('STOPPED', 'limit:budget'))
         self.ws.draft(proposal_text(cycles=2, budget='20'))  # a lowered cycle limit the open cycle already exceeds
@@ -462,7 +492,7 @@ class StopTests(Base):
         run = self.ws.record()
         self.assertEqual(run['turn']['state'], 'STOPPED')
         ev = self.ws.events()[-1]
-        self.assertEqual((ev['kind'], ev['actor'], ev['data']['turn']), ('stop', 'human', 1))
+        self.assertEqual((ev['kind'], ev['actor'], ev['data']['turn']), ('stop', 'L1', 1))
         self.assertEqual(self.ws.ok('session-status')['state'], 'STOPPED')
         self.assertFalse((self.ws.private / 'turns' / '1.exit').exists())
         self.ws.blocked('session-stop')
@@ -707,7 +737,7 @@ class QuestionTests(Base):
         self.assertNotIn('question', run['turn'])
         events = self.ws.events()
         self.assertEqual([(e['kind'], e['actor']) for e in events[-3:]],
-                         [('question', 'L2'), ('unanswered', 'L1'), ('stop', 'human')])
+                         [('question', 'L2'), ('unanswered', 'L1'), ('stop', 'L1')])
         self.assertEqual(events[-3]['data']['round'], 1)
         self.assertEqual(events[-3]['data']['questions'][0]['question'], 'Question 1?')
         self.assertEqual(events[-2]['data'], dict(round=1))
