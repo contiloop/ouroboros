@@ -10,21 +10,21 @@ the target project's git-ignored `.dryforge/ouroboros/` (`run.json`, `events.jso
 | Command | Use |
 | --- | --- |
 | `doctor --host claude` | `claude` on PATH, its version, `dryforge` plugin installed and enabled |
-| `draft --proposal <file>` | create or replace the DRAFT proposal (archives a finished run first; refuses on ACTIVE) |
+| `draft --proposal <file>` | create the DRAFT proposal, or revise the proposal of the current DRAFT, ACTIVE or STOPPED run (it must be shown and approved again); a COMPLETE run is archived first and a new run starts |
 | `shown` | mark the current proposal as shown to the user |
 | `show` | status, digests, limits, spent budget, session, open cycle |
-| `approve` | approve exactly the shown proposal; amendment on an active or stopped run |
+| `approve` | approve exactly the shown proposal: activates a DRAFT, amends an active or stopped run whose proposal changed, resumes a stopped run whose proposal is unchanged |
 | `cycle-start --kind development\|migration --goal <file> --checkpoint <commit>` | open a cycle |
 | `cycle-stage --stage ready\|go\|review\|done [--ready-digest <hex>] [--checkpoint <commit>]` | advance it (`go` needs a ready digest) |
 | `evaluate --decision CONTINUE\|REPLAN\|ESCALATE\|COMPLETE --basis <file>` | close it; applies limits and amendments |
 | `event --actor human\|L1\|L2\|host --kind <kind> [--cycle <id>] --data <file>` | record a question, answer, decision or evidence |
 | `stop --reason abort\|limit:<which>` | set STOPPED |
 | `archive` | move a finished run under `archive/<run_id>/` |
-| `session-start --skill ready\|go\|migration --message <file> [--fresh --reason <text>]` | launch a detached turn whose message is `/dryforge:<skill> ` + the file text |
+| `session-start --skill ready\|go\|migration --message <file> [--fresh --reason <text>]` | launch a detached turn whose message is `/dryforge:<skill> ` + the file text (`go --fresh` is refused once the cycle's Ready ran in a session) |
 | `session-send --message <file>` | launch a detached turn on the recorded session with the file text |
 | `session-wait [--timeout <s>]` | block until the turn exits, then print the parsed result |
 | `session-status` | `RUNNING` or the last parsed result, without blocking |
-| `session-stop` | terminate the running turn and record it |
+| `session-stop` | terminate the running turn and record it (a turn that already exited is settled instead) |
 
 ## The worker process
 
@@ -36,9 +36,13 @@ first words of the message; the host loads the installed skill. Without a questi
 asks in plain text and the turn ends; your next `session-send` is the answer.
 
 Parsed turn result keys: `state` (`COMPLETE`, `INTERRUPTED`, `STOPPED`), `session_id`, `text`,
-`num_turns`, `cost_usd`, `permission_denials`, `is_error`, `subtype`, `raw_path`, `text_path`,
-`reason`. The first result records the session id; a later result with a different id is an
-`INTERRUPTED` turn. Cost is added to the run's spent budget once per turn.
+`num_turns`, `cost_usd`, `usage` (`input_tokens`, `cache_read_input_tokens`,
+`cache_creation_input_tokens`, `output_tokens`; null when the host did not report one),
+`permission_denials`, `is_error`, `subtype`, `raw_path`, `text_path`, `reason`, and the run's
+`run_status` and `stopped_reason` after the turn. The first result that names a session id records
+it; a later result with a different id is an `INTERRUPTED` turn. Cost is added to the run's spent
+budget once per turn and checked at once: when the budget is exceeded the run is `STOPPED`
+(`limit:budget`) and no further turn launches.
 
 ## Evidence
 

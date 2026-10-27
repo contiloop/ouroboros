@@ -48,11 +48,12 @@
   no question tool.
 
 ## Detached turns: the `/bin/sh` wrapper and pid semantics
-- The adapter launches `claude` through `/bin/sh -c '… >N.json 2>N.err; echo $? >N.exit'` in a new
-  session so the exit code survives the short-lived CLI that started it. The recorded pid is the
-  shell's; `session-stop` signals its process group. `alive()` uses `os.kill(pid, 0)`; a pid reused by
-  an unrelated process after exit would read as RUNNING until it also exits (the `.exit` file is the
-  stronger signal if that ever matters).
+- The adapter launches `claude` through `/bin/sh -c 'umask 077; … >N.json 2>N.err; echo $? >N.exit'`
+  in a new session so the exit code survives the short-lived CLI that started it (the umask keeps
+  the three files 0600). The recorded pid is the shell's; `session-stop` signals its process group.
+  `alive()` consults the `.exit` file first: once it exists the turn is over, whatever the pid says;
+  only without it does `os.kill(pid, 0)` decide, so a pid reused by an unrelated process cannot make
+  a finished turn look RUNNING. A killed turn leaves no `.exit` file.
 - `session-wait` does not hold the record lock while blocking; settlement of a result happens inside
   a transaction and is idempotent (`turn.cost_recorded`, `turn.state != RUNNING`).
 

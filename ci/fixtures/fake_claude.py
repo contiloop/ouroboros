@@ -49,7 +49,9 @@ def print_mode(argv: list) -> int:
     result = dict(type='result', subtype='success', is_error=False, duration_ms=10, duration_api_ms=5,
                   num_turns=3, result='echo: ' + message, session_id=os.environ.get('FAKE_CLAUDE_SESSION', 'sess-fake-1'),
                   total_cost_usd=float(os.environ.get('FAKE_CLAUDE_COST', '0.125')),
-                  usage=dict(input_tokens=10, output_tokens=5), permission_denials=[])
+                  usage=dict(input_tokens=10, cache_read_input_tokens=100, cache_creation_input_tokens=20,
+                             output_tokens=5, server_tool_use=dict(web_search_requests=0)),
+                  permission_denials=[])
     code = 0
     if mode == 'error':
         result.update(is_error=True, subtype='error_during_execution', result='something broke')

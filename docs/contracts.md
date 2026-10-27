@@ -37,27 +37,32 @@ the workspace.
 | Command | Arguments | Effect |
 | --- | --- | --- |
 | `doctor` | `--host claude` | `{host, claude: path\|null, version, dryforge: {installed, enabled}}`; never exit 2 for a missing host |
-| `draft` | `--proposal <file>` | creates or replaces the DRAFT (archives a COMPLETE/STOPPED run first); refuses on ACTIVE or a live foreign owner |
+| `draft` | `--proposal <file>` | DRAFT, ACTIVE or STOPPED → replaces `proposal.md` of the current run, clears the shown digest and copy, appends `draft` (the revision must be shown and approved again); COMPLETE → archives the run first and starts a new DRAFT; refuses a live foreign owner |
 | `shown` | — | records the digest of `proposal.md` as shown; keeps a copy for diffs |
 | `show` | — | summary: status, run_id, shown and current digests, limits, spent, session, open cycle, `stopped_at` |
-| `approve` | — | no proposal → BLOCKED "nothing proposed"; digest ≠ shown → BLOCKED with both digests and a unified diff; DRAFT → ACTIVE + first approval; ACTIVE same digest → no-op summary; ACTIVE/STOPPED with a newer shown digest → amendment appended, status ACTIVE. Refuses a proposal missing a required section or a parsable `Limits` section |
+| `approve` | — | no proposal → BLOCKED "nothing proposed"; digest ≠ shown → BLOCKED with both digests and a unified diff; DRAFT → ACTIVE + first approval (`activated`); ACTIVE same digest → no-op summary; STOPPED same digest → `resumed`: an approval entry is appended, status ACTIVE, `stopped_reason`/`stopped_at` cleared; ACTIVE/STOPPED with a newer shown digest → `amended`: amendment appended, status ACTIVE. Refuses a proposal missing a required section or a parsable `Limits` section |
 | `cycle-start` | `--kind migration\|development --goal <file> --checkpoint <commit>` | opens `c<n>`; refuses unless ACTIVE, no open cycle and no limit already reached; emits pending `amend_applied` |
 | `cycle-stage` | `--stage ready\|go\|review\|done [--ready-digest <hex>] [--checkpoint <commit>]` | advances the open cycle; `go` requires a ready digest; `--checkpoint` sets `checkpoint_after` |
 | `evaluate` | `--decision CONTINUE\|REPLAN\|ESCALATE\|COMPLETE --basis <file>` | closes the cycle; REPLAN/ESCALATE count as stalled; COMPLETE needs a non-empty basis and sets the run COMPLETE; limits reached → STOPPED `limit:cycles\|stalled\|budget` |
 | `event` | `--actor human\|L1\|L2\|host --kind <kind> [--cycle <id>] --data <file>` | appends one event; JSON ≤ 8 KB embedded, otherwise copied to `turns/event-<n>.<ext>` |
 | `stop` | `--reason abort\|limit:<which>` | STOPPED with `stopped_at` {cycle, stage, checkpoint}; the open cycle stays open |
 | `archive` | — | moves a finished run under `archive/<run_id>/` |
-| `session-start` | `--skill ready\|go\|migration --message <file> [--fresh --reason <text>]` | detached turn; message = `/dryforge:<skill> ` + file text; `--resume` of the recorded session unless `--fresh` |
-| `session-send` | `--message <file>` | detached `--resume` turn with the file text |
+| `session-start` | `--skill ready\|go\|migration --message <file> [--fresh --reason <text>]` | detached turn; message = `/dryforge:<skill> ` + file text; `--resume` of the recorded session unless `--fresh`; refused while a limit is exceeded, and `go --fresh` is refused while the open cycle has a recorded `session_id` (Ready ran there) |
+| `session-send` | `--message <file>` | detached `--resume` turn with the file text; refused while a limit is exceeded |
 | `session-wait` | `[--timeout <s>]` | blocks until the turn exits; prints the parsed result, or `{state: RUNNING, waited}` on timeout |
 | `session-status` | — | `{state: RUNNING, pid, turn}` or the parsed result; never blocks |
-| `session-stop` | — | SIGTERM the process group, SIGKILL after 5 s; turn `STOPPED` |
+| `session-stop` | — | SIGTERM the process group (outside the record lock), SIGKILL after 5 s; turn `STOPPED`; a turn that has already exited is settled like `session-status` instead |
 
 **Parsed turn result:** `state` (`COMPLETE` | `INTERRUPTED` | `STOPPED`), `session_id`, `text`,
-`num_turns`, `cost_usd`, `permission_denials`, `is_error`, `subtype`, `raw_path`, `stderr_path`,
-`exit_code`, `text_path`, `reason`, `turn`, `pid`, `kind`. INTERRUPTED covers non-zero exit,
-empty or non-JSON output, a missing session id, `is_error`, or a session id that differs from the
-recorded one. Cost is added to `spent_usd` once per turn.
+`num_turns`, `cost_usd`, `usage` (`input_tokens`, `cache_read_input_tokens`,
+`cache_creation_input_tokens`, `output_tokens`; a count the host did not report is null),
+`permission_denials`, `is_error`, `subtype`, `raw_path`, `stderr_path`, `exit_code`, `text_path`,
+`reason`, `turn`, `pid`, `kind`, plus `run_status` and `stopped_reason` of the run after the turn.
+INTERRUPTED covers non-zero exit, empty or non-JSON output, a missing session id, `is_error`, or a
+session id that differs from the recorded one. Any turn that names a session id binds it when none
+is recorded yet (an INTERRUPTED first turn included). Cost is added to `spent_usd` once per turn;
+when the sum then exceeds `budget_usd` the run is set STOPPED `limit:budget` (a `stop` event, actor
+L1) and the result shows `run_status: STOPPED`.
 
 **Run record (`run.json`):** `run_id`, `workspace`, `status` ∈ {DRAFT, ACTIVE, COMPLETE, STOPPED},
 `proposal_digest_shown`, `approvals[] {time, digest, applied}`, `limits {max_cycles,

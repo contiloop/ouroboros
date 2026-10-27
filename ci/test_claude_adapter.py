@@ -17,7 +17,7 @@ ROOT = HERE.parent
 SCRIPTS = ROOT / 'src/skills/init/scripts'
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(SCRIPTS))
-from test_run_record import Workspace  # noqa: E402
+from test_run_record import Workspace, proposal as proposal_text  # noqa: E402
 from ouroboros import adapters, ports  # noqa: E402
 from ouroboros.adapters import claude as claude_adapter  # noqa: E402
 
@@ -166,9 +166,12 @@ class WaitAndStatusTests(Base):
         self.assertEqual(self.ws.events()[-1]['cycle_id'], 'c1')
         out = self.ws.wait()
         for key in ('state', 'session_id', 'text', 'num_turns', 'cost_usd', 'permission_denials', 'is_error',
-                    'subtype', 'raw_path'):
+                    'subtype', 'raw_path', 'usage', 'run_status', 'stopped_reason'):
             self.assertIn(key, out)
         self.assertEqual(out['state'], 'COMPLETE')
+        self.assertEqual((out['run_status'], out['stopped_reason']), ('ACTIVE', None))
+        self.assertEqual(out['usage'], dict(input_tokens=10, cache_read_input_tokens=100,
+                                            cache_creation_input_tokens=20, output_tokens=5))
         self.assertEqual(out['session_id'], 's-9')
         self.assertEqual(out['text'], 'echo: /dryforge:ready x\n')
         self.assertEqual((out['num_turns'], out['cost_usd'], out['is_error'], out['subtype']), (3, 0.5, False, 'success'))
@@ -180,10 +183,65 @@ class WaitAndStatusTests(Base):
         self.assertEqual(run['session']['id'], 's-9')
         self.assertEqual(json.loads((self.ws.private / 'owner.json').read_text())['session_id'], 's-9')
         self.assertEqual(run['cycles'][0]['session_id'], 's-9')
+        self.assertEqual(run['turn']['usage']['output_tokens'], 5)
         ev = self.ws.events()[-1]
         self.assertEqual((ev['kind'], ev['actor']), ('turn_result', 'host'))
         self.assertNotIn('text', ev['data'])
         self.assertIn('text_path', ev['data'])
+        self.assertEqual(ev['data']['usage']['input_tokens'], 10)
+
+    def test_usage_counts_missing_from_the_result_are_null(self):
+        adapter = claude_adapter.ClaudeAdapter()
+        raw = self.ws.private / 'turns' / 'probe.json'
+        raw.write_text(json.dumps(dict(session_id='s-u', result='x', usage=dict(input_tokens=7, output_tokens='many'))))
+        out = adapter.result(ports.Turn(pid=os.getpid(), raw_path=raw))
+        self.assertEqual(out['usage'], dict(input_tokens=7, cache_read_input_tokens=None,
+                                            cache_creation_input_tokens=None, output_tokens=None))
+        raw.write_text(json.dumps(dict(session_id='s-u', result='x')))
+        out = adapter.result(ports.Turn(pid=os.getpid(), raw_path=raw))
+        self.assertEqual(out['usage'], {k: None for k in claude_adapter.USAGE_KEYS})
+        self.assertIn('usage', claude_adapter.RESULT_KEYS)
+
+    def test_turn_files_are_private(self):
+        self.ws.start('ready', 'x\n')
+        self.ws.wait()
+        turns = self.ws.private / 'turns'
+        for name in ('1.json', '1.err', '1.exit', '1.txt'):
+            with self.subTest(name=name):
+                self.assertTrue((turns / name).is_file())
+                self.assertEqual(stat.S_IMODE((turns / name).stat().st_mode), 0o600)
+
+    def test_second_cycle_records_the_session_it_runs_in(self):
+        self.ws.start('ready', 'x\n', env=dict(FAKE_CLAUDE_SESSION='s-c'))
+        self.ws.wait()
+        self.ws.evaluate('CONTINUE')
+        self.ws.start_cycle()
+        run = self.ws.record()
+        self.assertEqual([c['session_id'] for c in run['cycles']], ['s-c', 's-c'])
+        self.ws.start('ready', 'y\n', env=dict(FAKE_CLAUDE_SESSION='s-c'))
+        self.ws.wait()
+        self.assertEqual(self.ws.record()['cycles'][1]['session_id'], 's-c')
+        # A fresh session inside the cycle replaces the cycle's recorded session once its first turn names one.
+        self.ws.evaluate('CONTINUE')
+        self.ws.start_cycle()
+        self.ws.start('ready', 'z\n', '--fresh', '--reason', 'replan', env=dict(FAKE_CLAUDE_SESSION='s-d'))
+        self.assertIsNone(self.ws.record()['cycles'][2]['session_id'])
+        self.ws.wait()
+        run = self.ws.record()
+        self.assertEqual((run['session']['id'], run['cycles'][2]['session_id']), ('s-d', 's-d'))
+
+    def test_interrupted_first_turn_still_records_its_session_id(self):
+        self.ws.start('ready', 'x\n', env=dict(FAKE_CLAUDE_MODE='fail', FAKE_CLAUDE_SESSION='s-i'))
+        out = self.ws.wait()
+        self.assertEqual((out['state'], out['session_id']), ('INTERRUPTED', 's-i'))
+        run = self.ws.record()
+        self.assertEqual(run['session']['id'], 's-i')
+        self.assertEqual(run['cycles'][0]['session_id'], 's-i')
+        self.assertEqual(json.loads((self.ws.private / 'owner.json').read_text())['session_id'], 's-i')
+        out = self.ws.send('resume\n', env=dict(FAKE_CLAUDE_SESSION='s-i'))
+        self.assertEqual(out['session_id'], 's-i')
+        self.ws.wait()
+        self.assertEqual(self.ws.argv()[self.ws.argv().index('--resume') + 1], 's-i')
 
     def test_status_running_while_sleeping_then_complete(self):
         t = time.monotonic()
@@ -223,6 +281,102 @@ class WaitAndStatusTests(Base):
         again = self.ws.ok('session-status')
         self.assertEqual(again['state'], 'INTERRUPTED')
         self.assertEqual(self.ws.record()['spent_usd'], 0.25)
+
+
+class BudgetTests(Base):
+    def test_turn_cost_over_budget_stops_the_run(self):
+        self.ws.start('ready', 'x\n', env=dict(FAKE_CLAUDE_COST='10.5'))  # proposal budget is 10
+        out = self.ws.wait()
+        self.assertEqual(out['state'], 'COMPLETE')
+        self.assertEqual((out['run_status'], out['stopped_reason']), ('STOPPED', 'limit:budget'))
+        run = self.ws.record()
+        self.assertEqual((run['status'], run['stopped_reason'], run['spent_usd']), ('STOPPED', 'limit:budget', 10.5))
+        self.assertEqual(run['stopped_at'], dict(cycle_id='c1', stage='ready', checkpoint='a' * 40))
+        self.assertEqual(run['turn']['state'], 'COMPLETE')
+        self.assertEqual(run['session']['id'], 'sess-fake-1')
+        ev = self.ws.events()[-1]
+        self.assertEqual((ev['kind'], ev['actor'], ev['cycle_id']), ('stop', 'L1', 'c1'))
+        self.assertEqual((ev['data']['reason'], ev['data']['turn'], ev['data']['budget_usd']), ('limit:budget', 1, 10))
+        self.assertEqual(self.ws.kinds()[-2], 'turn_result')
+        again = self.ws.ok('session-status')
+        self.assertEqual((again['state'], again['run_status']), ('COMPLETE', 'STOPPED'))
+        self.assertEqual(self.ws.kinds().count('stop'), 1)
+        out = self.ws.blocked('session-send', '--message', self.ws.file('more'))
+        self.assertIn('STOPPED', out['error'])
+        # The user resumes with the same proposal; the budget is still exceeded, so no turn is launched.
+        self.ws.ok('approve')
+        self.assertEqual(self.ws.record()['status'], 'ACTIVE')
+        out = self.ws.blocked('session-send', '--message', self.ws.file('more'))
+        self.assertIn('budget', out['error'])
+        self.assertEqual(self.ws.record()['turn_count'], 1)
+        # Raising the budget lets the run continue.
+        self.ws.draft(proposal_text(budget='20'))
+        self.ws.ok('shown'); self.ws.ok('approve')
+        self.ws.send('more\n', env=dict(FAKE_CLAUDE_COST='1'))
+        out = self.ws.wait()
+        self.assertEqual((out['state'], out['run_status']), ('COMPLETE', 'ACTIVE'))
+        self.assertEqual(self.ws.record()['spent_usd'], 11.5)
+
+    def test_no_cap_budget_never_stops_a_turn(self):
+        ws = HostWorkspace()
+        self.addCleanup(ws.cleanup)
+        ws.approve_fresh(proposal_text(budget='no cap'))
+        ws.start_cycle()
+        ws.start('ready', 'x\n', env=dict(FAKE_CLAUDE_COST='999'))
+        out = ws.wait()
+        self.assertEqual((out['run_status'], ws.record()['status']), ('ACTIVE', 'ACTIVE'))
+
+    def test_last_allowed_cycle_still_runs_turns(self):
+        for _ in range(2):
+            self.ws.evaluate('CONTINUE')
+            self.ws.start_cycle()
+        self.assertEqual(len(self.ws.record()['cycles']), 3)  # max cycles is 3; the open cycle is the last one
+        self.ws.start('ready', 'x\n', env=dict(FAKE_CLAUDE_COST='1'))
+        out = self.ws.wait()
+        self.assertEqual((out['state'], out['run_status']), ('COMPLETE', 'ACTIVE'))
+        self.ws.send('more\n', env=dict(FAKE_CLAUDE_COST='10'))  # the budget is still watched in the last cycle
+        out = self.ws.wait()
+        self.assertEqual((out['run_status'], out['stopped_reason']), ('STOPPED', 'limit:budget'))
+        self.ws.draft(proposal_text(cycles=2, budget='20'))  # a lowered cycle limit the open cycle already exceeds
+        self.ws.ok('shown'); self.ws.ok('approve')
+        self.assertEqual(self.ws.record()['status'], 'ACTIVE')
+        out = self.ws.blocked('session-send', '--message', self.ws.file('x'))
+        self.assertIn('cycles', out['error'])
+
+    def test_launch_refuses_once_any_limit_is_exceeded(self):
+        self.ws.start('ready', 'x\n')
+        self.ws.wait()
+        run = self.ws.record()
+        run['stalled_cycles'] = 2
+        (self.ws.private / 'run.json').write_text(json.dumps(run))
+        out = self.ws.blocked('session-send', '--message', self.ws.file('x'))
+        self.assertIn('stalled', out['error'])
+        self.assertEqual(self.ws.record()['turn_count'], 1)
+
+
+class GateThreeTests(Base):
+    def test_go_fresh_refused_once_ready_ran_in_a_session(self):
+        self.ws.start('ready', 'x\n', env=dict(FAKE_CLAUDE_SESSION='s-r'))
+        self.ws.wait()
+        self.ws.ok('cycle-stage', '--stage', 'go', '--ready-digest', 'd' * 64)
+        out = self.ws.blocked('session-start', '--skill', 'go', '--message', self.ws.file('go'), '--fresh',
+                              '--reason', 'try')
+        self.assertIn('s-r', out['error'])
+        run = self.ws.record()
+        self.assertEqual((run['turn_count'], run['session']['id'], run['turn']['state']), (1, 's-r', 'COMPLETE'))
+        self.assertEqual(self.ws.kinds().count('session'), 1)  # no fresh session was recorded
+        out = self.ws.start('go', 'go\n', env=dict(FAKE_CLAUDE_SESSION='s-r'))
+        self.assertEqual(out['session_id'], 's-r')
+        self.ws.wait()
+        self.assertEqual(self.ws.argv()[self.ws.argv().index('--resume') + 1], 's-r')
+
+    def test_go_fresh_allowed_when_no_ready_session_is_recorded(self):
+        self.ws.evaluate('CONTINUE')
+        self.ws.start_cycle()
+        self.assertIsNone(self.ws.record()['cycles'][1]['session_id'])
+        self.ws.ok('cycle-stage', '--stage', 'ready', '--ready-digest', 'd' * 64)
+        self.ws.start('go', 'go\n', '--fresh', '--reason', 'no session yet')
+        self.ws.wait()
 
 
 class InterruptedTests(Base):
@@ -285,9 +439,37 @@ class StopTests(Base):
         ev = self.ws.events()[-1]
         self.assertEqual((ev['kind'], ev['actor'], ev['data']['turn']), ('stop', 'human', 1))
         self.assertEqual(self.ws.ok('session-status')['state'], 'STOPPED')
+        self.assertFalse((self.ws.private / 'turns' / '1.exit').exists())
         self.ws.blocked('session-stop')
         self.ws.start('ready', 'again\n')  # a stopped turn is not RUNNING
         self.ws.wait()
+
+    def test_stop_on_an_exited_turn_settles_it_instead(self):
+        out = self.ws.start('ready', 'quick\n', env=dict(FAKE_CLAUDE_COST='0.3'))
+        deadline = time.monotonic() + 10
+        while not (self.ws.private / 'turns' / '1.exit').exists() and time.monotonic() < deadline:
+            time.sleep(0.05)
+        st = self.ws.ok('session-stop')
+        self.assertEqual((st['state'], st['turn'], st['session_id']), ('COMPLETE', 1, 'sess-fake-1'))
+        run = self.ws.record()
+        self.assertEqual((run['turn']['state'], run['spent_usd']), ('COMPLETE', 0.3))
+        self.assertNotIn('stop', self.ws.kinds())
+        self.assertEqual(self.ws.kinds()[-1], 'turn_result')
+
+    def test_alive_consults_the_exit_file_before_the_pid(self):
+        adapter = claude_adapter.ClaudeAdapter()
+        sleeper = subprocess.Popen(['sleep', '30'])
+        self.addCleanup(sleeper.kill)
+        raw = self.ws.private / 'turns' / 'probe.json'
+        turn = ports.Turn(pid=sleeper.pid, raw_path=raw)
+        self.assertTrue(adapter.alive(turn))
+        raw.with_suffix('.exit').write_text('0\n')
+        self.assertFalse(adapter.alive(turn))
+        self.assertTrue(pid_alive(sleeper.pid))
+        raw.with_suffix('.exit').unlink()
+        self.assertTrue(adapter.alive(turn))
+        sleeper.kill(); sleeper.wait()
+        self.assertFalse(adapter.alive(turn))
 
 
 class RefusalTests(unittest.TestCase):
