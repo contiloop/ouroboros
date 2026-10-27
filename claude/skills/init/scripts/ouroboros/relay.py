@@ -88,8 +88,11 @@ def wait_for_answer(proc: subprocess.Popen, path: str) -> dict | None:
         time.sleep(ANSWER_POLL)
 
 
-def take_down(proc: subprocess.Popen) -> None:
-    if proc.poll() is not None:
+def take_down(proc: subprocess.Popen | None) -> None:
+    """Stop the child. Only claude's own pid is signalled, not the group: claude shares the wrapper's process
+    group, and a group kill would take the `/bin/sh` wrapper with it and lose the `.exit` file. `session-stop`
+    is the one that kills the whole group."""
+    if proc is None or proc.poll() is not None:
         return
     for sig, grace in ((signal.SIGTERM, KILL_GRACE), (signal.SIGKILL, 1.0)):
         try:
@@ -133,19 +136,21 @@ def run(opts: dict, claude_argv: list) -> int:
         message = f.read()
     stream_fd = os.open(path('stream.jsonl'), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
     stream = os.fdopen(stream_fd, 'ab')
-    proc = subprocess.Popen(claude_argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=None,
-                            start_new_session=False, close_fds=True)
 
     def on_signal(signum, frame):
         raise Interrupted(signum)
 
+    # Handlers go in before the child exists so a signal in the gap cannot orphan it.
     for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
         signal.signal(sig, on_signal)
 
+    proc: subprocess.Popen | None = None
     result = None
     rounds = 0
     auto: list = []
     try:
+        proc = subprocess.Popen(claude_argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=None,
+                                start_new_session=False, close_fds=True)
         send(proc, dict(type='user', message=dict(role='user', content=message)))
         for raw in proc.stdout:
             stream.write(raw if raw.endswith(b'\n') else raw + b'\n')
@@ -194,8 +199,7 @@ def run(opts: dict, claude_argv: list) -> int:
         take_down(proc)
         raise
     finally:
-        if proc.poll() is None:
-            take_down(proc)
+        take_down(proc)
         stream.close()
 
 

@@ -28,7 +28,8 @@ RELAY = Path(__file__).resolve().parent.parent / 'relay.py'
 # `AskUserQuestion` must never be listed here: an allow-listed tool runs without a permission request, so
 # its questions would never reach the relay channel that hands them to L1.
 ALLOWED_TOOLS = 'Bash,Edit,Write,Read,Glob,Grep,Agent,WebFetch,WebSearch,NotebookEdit,Skill,TodoWrite,mcp__*'
-QUESTION_TOOL = 'AskUserQuestion'
+QUESTION_TOOL = 'AskUserQuestion'   # the relay keeps its own literal: it must stay import-free
+assert QUESTION_TOOL not in ALLOWED_TOOLS.split(','), 'the question tool must never be allow-listed'
 MAX_TURNS = 200
 MODEL: str | None = None
 STOP_GRACE = 5.0           # seconds between SIGTERM and SIGKILL in terminate()
@@ -100,6 +101,20 @@ def _exit_code(raw_path: Path) -> int | None:
         return None
 
 
+def wire_answers(answers: dict) -> dict:
+    """Claude's wire form of structured answers (question → string): a label as is, a list of labels joined
+    with ", ", {"other": text} as its text. The caller has validated the structure."""
+    wire = {}
+    for text, value in answers.items():
+        if isinstance(value, list):
+            wire[text] = ', '.join(value)
+        elif isinstance(value, dict):
+            wire[text] = value['other']
+        else:
+            wire[text] = value
+    return wire
+
+
 def parse_usage(data) -> dict:
     """The token counts of a result's `usage` block; a missing or non-numeric count is null."""
     usage = data if isinstance(data, dict) else {}
@@ -139,6 +154,8 @@ class ClaudeAdapter:
                  '--message', str(msg_path), '--']
         script = (f'umask 077; {" ".join(shlex.quote(a) for a in relay)} "$@" 2>>{shlex.quote(str(err_path))}; '
                   f'echo $? >{shlex.quote(str(exit_path))}')
+        # The detached group is intentionally never reaped here: the CLI exits long before the turn ends and
+        # `.exit` is the end-of-turn signal (hence the ResourceWarning about a running child in tests).
         proc = subprocess.Popen(['/bin/sh', '-c', script, 'sh', *argv], cwd=str(workspace),
                                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                 start_new_session=True, close_fds=True)
@@ -154,23 +171,26 @@ class ClaudeAdapter:
 
     # ── liveness and termination ─────────────────────────────────────────
     def alive(self, turn: Turn) -> bool:
-        """False once the wrapper has written the exit file (the authoritative end of a turn), else the pid check."""
+        """False once the wrapper has written the exit file (the authoritative end of a turn). Without it, the turn
+        is alive while the wrapper pid or any other member of its process group exists: after a group SIGTERM
+        the `/bin/sh` wrapper dies at once (no `.exit`) while the relay is still taking `claude` down, and a
+        turn reported dead in that window would let a second `claude --resume` start concurrently."""
         _, exit_path = side_paths(turn.raw_path)
         if exit_path.exists():
             return False
         try:
-            pid, _ = os.waitpid(turn.pid, os.WNOHANG)  # reaps the wrapper if it happens to be our child
-            if pid == turn.pid:
-                return False
+            os.waitpid(turn.pid, os.WNOHANG)  # reaps the wrapper if it happens to be our child
         except ChildProcessError:
             pass
-        try:
-            os.kill(turn.pid, 0)
-        except ProcessLookupError:
-            return False
-        except PermissionError:
+        for probe in (os.kill, os.killpg):  # the wrapper pid, then its whole group (same id: it leads the group)
+            try:
+                probe(turn.pid, 0)
+            except ProcessLookupError:
+                continue
+            except PermissionError:
+                return True
             return True
-        return True
+        return False
 
     def terminate(self, turn: Turn) -> None:
         for sig, grace in ((signal.SIGTERM, self.stop_grace), (signal.SIGKILL, 1.0)):
@@ -194,8 +214,8 @@ class ClaudeAdapter:
         return None
 
     def answer(self, turn: Turn, round_: int, answers: dict) -> None:
-        """Hand the wire-form answers (question text → string) of bundle `round_` to the relay."""
-        _write_json(aux_path(turn.raw_path, f'a{round_}.json'), dict(round=round_, answers=answers))
+        """Encode the validated answers of bundle `round_` into Claude's wire form and hand them to the relay."""
+        _write_json(aux_path(turn.raw_path, f'a{round_}.json'), dict(round=round_, answers=wire_answers(answers)))
 
     def session_id(self, turn: Turn) -> str | None:
         """The session id of the turn's init event as soon as the relay has recorded it, else None."""
