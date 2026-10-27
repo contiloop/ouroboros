@@ -302,15 +302,16 @@ def _launch(store: Store, a, message: str, kind: str, fresh: bool, reason: str |
                 f'go must run in the session of this cycle\'s Ready ({cycle.get("session_id") if cycle else None}); '
                 'drop --fresh, or run ready in a fresh session first')
         host = _host(run)
+        models = core.models(run)  # re-applied on every turn: an amendment takes effect at the next one
         store.ensure_dir()
         _claim(store, a, run)
         n = int(run.get('turn_count', 0)) + 1
         raw_path = store.turns_dir / f'{n}.json'
         try:
             if fresh:
-                handle = host.start(store.workspace, message, raw_path)
+                handle = host.start(store.workspace, message, raw_path, models)
             else:
-                handle = host.send(store.workspace, session_id, message, raw_path)
+                handle = host.send(store.workspace, session_id, message, raw_path, models)
         except (OSError, ValueError) as exc:
             raise RecordError(f'could not launch the host session: {exc}')
         started = now()
@@ -321,13 +322,13 @@ def _launch(store: Store, a, message: str, kind: str, fresh: bool, reason: str |
                 cycle['session_id'] = None  # the cycle's session is the one its turns actually run in
         run['turn_count'] = n
         run['turn'] = dict(n=n, pid=handle.pid, started=started, kind=kind, state='RUNNING', cost_recorded=False,
-                           questions_answered=0)
+                           questions_answered=0, models=models)
         store.write_run(run)
         if fresh:
-            store.append_event('L1', 'session', cycle_id, dict(reason=run['session']['reason'], turn=n))
+            store.append_event('L1', 'session', cycle_id, dict(reason=run['session']['reason'], turn=n, models=models))
         store.append_event('L1', 'turn', cycle_id, dict(turn=n, pid=handle.pid, kind=kind, session_id=session_id,
-                                                        resumed=not fresh, raw_path=str(raw_path)))
-        return dict(turn=n, pid=handle.pid, session_id=session_id)
+                                                        resumed=not fresh, raw_path=str(raw_path), models=models))
+        return dict(turn=n, pid=handle.pid, session_id=session_id, models=models)
 
 
 def cmd_session_start(store: Store, a) -> dict:
@@ -347,7 +348,7 @@ def _stored_result(store: Store, run: dict) -> dict:
     turn = run['turn']
     out = {k: turn.get(k) for k in ('state', 'session_id', 'num_turns', 'cost_usd', 'cost_total_usd', 'usage', 'permission_denials',
                                     'is_error', 'subtype', 'raw_path', 'stderr_path', 'exit_code', 'reason', 'text_path',
-                                    'skills', 'auto_allowed', 'questions', 'stream_path')}
+                                    'skills', 'auto_allowed', 'questions', 'stream_path', 'models')}
     text_path = turn.get('text_path')
     out['text'] = (store.dir / text_path).read_text(encoding='utf-8') if text_path and (store.dir / text_path).is_file() else None
     return dict(out, turn=turn['n'], pid=turn['pid'], kind=turn['kind'], run_status=run['status'],

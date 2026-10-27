@@ -412,7 +412,8 @@ def cycle_stage(run: dict, stage: str, ready_digest: str | None = None, checkpoi
 
 
 def evaluate(run: dict, decision: str, basis: str) -> tuple[dict, list]:
-    """Close the open cycle; return (run, extra events) for amend_applied and limit stops. On a beta cycle ESCALATE
+    """Close the open cycle; return (run, extra events) for amend_applied and limit stops. COMPLETE is accepted only on
+    a beta cycle (the run ends with its scenarios verified, never on development alone). On a beta cycle ESCALATE
     (a verification only the human can make) is not stalled; REPLAN is. The cycles limit stops the run only when
     the decision asks for more development (REPLAN, or ESCALATE on a development cycle): after CONTINUE at the
     last allowed cycle the run stays ACTIVE so the beta test can run; a development cycle-start is refused."""
@@ -420,6 +421,8 @@ def evaluate(run: dict, decision: str, basis: str) -> tuple[dict, list]:
     require(decision in DECISIONS, f'decision must be one of {", ".join(DECISIONS)}')
     require(open_cycle(run) is not None, 'no open cycle')
     require(decision != 'COMPLETE' or bool(basis.strip()), 'COMPLETE requires a non-empty basis (evidence per criterion)')
+    require(decision != 'COMPLETE' or open_cycle(run)['kind'] == 'beta',
+            'COMPLETE is the evaluation of a beta cycle; open one with cycle-start --kind beta')
     run = copy.deepcopy(run)
     cycle = open_cycle(run)
     cycle['stage'] = 'done'
