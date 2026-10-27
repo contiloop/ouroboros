@@ -32,9 +32,9 @@ def check_workspace(workspace: Path) -> None:
     top = subprocess.run(['git', '-C', str(workspace), 'rev-parse', '--show-toplevel'], capture_output=True, text=True)
     require(top.returncode == 0 and Path(top.stdout.strip()).resolve() == workspace.resolve(),
             f'workspace is not a git repository root: {workspace}')
-    ignored = subprocess.run(['git', '-C', str(workspace), 'check-ignore', '-q', '.dryforge/ouroboros/run.json'],
-                             capture_output=True)
-    require(ignored.returncode == 0, 'the workspace .gitignore does not ignore `.dryforge/`; add that line first')
+    for path in ('.dryforge/', '.dryforge/ouroboros/run.json', '.dryforge/ouroboros/events.jsonl'):
+        ignored = subprocess.run(['git', '-C', str(workspace), 'check-ignore', '-q', path], capture_output=True)
+        require(ignored.returncode == 0, 'the workspace .gitignore does not ignore `.dryforge/`; add that line first')
 
 
 def _mkdir(path: Path) -> None:
@@ -115,8 +115,8 @@ class Store:
         except ValueError:
             return None
 
-    def write_owner(self, pid: int) -> None:
-        _write_bytes(self.owner_path, json.dumps(dict(pid=pid, started=now())).encode())
+    def write_owner(self, pid: int, session_id: str | None = None) -> None:
+        _write_bytes(self.owner_path, json.dumps(dict(pid=pid, session_id=session_id, started=now())).encode())
 
     # ── record ──────────────────────────────────────────────────────────
     def has_run(self) -> bool:
@@ -152,13 +152,15 @@ class Store:
         _append(self.events_path, json.dumps(event, ensure_ascii=False) + '\n')
         return event
 
-    def event_data(self, source: Path) -> dict | list | str | int | float | bool | None:
-        """Embed small valid JSON; otherwise copy under turns/ and reference by relative path."""
+    def event_data(self, source: Path, text: bool = False):
+        """Embed small valid JSON (or, with text=True, small text as a string); otherwise copy under turns/
+        and reference by relative path."""
         require(source.is_file(), f'data file not found: {source}')
         raw = source.read_bytes()
         if len(raw) <= EMBED_LIMIT:
             try:
-                return json.loads(raw.decode('utf-8'))
+                decoded = raw.decode('utf-8')
+                return decoded if text else json.loads(decoded)
             except ValueError:
                 pass
         n = 1 + sum(1 for p in self.turns_dir.glob('event-*'))

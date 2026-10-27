@@ -62,6 +62,7 @@ def cmd_draft(store: Store, a) -> dict:
 
 
 def cmd_shown(store: Store, a) -> dict:
+    require(store.has_run(), 'nothing proposed')
     with store.transaction():
         run = store.read_run()
         raw = store.read_proposal()
@@ -78,11 +79,12 @@ def cmd_show(store: Store, a) -> dict:
 
 
 def cmd_approve(store: Store, a) -> dict:
-    raw = store.read_proposal()
-    require(raw is not None, 'nothing proposed')
+    require(store.has_run() and store.proposal_path.is_file(), 'nothing proposed')
     with store.transaction():
         check_owner(store, a.owner)
         run = store.read_run()
+        raw = store.read_proposal()
+        require(raw is not None, 'nothing proposed')
         current = core.digest(raw)
         try:
             run, action = core.approve(run, current, raw.decode('utf-8'))
@@ -105,11 +107,13 @@ def cmd_approve(store: Store, a) -> dict:
 def cmd_cycle_start(store: Store, a) -> dict:
     goal = read_text(a.goal)
     with store.transaction():
-        run = core.cycle_start(store.read_run(), a.kind, goal, a.checkpoint)
+        run, extra = core.cycle_start(store.read_run(), a.kind, goal, a.checkpoint)
         cycle = run['cycles'][-1]
         store.write_run(run)
         store.append_event('L1', 'cycle_start', cycle['id'],
                            dict(kind=a.kind, checkpoint_before=a.checkpoint, goal_digest=core.digest(goal.encode())))
+        for e in extra:
+            store.append_event(e['actor'], e['kind'], e['cycle_id'], e['data'])
         return summary(store)
 
 
@@ -126,11 +130,11 @@ def cmd_cycle_stage(store: Store, a) -> dict:
 def cmd_evaluate(store: Store, a) -> dict:
     basis = read_text(a.basis)
     with store.transaction():
-        before = store.read_run()
-        run, extra = core.evaluate(before, a.decision)
+        run, extra = core.evaluate(store.read_run(), a.decision, basis)
         cycle_id = run['cycles'][-1]['id']
         store.write_run(run)
-        store.append_event('L1', 'evaluate', cycle_id, dict(decision=a.decision, basis=basis))
+        store.append_event('L1', 'evaluate', cycle_id,
+                           dict(decision=a.decision, basis=store.event_data(Path(a.basis), text=True)))
         for e in extra:
             store.append_event(e['actor'], e['kind'], e['cycle_id'], e['data'])
         return summary(store)
@@ -155,7 +159,7 @@ def cmd_stop(store: Store, a) -> dict:
         cycle = core.open_cycle(run)
         store.write_run(run)
         store.append_event('human' if a.reason == 'abort' else 'L1', 'stop', cycle['id'] if cycle else None,
-                           dict(reason=a.reason, stage=cycle['stage'] if cycle else None))
+                           dict(reason=a.reason, stopped_at=run['stopped_at']))
         return summary(store)
 
 

@@ -148,7 +148,8 @@ class DraftTests(Base):
             self.assertEqual(stat.S_IMODE((priv / name).stat().st_mode), 0o600, name)
         run = self.ws.record()
         self.assertEqual(set(run), {'run_id', 'workspace', 'status', 'proposal_digest_shown', 'approvals', 'limits',
-                                    'spent_usd', 'stalled_cycles', 'host', 'session', 'cycles', 'stopped_reason'})
+                                    'spent_usd', 'stalled_cycles', 'host', 'session', 'cycles', 'stopped_reason',
+                                    'stopped_at'})
         self.assertEqual(run['status'], 'DRAFT')
         self.assertEqual(run['workspace'], str(self.ws.path))
         self.assertIsNone(run['proposal_digest_shown'])
@@ -160,6 +161,8 @@ class DraftTests(Base):
         self.assertEqual(self.ws.kinds(), ['draft'])
         owner = json.loads((priv / 'owner.json').read_text())
         self.assertEqual(owner['pid'], os.getpid())
+        self.assertEqual(set(owner), {'pid', 'session_id', 'started'})
+        self.assertIsNone(owner['session_id'])
         self.assertNotIn('schema', json.dumps(run))
 
     def test_redraft_replaces_proposal_and_clears_shown(self):
@@ -177,6 +180,14 @@ class DraftTests(Base):
     def test_draft_refused_when_dryforge_not_ignored(self):
         ws = Workspace(ignore=False)
         self.addCleanup(ws.cleanup)
+        out = ws.blocked('draft', '--proposal', ws.file(proposal()))
+        self.assertIn('.dryforge/', out['error'])
+        self.assertFalse((ws.path / '.dryforge').exists())
+
+    def test_draft_refused_when_only_json_is_ignored(self):
+        ws = Workspace(ignore=False)
+        self.addCleanup(ws.cleanup)
+        (ws.path / '.gitignore').write_text('*.json\n')
         out = ws.blocked('draft', '--proposal', ws.file(proposal()))
         self.assertIn('.dryforge/', out['error'])
         self.assertFalse((ws.path / '.dryforge').exists())
@@ -277,6 +288,7 @@ class ApproveTests(Base):
         self.assertEqual(len(run['approvals']), 1)
         self.assertEqual(run['approvals'][0]['digest'], sha(proposal()))
         self.assertIn('time', run['approvals'][0])
+        self.assertTrue(run['approvals'][0]['applied'])
         self.assertEqual(run['limits'], dict(max_cycles=3, max_stalled_cycles=2, budget_usd=10))
         ev = self.ws.events()[-1]
         self.assertEqual((ev['kind'], ev['actor']), ('approve', 'human'))
@@ -300,6 +312,7 @@ class ApproveTests(Base):
         self.assertEqual(run['status'], 'ACTIVE')
         self.assertEqual([a['digest'] for a in run['approvals']], [sha(proposal()), sha(proposal(cycles=5))])
         self.assertEqual(run['limits']['max_cycles'], 5)
+        self.assertFalse(run['approvals'][-1]['applied'])
         self.assertEqual(self.ws.kinds()[-1], 'amend')
         self.assertEqual(self.ws.events()[-1]['actor'], 'human')
         self.ws.ok('stop', '--reason', 'abort')
@@ -449,10 +462,23 @@ class CycleTests(Base):
 
     def test_complete_sets_run_complete(self):
         self.ws.start_cycle()
+        out = self.ws.blocked('evaluate', '--decision', 'COMPLETE', '--basis', self.ws.file('  \n'))
+        self.assertIn('basis', out['error'])
+        self.assertEqual(self.ws.record()['status'], 'ACTIVE')
+        self.ws.ok('evaluate', '--decision', 'CONTINUE', '--basis', self.ws.file(''))  # empty basis only blocks COMPLETE
+        self.ws.start_cycle()
         self.ws.evaluate('COMPLETE')
         run = self.ws.record()
         self.assertEqual(run['status'], 'COMPLETE')
         self.assertIsNone(run['stopped_reason'])
+
+    def test_large_basis_goes_to_turns(self):
+        self.ws.start_cycle()
+        self.ws.ok('evaluate', '--decision', 'CONTINUE', '--basis', self.ws.file('x' * 9000, '.md'))
+        ev = self.ws.events()[-1]
+        self.assertEqual(ev['kind'], 'evaluate')
+        self.assertEqual(ev['data']['basis']['file'], 'turns/event-1.md')
+        self.assertEqual((self.ws.private / 'turns/event-1.md').read_text(), 'x' * 9000)
 
     def test_stalled_limit_stops(self):
         self.ws.start_cycle(); self.ws.evaluate('REPLAN')
@@ -500,6 +526,19 @@ class CycleTests(Base):
         self.ws.start_cycle()
         self.ws.evaluate('CONTINUE')
         self.assertEqual(self.ws.kinds().count('amend_applied'), 1)
+        self.assertTrue(all(a['applied'] for a in self.ws.record()['approvals']))
+
+    def test_amendment_between_cycles_applied_at_next_cycle_start(self):
+        self.ws.start_cycle(); self.ws.evaluate('CONTINUE')
+        (self.ws.private / 'proposal.md').write_text(proposal(cycles=8))
+        self.ws.ok('shown'); self.ws.ok('approve')
+        self.assertNotIn('amend_applied', self.ws.kinds())
+        self.ws.start_cycle()
+        kinds = self.ws.kinds()
+        self.assertEqual(kinds[-2:], ['cycle_start', 'amend_applied'])
+        self.assertEqual(self.ws.events()[-1]['cycle_id'], 'c2')
+        self.ws.evaluate('CONTINUE')
+        self.assertEqual(self.ws.kinds().count('amend_applied'), 1)
 
 
 class EventTests(Base):
@@ -545,9 +584,27 @@ class StopAndArchiveTests(Base):
         self.assertEqual(out['status'], 'STOPPED')
         run = self.ws.record()
         self.assertEqual(run['stopped_reason'], 'abort')
+        self.assertIsNone(run['stopped_at'])
         ev = self.ws.events()[-1]
         self.assertEqual((ev['kind'], ev['actor'], ev['data']['reason']), ('stop', 'human', 'abort'))
         self.ws.blocked('stop', '--reason', 'abort')
+
+    def test_stop_records_open_cycle_checkpoint_and_stage(self):
+        self.ws.approve_fresh()
+        self.ws.start_cycle(checkpoint='a' * 40)
+        self.ws.ok('cycle-stage', '--stage', 'ready', '--ready-digest', 'd' * 64)
+        self.ws.ok('cycle-stage', '--stage', 'go')
+        self.ws.ok('stop', '--reason', 'abort')
+        run = self.ws.record()
+        self.assertEqual(run['stopped_at'], dict(cycle_id='c1', stage='go', checkpoint='a' * 40))
+        self.assertEqual(self.ws.events()[-1]['data']['stopped_at'], run['stopped_at'])
+        self.assertIsNone(run['cycles'][0]['evaluation'])  # abort leaves the cycle open
+        (self.ws.private / 'proposal.md').write_text(proposal(cycles=9))
+        self.ws.ok('shown'); self.ws.ok('approve')
+        self.assertIsNone(self.ws.record()['stopped_at'])
+        self.ws.ok('cycle-stage', '--stage', 'review', '--checkpoint', 'b' * 40)
+        self.ws.ok('stop', '--reason', 'abort')
+        self.assertEqual(self.ws.record()['stopped_at']['checkpoint'], 'b' * 40)
 
     def test_stop_limit_reason(self):
         self.ws.approve_fresh()
@@ -605,7 +662,8 @@ class OwnerAndLockTests(Base):
         st = store.Store(self.ws.path)
         other = subprocess.Popen(['sleep', '30'])
         self.addCleanup(other.kill)
-        st.write_owner(other.pid)
+        st.write_owner(other.pid, session_id='s-1')
+        self.assertEqual(st.read_owner()['session_id'], 's-1')
         with self.assertRaises(core.RecordError):
             store.check_owner(st, os.getpid())
         store.check_owner(st, other.pid)

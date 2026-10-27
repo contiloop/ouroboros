@@ -46,7 +46,7 @@ def new_run(workspace: str) -> dict:
     run_id = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S') + '-' + secrets.token_hex(3)
     return dict(run_id=run_id, workspace=workspace, status='DRAFT', proposal_digest_shown=None, approvals=[],
                 limits=None, spent_usd=0, stalled_cycles=0, host=HOST,
-                session=dict(id=None, started=None, reason=None), cycles=[], stopped_reason=None)
+                session=dict(id=None, started=None, reason=None), cycles=[], stopped_reason=None, stopped_at=None)
 
 
 # ── proposal ───────────────────────────────────────────────────────────────
@@ -129,11 +129,12 @@ def approve(run: dict, current_digest: str, proposal_text: str) -> tuple[dict, s
         return copy.deepcopy(run), 'unchanged'
     limits = parse_proposal(proposal_text)['limits']
     run = copy.deepcopy(run)
-    run['approvals'].append(dict(time=now(), digest=current_digest))
-    run['limits'] = limits
     action = 'activated' if run['status'] == 'DRAFT' else 'amended'
+    run['approvals'].append(dict(time=now(), digest=current_digest, applied=action == 'activated'))
+    run['limits'] = limits
     run['status'] = 'ACTIVE'
     run['stopped_reason'] = None
+    run['stopped_at'] = None
     return run, action
 
 
@@ -154,7 +155,18 @@ def limit_exceeded(run: dict) -> str | None:
     return None
 
 
-def cycle_start(run: dict, kind: str, goal: str, checkpoint: str) -> dict:
+def apply_amendments(run: dict, cycle_id: str | None) -> list:
+    """Mark unapplied amendments applied; return the amend_applied events to append. Mutates `run`."""
+    events = []
+    for approval in run['approvals']:
+        if not approval['applied']:
+            approval['applied'] = True
+            events.append(dict(actor='L1', kind='amend_applied', cycle_id=cycle_id, data=dict(digest=approval['digest'])))
+    return events
+
+
+def cycle_start(run: dict, kind: str, goal: str, checkpoint: str) -> tuple[dict, list]:
+    """Open a cycle; return (run, extra events) with amend_applied for amendments made between cycles."""
     require(run['status'] == 'ACTIVE', f'run is {run["status"]}, not ACTIVE')
     require(kind in KINDS, f'kind must be one of {", ".join(KINDS)}')
     require(bool(goal.strip()), 'cycle goal is empty')
@@ -163,10 +175,11 @@ def cycle_start(run: dict, kind: str, goal: str, checkpoint: str) -> dict:
     which = limit_exceeded(run)
     require(which is None, f'limit already exceeded: {which}')
     run = copy.deepcopy(run)
-    run['cycles'].append(dict(id=f'c{len(run["cycles"]) + 1}', goal=goal, kind=kind, started=now(), session_id=None,
+    cycle_id = f'c{len(run["cycles"]) + 1}'
+    run['cycles'].append(dict(id=cycle_id, goal=goal, kind=kind, started=now(), session_id=None,
                               stage='ready', checkpoint_before=checkpoint, checkpoint_after=None,
                               ready_digest=None, evaluation=None))
-    return run
+    return run, apply_amendments(run, cycle_id)
 
 
 def cycle_stage(run: dict, stage: str, ready_digest: str | None = None, checkpoint: str | None = None) -> dict:
@@ -185,19 +198,17 @@ def cycle_stage(run: dict, stage: str, ready_digest: str | None = None, checkpoi
     return run
 
 
-def evaluate(run: dict, decision: str) -> tuple[dict, list]:
+def evaluate(run: dict, decision: str, basis: str) -> tuple[dict, list]:
     """Close the open cycle; return (run, extra events) for amend_applied and limit stops."""
     require(run['status'] == 'ACTIVE', f'run is {run["status"]}, not ACTIVE')
     require(decision in DECISIONS, f'decision must be one of {", ".join(DECISIONS)}')
     require(open_cycle(run) is not None, 'no open cycle')
+    require(decision != 'COMPLETE' or bool(basis.strip()), 'COMPLETE requires a non-empty basis (evidence per criterion)')
     run = copy.deepcopy(run)
     cycle = open_cycle(run)
     cycle['stage'] = 'done'
     cycle['evaluation'] = decision
-    extra = []
-    if run['approvals'] and run['approvals'][-1]['time'] > cycle['started']:
-        extra.append(dict(actor='L1', kind='amend_applied', cycle_id=cycle['id'],
-                          data=dict(digest=run['approvals'][-1]['digest'])))
+    extra = apply_amendments(run, cycle['id'])
     if decision not in ('CONTINUE', 'COMPLETE'):
         run['stalled_cycles'] += 1
     if decision == 'COMPLETE':
@@ -215,8 +226,11 @@ def stop(run: dict, reason: str) -> dict:
     require(run['status'] == 'ACTIVE', f'run is {run["status"]}, not ACTIVE')
     require(reason == 'abort' or (reason.startswith('limit:') and len(reason) > 6), 'reason must be abort or limit:<which>')
     run = copy.deepcopy(run)
+    cycle = open_cycle(run)
     run['status'] = 'STOPPED'
     run['stopped_reason'] = reason
+    run['stopped_at'] = dict(cycle_id=cycle['id'], stage=cycle['stage'],
+                             checkpoint=cycle['checkpoint_after'] or cycle['checkpoint_before']) if cycle else None
     return run
 
 
@@ -233,5 +247,6 @@ def summary(run: dict, proposal_digest: str | None, event_count: int) -> dict:
     return dict(status=run['status'], run_id=run['run_id'], proposal_digest_shown=run['proposal_digest_shown'],
                 proposal_digest=proposal_digest, limits=run['limits'], spent_usd=run['spent_usd'],
                 stalled_cycles=run['stalled_cycles'], session=run['session'], stopped_reason=run['stopped_reason'],
+                stopped_at=run['stopped_at'],
                 cycle=dict(id=cycle['id'], stage=cycle['stage'], kind=cycle['kind']) if cycle else None,
                 counts=dict(cycles=len(run['cycles']), approvals=len(run['approvals']), events=event_count))
