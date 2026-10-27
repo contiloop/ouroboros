@@ -8,8 +8,8 @@ Ready–Go cycles in one persistent headless worker session, and finally beta-te
 itself. Small repository: skill text under
 `src/skills/`, ~2k lines of standard-library Python runtime (run record, relay, Claude Code adapter), a
 bash build that emits five host packages, and a unittest suite. Maintained by one person;
-experimental; rebuilt from its concept on 2026-10-27, live run still pending (see
-`docs/tracking/status.md`).
+experimental; rebuilt from its concept on 2026-10-27, first live unattended run completed
+2026-10-28 (see `docs/tracking/status.md`).
 
 ## Project structure
 
