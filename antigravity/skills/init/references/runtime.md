@@ -25,7 +25,7 @@ Writes refuse while `.dryforge/` is not ignored there.
 | `session-send --message <file>` | launch a detached turn on the recorded session with the file text |
 | `session-wait [--timeout <s>]` | block until the turn exits or the worker asks a question, then print the parsed result (`QUESTION` carries `round` and `questions`) |
 | `session-answer --answers <file> [--basis <file>]` | answer the open question round: JSON object `{"<question text>": "<label>" \| ["<label>", …] \| {"other": "<text>"}}`; records `question` and `answer` events; refuses an unknown question or a non-option answer |
-| `session-status` | `RUNNING` or the last parsed result, without blocking |
+| `session-status` | `RUNNING`, `QUESTION` (with the open question) or the last parsed result, without blocking |
 | `session-stop` | terminate the running turn and record it (a turn that already exited is settled instead) |
 
 ## The worker process
