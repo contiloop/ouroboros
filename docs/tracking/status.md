@@ -1,6 +1,6 @@
 # Status
 
-Snapshot as of 2026-10-27, branch `dryforge/four-doc-proposal` (cycle 003) (v1.4.1 released 2026-10-24; an
+Snapshot as of 2026-10-28, branch `dryforge/cycle-004` (cycle 004) (v1.4.1 released 2026-10-24; an
 `Unreleased` changelog section describes the rebuild).
 
 ## Direction
@@ -24,46 +24,16 @@ packaging-only.
 | Host facts the design rests on (skill loads headlessly, resume, allow-list behavior) | live-probed once on 2026-10-27 with claude 2.1.311 | probe results recorded in the engineering notes |
 | README and product docs for the new model | done; translations patched minimally | `ci/test_ouroboros_branding.py` |
 | Five-platform build, manifest/version/marketplace validation, reproducible-build check | passes | `build/build.sh`, `ci/verify.py` |
+| Cycle 004: budget removed (limits = max cycles, max stalled cycles; cost kept as information), `effort` in `delegation.md` validated and passed as `--effort`, English documents, the client interview stage for stage with the interview log, `review` command, `approve` requires a passing gate review bound to the content digest (decision 0011) | built, unit-tested | `ci/test_run_record.py`, `ci/test_claude_adapter.py`, `ci/test_mission_contract.py` |
 
 ## Remaining (in order)
 
-Findings from the first live unattended run on Claude Code (2026-10-27/28, sample project
-`~/Desktop/topmemo`, a macOS always-on-top memo app; the human side was played by the maintainer's
-assistant session). The run went `init → approve → 2 development cycles → beta cycle → ESCALATE for
-on-screen checks → COMPLETE`. Everything below is what the next cycle changes; the mechanism itself held.
-
-0. **Governing principle for the interview (the user's words):** the user is a client, not a
-   developer. They know what they want, when and how it is used, how it should look and feel, and
-   what would satisfy them; they do not need to know the technology. L1 is the expert who knows the
-   technology and the code and decides everything else. So the interview asks only what a client
-   would know (scenarios, observable conditions, taste and references, priorities); technical
-   choices are L1's, presented to the user only when they change the user's experience and then in
-   plain words. Validation items are written by L1 from the scenarios and shown to the user as
-   "this is what I will check" for confirmation; environment, evidence and efficient checks are L1's.
-   Questions from the independent reviews pass the same filter.
-1. **Remove the budget.** Claude Code runs on a subscription, so `budget usd` is only a list-price
-   conversion. The run still stopped itself at 22 USD of a 20 USD limit and needed an amendment to
-   continue. Drop the budget from `delegation.md` and the limits, the budget stop in `_settle`, and
-   the spend accounting (keep `cost_usd` in turn results as information or drop it; decide in `ready`).
-   Limits become max cycles and max stalled cycles only.
-2. **Models and effort are L1's call.** L1 picks the L2/L3 models and an effort level as the expert
-   (recorded in `delegation.md`), tells the user in one line that they can be changed, and asks at
-   most one plain-language choice ("quick and light" vs "thorough") when it matters. Apply effort
-   with the host's `--effort` flag on the worker session (not yet passed by the adapter).
-3. **Language.** Remove the "reply in the user's language" instruction from the skill text; keep one
-   line that the four documents are written in English (the run produced Korean documents while the
-   chat was English).
-4. **Content completeness before approve, with re-asking.** `approve` checks structure only. Add an
-   independent review of the four documents (an agent that did not author them) before approval; its
-   findings are re-asked to the user by L1 until none remain; the passing review is recorded and
-   `approve` requires it. Model the whole interview on Dryforge `ready`'s stages, stage for stage:
-   orient → decompose the user's words into the four documents' axes (conflicts become questions) →
-   elicit (decision surface, extract domain / present technical, grounds gate, ≤4 questions with a
-   recommendation) → independent intent-completeness subagent (guess hunt, findings re-asked) →
-   write the four documents + fidelity check → independent gate subagent on the finished documents
-   (executability, contract consistency; findings re-asked) → `approve`. Both independent checks are
-   recorded in the run and `approve` requires the last one to have passed on the shown set.
-5. Then: Codex adapter; release (version bump, translated READMEs).
+1. **Second live unattended run on Claude Code** with the cycle-004 interview: a client-only
+   dialogue, both independent reviews recorded, `approve` refusing until the gate passes, English
+   documents, no budget stop. Observe whether the headless resumed session honors `--effort`
+   (record the observation in the engineering notes) and whether L3 effort needs control.
+2. Codex adapter.
+3. Release: version bump (ten manifests + CHANGELOG heading + tag), translated READMEs.
 
 ## Blockers
 

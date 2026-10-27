@@ -41,8 +41,9 @@
   Bash does nothing and lists them in `permission_denials`, with the allow-list (including the
   `mcp__*` pattern, which the CLI accepts) the same turn runs with no denial; `claude plugin list`
   prints `dryforge@dryforge` with a `Status:` line the adapter parses.
-- **Not verified:** a full Ready → Go cycle driven by L1, L3 behavior under the allow-list, cost and
-  context growth across cycles. The unit tests use `ci/fixtures/fake_claude.py`; a green suite is
+- **Not verified:** L3 behavior under the allow-list, context growth across cycles, and whether a
+  headless `--resume`d session honors `--effort <level>` (the adapter passes it since cycle 004; only
+  the fake host covers it). The unit tests use `ci/fixtures/fake_claude.py`; a green suite is
   not live evidence.
 - A Claude Code **subagent** cannot be L2: it does not see user-invocable-only plugin skills and has
   no question tool.

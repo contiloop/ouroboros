@@ -30,8 +30,14 @@
   prompts (`ci/test_runtime_contract.py` pins the absence of bypass flags). `AskUserQuestion` must
   never be added to the allow-list: an allow-listed tool never reaches the channel, and L1 would
   stop seeing questions.
-- The host's `total_cost_usd` is cumulative per session; `_settle` charges the delta
-  (`session.cost_total_usd` is the baseline). Do not add the reported figure directly.
+- The host's `total_cost_usd` is cumulative per session; `_settle` reports the delta as `cost_usd`
+  (`session.cost_total_usd` is the baseline). Cost is information only: there is no budget, no spend
+  accounting and no cost-based stop.
+- `approve` requires a passing `gate` review bound to the content digest (scenario, validation,
+  spec); the rule lives in `core.approve` as a refusal, never an activation. `interview.md` is L1's
+  private log, part of `RUN_FILES`, never quoted to L2.
+- Effort: `delegation.md` `effort:` is validated in `core` against `EFFORTS`; the adapter passes
+  `--effort` for anything but `default`; L3 effort is not controlled.
 - Scripts: Python 3.11+, standard library only. `ouroboros_cli.py` inserts its own directory into
   `sys.path`; run it by path with `-B`.
 - Record files are created under the *target project's* `.dryforge/ouroboros/` with modes 0700/0600,
