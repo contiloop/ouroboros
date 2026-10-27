@@ -32,14 +32,24 @@ Findings from the first live unattended run on Claude Code (2026-10-27/28, sampl
 assistant session). The run went `init → approve → 2 development cycles → beta cycle → ESCALATE for
 on-screen checks → COMPLETE`. Everything below is what the next cycle changes; the mechanism itself held.
 
+0. **Governing principle for the interview (the user's words):** the user is a client, not a
+   developer. They know what they want, when and how it is used, how it should look and feel, and
+   what would satisfy them; they do not need to know the technology. L1 is the expert who knows the
+   technology and the code and decides everything else. So the interview asks only what a client
+   would know (scenarios, observable conditions, taste and references, priorities); technical
+   choices are L1's, presented to the user only when they change the user's experience and then in
+   plain words. Validation items are written by L1 from the scenarios and shown to the user as
+   "this is what I will check" for confirmation; environment, evidence and efficient checks are L1's.
+   Questions from the independent reviews pass the same filter.
 1. **Remove the budget.** Claude Code runs on a subscription, so `budget usd` is only a list-price
    conversion. The run still stopped itself at 22 USD of a 20 USD limit and needed an amendment to
    continue. Drop the budget from `delegation.md` and the limits, the budget stop in `_settle`, and
    the spend accounting (keep `cost_usd` in turn results as information or drop it; decide in `ready`).
    Limits become max cycles and max stalled cycles only.
-2. **Ask the models and effort in the interview.** `delegation.md` `Models` stays `default` unless
-   asked; the interview should present L2/L3 model choices and an effort level with a recommendation.
-   Apply effort with the host's `--effort` flag on the worker session (not yet passed by the adapter).
+2. **Models and effort are L1's call.** L1 picks the L2/L3 models and an effort level as the expert
+   (recorded in `delegation.md`), tells the user in one line that they can be changed, and asks at
+   most one plain-language choice ("quick and light" vs "thorough") when it matters. Apply effort
+   with the host's `--effort` flag on the worker session (not yet passed by the adapter).
 3. **Language.** Remove the "reply in the user's language" instruction from the skill text; keep one
    line that the four documents are written in English (the run produced Korean documents while the
    chat was English).
