@@ -18,8 +18,8 @@ user's language. Load `../init/references/runtime.md` for the commands.
    - changed since it was shown → show the user the difference; nothing is approved until they see
      the current version and invoke `approve` again;
    - equal → the run is `ACTIVE` (or, for a changed proposal on an active or stopped run, an
-     amendment is recorded and applied at the next cycle boundary; a stopped run becomes active
-     again).
+     amendment is recorded and applied at the next cycle boundary); a stopped run approved again
+     resumes, with or without a changed proposal.
 3. Repeating `approve` on an active run with an unchanged proposal changes nothing.
 4. Recording `ACTIVE` is not execution. Load the complete `../init/references/orchestration.md` and
    begin the loop now, in this session.

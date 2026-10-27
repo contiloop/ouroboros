@@ -39,7 +39,8 @@ started. Never paste Dryforge procedure text or substitute another procedure.
    - `INTERRUPTED` → inspect the workspace and `.dryforge/` of the target, then resume the same
      session with `session-send`; replacing the session is a recorded decision (`--fresh`);
    - a permission denial is part of the result: decide the next message yourself, never ask the
-     user to allow anything.
+     user to allow anything;
+   - `run_status: STOPPED` → the turn's cost took the run over its budget; report it and stop.
 5. **Review Ready.** Read the actual `.dryforge/handoff.md`, `spec.md` and `plan.md` in the target
    project, not L2's summary. Request corrections with `session-send`. When they are right, record
    `cycle-stage --stage go --ready-digest <sha256 of the three files>` and send

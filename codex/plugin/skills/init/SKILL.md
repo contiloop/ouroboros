@@ -21,9 +21,10 @@ load `references/runtime.md` for the record commands.
 3. Read the existing run record with `show` (see `runtime.md`):
    - no record or `DRAFT` → start or continue the proposal conversation;
    - `ACTIVE` → the run continues under its existing authority; talk about changes, never reset,
-     refill or restart anything;
-   - `COMPLETE` or `STOPPED` → a new proposal may be drafted; the finished run is archived
-     automatically by `draft`, never overwritten.
+     refill or restart anything; `draft` revises its proposal for a later amendment;
+   - `COMPLETE` → `draft` archives the finished run and starts a new one;
+   - `STOPPED` → `draft` revises the stopped run so `approve` can resume it; to start a different
+     goal after a stop, run `archive` first and then `draft`.
    Records under `.dryforge/mission/` are from an older version and are ignored.
 
 ## The conversation

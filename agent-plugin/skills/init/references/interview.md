@@ -35,9 +35,12 @@ Every time the proposal is shown to the user, write it with `draft --proposal <f
 `shown`. Approval binds to the shown version: if the file changes afterwards, `approve` shows the
 difference instead of approving.
 
-## While the run is active
+## While the run is active or stopped
 
 The user may keep talking. Clarification inside the agreed scope goes into the next worker message
 or the next cycle with no new approval. A change to goal, completion criteria, constraints,
-priorities or non-goals is a proposal revision: update the file, show it, and the user's next
-`approve` records the amendment, applied at the next cycle boundary.
+priorities, non-goals or limits is a proposal revision: write it with `draft` (which revises the
+current run instead of starting a new one), run `shown`, and the user's next `approve` records the
+amendment, applied at the next cycle boundary. The same path revises a stopped run, for example to
+raise a limit; `approve` then resumes it. A different goal after a stop is a new run: `archive`
+the stopped run first, then `draft`.

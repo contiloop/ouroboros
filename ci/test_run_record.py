@@ -203,28 +203,65 @@ class DraftTests(Base):
         out = self.ws.blocked('draft', '--proposal', self.ws.file(proposal()), workspace=str(sub))
         self.assertIn('git', out['error'])
 
-    def test_draft_refused_on_active_run(self):
+    def test_draft_revises_active_run(self):
         self.ws.approve_fresh()
-        out = self.ws.blocked('draft', '--proposal', self.ws.file(proposal(cycles=5)))
-        self.assertIn('ACTIVE', out['error'])
-        self.assertEqual(self.ws.record()['status'], 'ACTIVE')
-        self.assertEqual((self.ws.private / 'proposal.md').read_text(), proposal())
+        before = self.ws.record()
+        out = self.ws.ok('draft', '--proposal', self.ws.file(proposal(cycles=5)))
+        self.assertEqual(out['status'], 'ACTIVE')
+        self.assertIsNone(out['proposal_digest_shown'])
+        self.assertEqual(out['proposal_digest'], sha(proposal(cycles=5)))
+        run = self.ws.record()
+        self.assertEqual((run['run_id'], run['status'], run['limits']), (before['run_id'], 'ACTIVE', before['limits']))
+        self.assertEqual(run['approvals'], before['approvals'])
+        self.assertEqual((self.ws.private / 'proposal.md').read_text(), proposal(cycles=5))
+        self.assertFalse((self.ws.private / 'proposal.shown.md').exists())
+        self.assertEqual(self.ws.kinds(), ['draft', 'shown', 'approve', 'draft'])
+        self.assertFalse((self.ws.private / 'archive').exists())
+        out = self.ws.blocked('approve')  # the revision must be shown first
+        self.assertIn('shown', out['error'])
 
-    def test_draft_archives_finished_run_first(self):
+    def test_draft_revises_stopped_run_so_approve_can_resume_it(self):
         self.ws.approve_fresh()
         self.ws.ok('stop', '--reason', 'abort')
+        old = self.ws.record()
+        out = self.ws.ok('draft', '--proposal', self.ws.file(proposal(cycles=4)))
+        self.assertEqual(out['status'], 'STOPPED')
+        run = self.ws.record()
+        self.assertEqual((run['run_id'], run['status'], run['stopped_reason']), (old['run_id'], 'STOPPED', 'abort'))
+        self.assertIsNone(run['proposal_digest_shown'])
+        self.assertFalse((self.ws.private / 'archive').exists())
+        self.ws.ok('shown')
+        out = self.ws.ok('approve')
+        self.assertEqual((out['status'], out['approval']), ('ACTIVE', 'amended'))
+        self.assertEqual(self.ws.record()['limits']['max_cycles'], 4)
+
+    def test_draft_archives_complete_run_and_starts_a_new_one(self):
+        self.ws.approve_fresh()
+        self.ws.start_cycle()
+        self.ws.evaluate('COMPLETE')
         old = self.ws.record()
         self.ws.draft(proposal(cycles=4))
         run = self.ws.record()
         self.assertNotEqual(run['run_id'], old['run_id'])
         self.assertEqual(run['status'], 'DRAFT')
         archived = self.ws.private / 'archive' / old['run_id']
-        self.assertEqual(json.loads((archived / 'run.json').read_text())['status'], 'STOPPED')
+        self.assertEqual(json.loads((archived / 'run.json').read_text())['status'], 'COMPLETE')
         self.assertEqual((archived / 'proposal.md').read_text(), proposal())
         self.assertTrue((archived / 'proposal.shown.md').is_file())
         kinds = [json.loads(l)['kind'] for l in (archived / 'events.jsonl').read_text().splitlines()]
         self.assertEqual(kinds[-1], 'archive')
         self.assertEqual(self.ws.kinds(), ['draft'])
+
+    def test_archive_then_draft_starts_a_different_goal_after_a_stop(self):
+        self.ws.approve_fresh()
+        self.ws.ok('stop', '--reason', 'abort')
+        old = self.ws.record()['run_id']
+        self.ws.ok('archive')
+        self.ws.draft(proposal(cycles=4))
+        run = self.ws.record()
+        self.assertNotEqual(run['run_id'], old)
+        self.assertEqual((run['status'], run['approvals']), ('DRAFT', []))
+        self.assertEqual(json.loads((self.ws.private / 'archive' / old / 'run.json').read_text())['status'], 'STOPPED')
 
 
 class ShownAndShowTests(Base):
@@ -304,10 +341,11 @@ class ApproveTests(Base):
 
     def test_amendment_on_active_and_stopped(self):
         self.ws.approve_fresh()
-        (self.ws.private / 'proposal.md').write_text(proposal(cycles=5))
-        self.ws.blocked('approve')  # changed but not re-shown
+        self.ws.draft(proposal(cycles=5))
+        self.ws.blocked('approve')  # revised but not re-shown
         self.ws.ok('shown')
         out = self.ws.ok('approve')
+        self.assertEqual(out['approval'], 'amended')
         run = self.ws.record()
         self.assertEqual(run['status'], 'ACTIVE')
         self.assertEqual([a['digest'] for a in run['approvals']], [sha(proposal()), sha(proposal(cycles=5))])
@@ -317,14 +355,37 @@ class ApproveTests(Base):
         self.assertEqual(self.ws.events()[-1]['actor'], 'human')
         self.ws.ok('stop', '--reason', 'abort')
         self.assertEqual(self.ws.record()['status'], 'STOPPED')
-        (self.ws.private / 'proposal.md').write_text(proposal(cycles=6))
+        self.ws.draft(proposal(cycles=6))
         self.ws.ok('shown')
         out = self.ws.ok('approve')
+        self.assertEqual(out['approval'], 'amended')
         run = self.ws.record()
         self.assertEqual(run['status'], 'ACTIVE')
         self.assertIsNone(run['stopped_reason'])
         self.assertEqual(len(run['approvals']), 3)
         self.assertEqual(run['limits']['max_cycles'], 6)
+
+    def test_approve_on_stopped_with_same_digest_resumes(self):
+        self.ws.approve_fresh()
+        self.ws.start_cycle()
+        self.ws.ok('stop', '--reason', 'abort')
+        stopped = self.ws.record()
+        self.assertEqual(stopped['status'], 'STOPPED')
+        self.assertIsNotNone(stopped['stopped_at'])
+        out = self.ws.ok('approve')
+        self.assertEqual((out['status'], out['approval']), ('ACTIVE', 'resumed'))
+        run = self.ws.record()
+        self.assertEqual(run['status'], 'ACTIVE')
+        self.assertIsNone(run['stopped_reason'])
+        self.assertIsNone(run['stopped_at'])
+        self.assertEqual([a['digest'] for a in run['approvals']], [sha(proposal())] * 2)
+        self.assertTrue(run['approvals'][-1]['applied'])
+        self.assertEqual(run['limits'], stopped['limits'])
+        ev = self.ws.events()[-1]
+        self.assertEqual((ev['kind'], ev['actor'], ev['data']['action']), ('approve', 'human', 'resumed'))
+        self.assertIsNone(run['cycles'][0]['evaluation'])  # the aborted cycle is still open
+        self.assertEqual(self.ws.ok('approve'), self.ws.ok('show'))  # ACTIVE + same digest stays a no-op
+        self.assertEqual(self.ws.kinds().count('approve'), 2)
 
     def test_complete_run_cannot_be_approved(self):
         self.ws.approve_fresh()
@@ -413,7 +474,7 @@ class CycleTests(Base):
         self.assertEqual(ws.record()['status'], 'STOPPED')
         ws.blocked('cycle-start', '--kind', 'development', '--goal', ws.file('x'), '--checkpoint', 'c' * 40)
         # Raise the limit through an amendment, but keep a budget that is already overspent.
-        (ws.private / 'proposal.md').write_text(proposal(cycles=9, stalled=5, budget='0.5'))
+        ws.draft(proposal(cycles=9, stalled=5, budget='0.5'))
         ws.ok('shown')
         ws.ok('approve')
         run = ws.record()
@@ -516,7 +577,7 @@ class CycleTests(Base):
 
     def test_pending_amendment_applied_at_evaluate(self):
         self.ws.start_cycle()
-        (self.ws.private / 'proposal.md').write_text(proposal(cycles=8))
+        self.ws.draft(proposal(cycles=8))
         self.ws.ok('shown')
         self.ws.ok('approve')
         self.ws.evaluate('CONTINUE')
@@ -530,7 +591,7 @@ class CycleTests(Base):
 
     def test_amendment_between_cycles_applied_at_next_cycle_start(self):
         self.ws.start_cycle(); self.ws.evaluate('CONTINUE')
-        (self.ws.private / 'proposal.md').write_text(proposal(cycles=8))
+        self.ws.draft(proposal(cycles=8))
         self.ws.ok('shown'); self.ws.ok('approve')
         self.assertNotIn('amend_applied', self.ws.kinds())
         self.ws.start_cycle()
@@ -599,7 +660,7 @@ class StopAndArchiveTests(Base):
         self.assertEqual(run['stopped_at'], dict(cycle_id='c1', stage='go', checkpoint='a' * 40))
         self.assertEqual(self.ws.events()[-1]['data']['stopped_at'], run['stopped_at'])
         self.assertIsNone(run['cycles'][0]['evaluation'])  # abort leaves the cycle open
-        (self.ws.private / 'proposal.md').write_text(proposal(cycles=9))
+        self.ws.draft(proposal(cycles=9))
         self.ws.ok('shown'); self.ws.ok('approve')
         self.assertIsNone(self.ws.record()['stopped_at'])
         self.ws.ok('cycle-stage', '--stage', 'review', '--checkpoint', 'b' * 40)

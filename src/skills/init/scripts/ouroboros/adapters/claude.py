@@ -25,7 +25,8 @@ MAX_TURNS = 200
 MODEL: str | None = None
 STOP_GRACE = 5.0           # seconds between SIGTERM and SIGKILL in terminate()
 DOCTOR_TIMEOUT = 20.0      # seconds allowed for `claude --version` / `claude plugin list`
-RESULT_KEYS = ('session_id', 'text', 'num_turns', 'cost_usd', 'permission_denials', 'is_error', 'subtype')
+RESULT_KEYS = ('session_id', 'text', 'num_turns', 'cost_usd', 'permission_denials', 'is_error', 'subtype', 'usage')
+USAGE_KEYS = ('input_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens', 'output_tokens')
 
 
 def command_line(message: str, session_id: str | None, *, allowed_tools: str = ALLOWED_TOOLS,
@@ -53,6 +54,13 @@ def _exit_code(raw_path: Path) -> int | None:
         return None
 
 
+def parse_usage(data) -> dict:
+    """The token counts of a result's `usage` block; a missing or non-numeric count is null."""
+    usage = data if isinstance(data, dict) else {}
+    return {k: (usage[k] if isinstance(usage.get(k), (int, float)) and not isinstance(usage.get(k), bool) else None)
+            for k in USAGE_KEYS}
+
+
 class ClaudeAdapter:
     def __init__(self, allowed_tools: str = ALLOWED_TOOLS, max_turns: int = MAX_TURNS, model: str | None = MODEL,
                  stop_grace: float = STOP_GRACE):
@@ -74,8 +82,9 @@ class ClaudeAdapter:
         err_path, exit_path = side_paths(raw_path)
         for p in (raw_path, err_path, exit_path):
             p.unlink(missing_ok=True)
-        # `"$@"` carries the argv untouched; the wrapper only redirects and records the exit code.
-        script = (f'{shlex.quote(exe)} "$@" >{shlex.quote(str(raw_path))} 2>{shlex.quote(str(err_path))}; '
+        # `"$@"` carries the argv untouched; the wrapper only redirects and records the exit code. The umask
+        # keeps the three files it creates private (0600) like the rest of the record.
+        script = (f'umask 077; {shlex.quote(exe)} "$@" >{shlex.quote(str(raw_path))} 2>{shlex.quote(str(err_path))}; '
                   f'echo $? >{shlex.quote(str(exit_path))}')
         proc = subprocess.Popen(['/bin/sh', '-c', script, 'sh', *argv[1:]], cwd=str(workspace),
                                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -92,6 +101,10 @@ class ClaudeAdapter:
 
     # ── liveness and termination ─────────────────────────────────────────
     def alive(self, turn: Turn) -> bool:
+        """False once the wrapper has written the exit file (the authoritative end of a turn), else the pid check."""
+        _, exit_path = side_paths(turn.raw_path)
+        if exit_path.exists():
+            return False
         try:
             pid, _ = os.waitpid(turn.pid, os.WNOHANG)  # reaps the wrapper if it happens to be our child
             if pid == turn.pid:
@@ -122,8 +135,8 @@ class ClaudeAdapter:
     def result(self, turn: Turn) -> dict:
         err_path, _ = side_paths(turn.raw_path)
         out = dict(state='INTERRUPTED', session_id=None, text=None, num_turns=None, cost_usd=0, permission_denials=[],
-                   is_error=None, subtype=None, raw_path=str(turn.raw_path), stderr_path=str(err_path),
-                   exit_code=_exit_code(turn.raw_path), reason=None)
+                   is_error=None, subtype=None, usage=parse_usage(None), raw_path=str(turn.raw_path),
+                   stderr_path=str(err_path), exit_code=_exit_code(turn.raw_path), reason=None)
         try:
             raw = turn.raw_path.read_text(encoding='utf-8')
         except OSError:
@@ -144,7 +157,7 @@ class ClaudeAdapter:
         out.update(session_id=data.get('session_id'), text=data.get('result'), num_turns=data.get('num_turns'),
                    cost_usd=cost if isinstance(cost, (int, float)) and cost >= 0 else 0,
                    permission_denials=data.get('permission_denials') or [], is_error=bool(data.get('is_error')),
-                   subtype=data.get('subtype'))
+                   subtype=data.get('subtype'), usage=parse_usage(data.get('usage')))
         if not isinstance(out['session_id'], str) or not out['session_id']:
             out.update(session_id=None, reason='result has no session_id')
         elif out['is_error']:

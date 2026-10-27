@@ -110,14 +110,18 @@ def record_shown(run: dict, proposal_digest: str) -> dict:
 
 
 def redraft(run: dict) -> dict:
-    require(run['status'] == 'DRAFT', f'run is {run["status"]}; draft only replaces a DRAFT proposal')
+    """Replace the proposal of a DRAFT, ACTIVE or STOPPED run: the shown digest is cleared, so the revision
+    must be shown again before approve. A COMPLETE run is archived by the caller first."""
+    require(run['status'] != 'COMPLETE', 'run is COMPLETE; archive it and draft a new proposal')
     run = copy.deepcopy(run)
     run['proposal_digest_shown'] = None
     return run
 
 
 def approve(run: dict, current_digest: str, proposal_text: str) -> tuple[dict, str]:
-    """Return (run, action) with action ∈ {activated, amended, unchanged}. Digest rules of the spec."""
+    """Return (run, action) with action ∈ {activated, resumed, amended, unchanged}. Digest rules of the spec:
+    DRAFT → activated; ACTIVE with the last approved digest → unchanged; STOPPED with the last approved
+    digest → resumed (ACTIVE again, same authority); a newer shown digest on ACTIVE or STOPPED → amended."""
     require(run['status'] != 'COMPLETE', 'run is COMPLETE; start a new proposal with draft')
     shown = run['proposal_digest_shown']
     require(shown is not None, 'proposal was never shown; show it and record shown first',
@@ -125,12 +129,17 @@ def approve(run: dict, current_digest: str, proposal_text: str) -> tuple[dict, s
     require(shown == current_digest, 'proposal changed since it was shown; approval applies only to what was shown',
             shown_digest=shown, current_digest=current_digest)
     last = run['approvals'][-1]['digest'] if run['approvals'] else None
-    if run['status'] != 'DRAFT' and last == current_digest:
+    if run['status'] == 'ACTIVE' and last == current_digest:
         return copy.deepcopy(run), 'unchanged'
     limits = parse_proposal(proposal_text)['limits']
     run = copy.deepcopy(run)
-    action = 'activated' if run['status'] == 'DRAFT' else 'amended'
-    run['approvals'].append(dict(time=now(), digest=current_digest, applied=action == 'activated'))
+    if run['status'] == 'DRAFT':
+        action = 'activated'
+    elif run['status'] == 'STOPPED' and last == current_digest:
+        action = 'resumed'
+    else:
+        action = 'amended'
+    run['approvals'].append(dict(time=now(), digest=current_digest, applied=action != 'amended'))
     run['limits'] = limits
     run['status'] = 'ACTIVE'
     run['stopped_reason'] = None
@@ -144,9 +153,12 @@ def open_cycle(run: dict) -> dict | None:
     return None
 
 
-def limit_exceeded(run: dict) -> str | None:
+def limit_exceeded(run: dict, *, mid_cycle: bool = False) -> str | None:
+    """Which limit the run has reached, or None. Between cycles every opened cycle counts; with `mid_cycle`
+    (checked before a worker turn) the open cycle is the one being run and counts only once it is closed."""
     lim = run['limits']
-    if len(run['cycles']) >= lim['max_cycles']:
+    cycles = len(run['cycles']) - (1 if mid_cycle and open_cycle(run) is not None else 0)
+    if cycles >= lim['max_cycles']:
         return 'cycles'
     if run['stalled_cycles'] >= lim['max_stalled_cycles']:
         return 'stalled'
@@ -176,7 +188,7 @@ def cycle_start(run: dict, kind: str, goal: str, checkpoint: str) -> tuple[dict,
     require(which is None, f'limit already exceeded: {which}')
     run = copy.deepcopy(run)
     cycle_id = f'c{len(run["cycles"]) + 1}'
-    run['cycles'].append(dict(id=cycle_id, goal=goal, kind=kind, started=now(), session_id=None,
+    run['cycles'].append(dict(id=cycle_id, goal=goal, kind=kind, started=now(), session_id=run['session']['id'],
                               stage='ready', checkpoint_before=checkpoint, checkpoint_after=None,
                               ready_digest=None, evaluation=None))
     return run, apply_amendments(run, cycle_id)

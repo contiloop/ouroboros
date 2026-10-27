@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ouroboros import adapters, core  # noqa: E402
 from ouroboros.core import RecordError, now, require  # noqa: E402
 from ouroboros.ports import Turn  # noqa: E402
-from ouroboros.store import Store, check_owner  # noqa: E402
+from ouroboros.store import Store, _write_bytes, check_owner  # noqa: E402
 
 SKILLS = ('ready', 'go', 'migration')
 WAIT_POLL = 0.05
@@ -43,13 +43,15 @@ def cmd_doctor(store: Store, a) -> dict:
 
 
 def cmd_draft(store: Store, a) -> dict:
+    """Create the DRAFT, or revise the proposal of the current DRAFT, ACTIVE or STOPPED run (the revision must be
+    shown and approved again). A COMPLETE run is archived first and a new run starts."""
     data = Path(a.proposal).read_bytes() if Path(a.proposal).is_file() else None
     require(data is not None, f'proposal file not found: {a.proposal}')
     store.ensure_dir()
     with store.transaction():
         check_owner(store, a.owner)
         run = store.read_run() if store.has_run() else None
-        if run is not None and run['status'] in ('COMPLETE', 'STOPPED'):
+        if run is not None and run['status'] == 'COMPLETE':
             store.archive(run)
             run = None
         if run is not None:
@@ -103,8 +105,8 @@ def cmd_approve(store: Store, a) -> dict:
             return summary(store)
         store.write_owner(a.owner)
         store.write_run(run)
-        store.append_event('human', 'approve' if action == 'activated' else 'amend', None,
-                           dict(digest=current, limits=run['limits']))
+        store.append_event('human', 'amend' if action == 'amended' else 'approve', None,
+                           dict(digest=current, limits=run['limits'], action=action))
         return dict(summary(store), approval=action)
 
 
@@ -198,6 +200,8 @@ def _launch(store: Store, a, message: str, kind: str, fresh: bool, reason: str |
         check_owner(store, a.owner)
         run = store.read_run()
         require(run['status'] == 'ACTIVE', f'run is {run["status"]}, not ACTIVE')
+        which = core.limit_exceeded(run, mid_cycle=True)
+        require(which is None, f'limit already exceeded: {which}')
         running = _running(run)
         require(running is None, f'turn {running["n"] if running else ""} is still RUNNING; wait for it or stop it')
         session_id = run['session']['id']
@@ -205,6 +209,12 @@ def _launch(store: Store, a, message: str, kind: str, fresh: bool, reason: str |
             require(session_id is not None, 'no session recorded; start one with session-start')
         elif session_id is None:
             fresh = True
+        cycle = core.open_cycle(run)
+        cycle_id = cycle['id'] if cycle else None
+        # Gate 3: Go runs in the session where this cycle's Ready ran, never in a fresh one.
+        require(not (kind == 'go' and fresh and cycle and cycle.get('session_id')),
+                f'go must run in the session of this cycle\'s Ready ({cycle.get("session_id") if cycle else None}); '
+                'drop --fresh, or run ready in a fresh session first')
         host = _host(run)
         store.ensure_dir()
         n = int(run.get('turn_count', 0)) + 1
@@ -216,12 +226,12 @@ def _launch(store: Store, a, message: str, kind: str, fresh: bool, reason: str |
                 handle = host.send(store.workspace, session_id, message, raw_path)
         except (OSError, ValueError) as exc:
             raise RecordError(f'could not launch the host session: {exc}')
-        cycle = core.open_cycle(run)
-        cycle_id = cycle['id'] if cycle else None
         started = now()
         if fresh:
             run['session'] = dict(id=None, started=started, reason=reason or 'first')
             session_id = None
+            if cycle:
+                cycle['session_id'] = None  # the cycle's session is the one its turns actually run in
         run['turn_count'] = n
         run['turn'] = dict(n=n, pid=handle.pid, started=started, kind=kind, state='RUNNING', cost_recorded=False)
         store.write_run(run)
@@ -244,12 +254,15 @@ def cmd_session_send(store: Store, a) -> dict:
     return _launch(store, a, text, 'message', False, None)
 
 
-def _stored_result(store: Store, turn: dict) -> dict:
-    out = {k: turn.get(k) for k in ('state', 'session_id', 'num_turns', 'cost_usd', 'permission_denials', 'is_error',
-                                    'subtype', 'raw_path', 'stderr_path', 'exit_code', 'reason', 'text_path')}
+def _stored_result(store: Store, run: dict) -> dict:
+    """The recorded result of the last turn plus the run status it left behind (a budget stop shows here)."""
+    turn = run['turn']
+    out = {k: turn.get(k) for k in ('state', 'session_id', 'num_turns', 'cost_usd', 'usage', 'permission_denials',
+                                    'is_error', 'subtype', 'raw_path', 'stderr_path', 'exit_code', 'reason', 'text_path')}
     text_path = turn.get('text_path')
     out['text'] = (store.dir / text_path).read_text(encoding='utf-8') if text_path and (store.dir / text_path).is_file() else None
-    return dict(out, turn=turn['n'], pid=turn['pid'], kind=turn['kind'])
+    return dict(out, turn=turn['n'], pid=turn['pid'], kind=turn['kind'], run_status=run['status'],
+                stopped_reason=run['stopped_reason'])
 
 
 def _settle(store: Store, a) -> dict:
@@ -260,7 +273,7 @@ def _settle(store: Store, a) -> dict:
         turn = run.get('turn')
         require(turn is not None, 'no turn has been started')
         if turn['state'] != 'RUNNING':
-            return _stored_result(store, turn)
+            return _stored_result(store, run)
         host = _host(run)
         handle = _turn_handle(store, turn)
         if host.alive(handle):
@@ -269,31 +282,41 @@ def _settle(store: Store, a) -> dict:
         cycle = core.open_cycle(run)
         cycle_id = cycle['id'] if cycle else None
         recorded = run['session']['id']
-        if parsed['state'] == 'COMPLETE':
+        sid = parsed['session_id']
+        if isinstance(sid, str) and sid:
+            # Any turn that names a session binds it (an INTERRUPTED first turn included); a different id is
+            # never adopted, the turn is recorded as INTERRUPTED instead.
             if recorded is None:
-                run['session']['id'] = parsed['session_id']
-                store.write_owner(a.owner, session_id=parsed['session_id'])
-                if cycle and cycle.get('session_id') is None:
-                    cycle['session_id'] = parsed['session_id']
-            elif recorded != parsed['session_id']:
+                run['session']['id'] = sid
+                store.write_owner(a.owner, session_id=sid)
+            elif recorded != sid:
                 parsed.update(state='INTERRUPTED', reason='session id mismatch')
+            if run['session']['id'] == sid and cycle and cycle.get('session_id') is None:
+                cycle['session_id'] = sid
         text = parsed.pop('text')
         text_path = None
         if text is not None:
             text_path = f"turns/{turn['n']}.txt"
-            (store.dir / text_path).write_text(text, encoding='utf-8')
-            (store.dir / text_path).chmod(0o600)
+            _write_bytes(store.dir / text_path, text.encode('utf-8'))
         if not turn.get('cost_recorded'):
             run = core.add_spent(run, parsed['cost_usd'])
             turn = run['turn']
             turn['cost_recorded'] = True
         turn.update(parsed, text_path=text_path, finished=now())
+        stop_event = None
+        if run['status'] == 'ACTIVE' and core.limit_exceeded(run, mid_cycle=True) == 'budget':
+            run = core.stop(run, 'limit:budget')
+            turn = run['turn']
+            stop_event = dict(reason=run['stopped_reason'], stopped_at=run['stopped_at'], turn=turn['n'],
+                              spent_usd=run['spent_usd'], budget_usd=run['limits']['budget_usd'])
         store.write_run(run)
         store.append_event('host', 'turn_result', cycle_id, dict(parsed, turn=turn['n'], text_path=text_path))
         if parsed['state'] == 'INTERRUPTED':
             store.append_event('host', 'interrupt', cycle_id, dict(turn=turn['n'], reason=parsed['reason'],
                                                                    raw_path=parsed['raw_path']))
-        return _stored_result(store, turn)
+        if stop_event is not None:
+            store.append_event('L1', 'stop', cycle_id, stop_event)
+        return _stored_result(store, run)
 
 
 def cmd_session_wait(store: Store, a) -> dict:
@@ -317,19 +340,32 @@ def cmd_session_status(store: Store, a) -> dict:
 
 
 def cmd_session_stop(store: Store, a) -> dict:
+    """Terminate the RUNNING turn and record it STOPPED. A turn that has already exited is settled (parsed)
+    instead. The signal is sent outside the record lock; the record is updated in a second transaction."""
     with store.transaction():
         check_owner(store, a.owner)
         run = store.read_run()
         turn = _running(run)
         require(turn is not None, 'no turn is RUNNING')
-        host = _host(run)
-        host.terminate(_turn_handle(store, turn))
+        host, handle, n = _host(run), _turn_handle(store, turn), turn['n']
+        exited = not host.alive(handle)
+    if exited:
+        return _settle(store, a)
+    host.terminate(handle)
+    with store.transaction():
+        check_owner(store, a.owner)
+        run = store.read_run()
+        turn = run.get('turn')
+        if turn is not None and turn['n'] == n and turn['state'] != 'RUNNING':
+            return _stored_result(store, run)  # settled by another command meanwhile
+        require(turn is not None and turn['n'] == n, f'turn {n} is no longer the current turn')
         cycle = core.open_cycle(run)
         turn.update(state='STOPPED', finished=now())
         store.write_run(run)
         store.append_event('human', 'stop', cycle['id'] if cycle else None,
                            dict(turn=turn['n'], pid=turn['pid'], kind=turn['kind']))
-        return dict(state='STOPPED', turn=turn['n'], pid=turn['pid'], kind=turn['kind'])
+        return dict(state='STOPPED', turn=turn['n'], pid=turn['pid'], kind=turn['kind'], run_status=run['status'],
+                    stopped_reason=run['stopped_reason'])
 
 
 def add_commands(sub) -> dict:
@@ -342,10 +378,10 @@ def add_commands(sub) -> dict:
         return p
 
     cmd('doctor', cmd_doctor, 'report host prerequisites').add_argument('--host', default='claude', choices=['claude'])
-    cmd('draft', cmd_draft, 'create or replace the DRAFT proposal').add_argument('--proposal', required=True)
+    cmd('draft', cmd_draft, 'create the DRAFT proposal or revise the current run\'s proposal').add_argument('--proposal', required=True)
     cmd('shown', cmd_shown, 'record the current proposal digest as shown')
     cmd('show', cmd_show, 'print the run summary')
-    cmd('approve', cmd_approve, 'approve the proposal exactly as shown')
+    cmd('approve', cmd_approve, 'approve the proposal exactly as shown (activate, resume or amend the run)')
     p = cmd('cycle-start', cmd_cycle_start, 'open a cycle')
     p.add_argument('--kind', required=True)
     p.add_argument('--goal', required=True)
@@ -372,7 +408,7 @@ def add_commands(sub) -> dict:
     cmd('session-send', cmd_session_send, 'launch a detached turn on the recorded session').add_argument('--message', required=True)
     cmd('session-wait', cmd_session_wait, 'block until the running turn exits, then print its parsed result').add_argument('--timeout', type=float)
     cmd('session-status', cmd_session_status, 'RUNNING or the parsed result of the last turn (non-blocking)')
-    cmd('session-stop', cmd_session_stop, 'terminate the running turn (SIGTERM, then SIGKILL) and record it')
+    cmd('session-stop', cmd_session_stop, 'terminate the running turn (SIGTERM, then SIGKILL) and record it; settles an exited one')
     return handlers
 
 
