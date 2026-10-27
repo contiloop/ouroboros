@@ -7,7 +7,9 @@
   (handoff; points at init's references).
 - `skills/init/scripts/` — all executable code: `ouroboros_cli.py` (entry point), `ouroboros/core.py`
   (pure record rules), `ouroboros/store.py` (private dir, lock, owner, events, archive),
-  `ouroboros/ports.py` (`HostSession` protocol), `ouroboros/adapters/claude.py` (headless `claude`).
+  `ouroboros/ports.py` (`HostSession` protocol), `ouroboros/adapters/claude.py` (headless `claude`
+  through the streaming control channel), `ouroboros/relay.py` (per-turn relay: stdin/stdout of
+  `claude`, question files, automatic permission allow; standard library, run by path, no package imports).
 
 ## Not this module's scope
 - Host manifests and overlays (`platform/`), package generation (`build/`), tests (`ci/`).
@@ -24,7 +26,12 @@
 - The message handed to the host carries only the caller's text (and the `/dryforge:<kind>` prefix).
   No Ouroboros identity, run id, owner or approval bookkeeping (`adapters/claude.py`, `ouroboros_cli.py`).
 - No bypass flag anywhere (`--dangerously-skip-permissions`, `bypassPermissions`); tool access is
-  the allow-list constant in `adapters/claude.py` (`ci/test_runtime_contract.py` pins this).
+  the allow-list constant in `adapters/claude.py` plus the relay's automatic allow of what still
+  prompts (`ci/test_runtime_contract.py` pins the absence of bypass flags). `AskUserQuestion` must
+  never be added to the allow-list: an allow-listed tool never reaches the channel, and L1 would
+  stop seeing questions.
+- The host's `total_cost_usd` is cumulative per session; `_settle` charges the delta
+  (`session.cost_total_usd` is the baseline). Do not add the reported figure directly.
 - Scripts: Python 3.11+, standard library only. `ouroboros_cli.py` inserts its own directory into
   `sys.path`; run it by path with `-B`.
 - Record files are created under the *target project's* `.dryforge/ouroboros/` with modes 0700/0600,

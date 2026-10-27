@@ -49,11 +49,23 @@ the workspace.
 | `archive` | — | moves a finished run under `archive/<run_id>/` |
 | `session-start` | `--skill ready\|go\|migration --message <file> [--fresh --reason <text>]` | detached turn; message = `/dryforge:<skill> ` + file text; `--resume` of the recorded session unless `--fresh`; refused while a limit is exceeded, and `go --fresh` is refused while the open cycle has a recorded `session_id` (Ready ran there) |
 | `session-send` | `--message <file>` | detached `--resume` turn with the file text; refused while a limit is exceeded |
-| `session-wait` | `[--timeout <s>]` | blocks until the turn exits; prints the parsed result, or `{state: RUNNING, waited}` on timeout |
-| `session-status` | — | `{state: RUNNING, pid, turn}` or the parsed result; never blocks |
+| `session-wait` | `[--timeout <s>]` | blocks until the turn exits **or the worker asks a structured question**; prints the parsed result, `{state: QUESTION, round, questions}` for an open question, or `{state: RUNNING, waited}` on timeout |
+| `session-answer` | `--answers <file> [--basis <file>]` | answers the open question round: JSON object `{"<question text>": "<label>" \| ["<label>", …] (multiSelect) \| {"other": "<text>"}}`; every question must be answered, an unknown question or a non-option answer is BLOCKED; writes `turns/<n>.a<k>.json`, records `question` (L2) and `answer` (L1) events, turn back to RUNNING |
+| `session-status` | — | `{state: RUNNING, pid, turn}`, `{state: QUESTION, …}` or the parsed result; never blocks |
 | `session-stop` | — | SIGTERM the process group (outside the record lock), SIGKILL after 5 s; turn `STOPPED`; a turn that has already exited is settled like `session-status` instead |
 
-**Parsed turn result:** `state` (`COMPLETE` | `INTERRUPTED` | `STOPPED`), `session_id`, `text`,
+**Worker process and channel.** Each turn runs `claude -p --input-format stream-json --output-format
+stream-json --verbose --permission-prompt-tool stdio [--resume <id>] --allowedTools … --max-turns N`
+under a relay (`ouroboros/relay.py`) that holds its stdin/stdout, sends the message, mirrors every
+event to `turns/<n>.stream.jsonl`, writes `turns/<n>.init.json` (session id, slash commands),
+`turns/<n>.q<k>.json` for each structured question round, forwards `turns/<n>.a<k>.json` as the
+answer, allows any other permission request automatically (listed in `turns/<n>.auto.json`), and
+writes the final result to `turns/<n>.json`. `session-start`/`session-send` are refused while a
+question is open. Turn states: `RUNNING`, `QUESTION`, `COMPLETE`, `INTERRUPTED`, `STOPPED`.
+
+**Parsed turn result:** `state` (`QUESTION` | `COMPLETE` | `INTERRUPTED` | `STOPPED`), `session_id`, `text`,
+`questions` (answered rounds), `skills` (the `dryforge:` commands the session saw), `auto_allowed[]`
+({tool_name, tool_use_id}), `stream_path`,
 `num_turns`, `cost_usd` (this turn's charge), `cost_total_usd` (the host's cumulative total for the
 session, as reported), `usage` (`input_tokens`, `cache_read_input_tokens`,
 `cache_creation_input_tokens`, `output_tokens`; a count the host did not report is null),
