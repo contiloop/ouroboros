@@ -17,7 +17,7 @@ ROOT = HERE.parent
 SCRIPTS = ROOT / 'src/skills/init/scripts'
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(SCRIPTS))
-from test_run_record import Workspace, proposal as proposal_text  # noqa: E402
+from test_run_record import Workspace, proposal_set as proposal_text  # noqa: E402
 from ouroboros import adapters, ports  # noqa: E402
 from ouroboros.adapters import claude as claude_adapter  # noqa: E402
 

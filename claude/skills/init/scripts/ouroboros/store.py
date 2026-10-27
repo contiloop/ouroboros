@@ -14,11 +14,12 @@ import subprocess
 import time
 from pathlib import Path
 
-from .core import digest, now, require
+from .core import PROPOSAL_FILES, digest, now, require
 
 LOCK_TIMEOUT = 5.0
 EMBED_LIMIT = 8 * 1024
-RUN_FILES = ('proposal.md', 'proposal.shown.md', 'run.json', 'events.jsonl', 'turns', 'proposal.approved.md',)
+LEGACY_FILES = ('proposal.md', 'proposal.shown.md', 'proposal.approved.md')  # single-file records of cycles 001-002
+RUN_FILES = PROPOSAL_FILES + ('shown', 'approved', 'run.json', 'events.jsonl', 'turns', 'workgraph.yaml') + LEGACY_FILES
 
 
 def private_dir(workspace: Path | str) -> Path:
@@ -73,9 +74,9 @@ class Store:
         self.dir = private_dir(self.workspace)
         self.run_path = self.dir / 'run.json'
         self.events_path = self.dir / 'events.jsonl'
-        self.proposal_path = self.dir / 'proposal.md'
-        self.shown_path = self.dir / 'proposal.shown.md'
-        self.approved_path = self.dir / 'proposal.approved.md'
+        self.shown_dir = self.dir / 'shown'
+        self.approved_dir = self.dir / 'approved'
+        self.legacy_path = self.dir / 'proposal.md'
         self.owner_path = self.dir / 'owner.json'
         self.lock_path = self.dir / 'lock'
         self.turns_dir = self.dir / 'turns'
@@ -130,20 +131,46 @@ class Store:
     def write_run(self, run: dict) -> None:
         _write_bytes(self.run_path, json.dumps(run, indent=1, ensure_ascii=False).encode())
 
-    def read_proposal(self) -> bytes | None:
-        return self.proposal_path.read_bytes() if self.proposal_path.is_file() else None
+    # ── proposal set ────────────────────────────────────────────────────
+    def proposal_path(self, name: str) -> Path:
+        require(name in PROPOSAL_FILES, f'not a proposal file: {name}')
+        return self.dir / name
 
-    def write_proposal(self, data: bytes) -> None:
-        _write_bytes(self.proposal_path, data)
+    def is_legacy(self) -> bool:
+        """A record that still carries the single-file proposal of cycles 001-002 (never converted)."""
+        return self.legacy_path.is_file()
 
-    def write_shown(self, data: bytes) -> None:
-        _write_bytes(self.shown_path, data)
+    @staticmethod
+    def _read_set(directory: Path) -> dict:
+        return {name: (directory / name).read_bytes() if (directory / name).is_file() else None for name in PROPOSAL_FILES}
 
-    def write_approved(self, data: bytes) -> None:
-        _write_bytes(self.approved_path, data)
+    def _write_set(self, directory: Path, parts: dict) -> None:
+        _mkdir(directory)
+        for name, data in parts.items():
+            require(name in PROPOSAL_FILES, f'not a proposal file: {name}')
+            _write_bytes(directory / name, data)
 
-    def read_shown(self) -> bytes | None:
-        return self.shown_path.read_bytes() if self.shown_path.is_file() else None
+    def read_set(self) -> dict:
+        """File name → bytes (None when the file is absent) for the four proposal files."""
+        return self._read_set(self.dir)
+
+    def write_set(self, parts: dict) -> None:
+        """Write the given proposal files (any subset); the others are kept."""
+        for name, data in parts.items():
+            _write_bytes(self.proposal_path(name), data)
+
+    def write_shown(self, parts: dict) -> None:
+        self._write_set(self.shown_dir, parts)
+
+    def read_shown(self) -> dict:
+        return self._read_set(self.shown_dir)
+
+    def clear_shown(self) -> None:
+        if self.shown_dir.is_dir():
+            shutil.rmtree(self.shown_dir)
+
+    def write_approved(self, parts: dict) -> None:
+        self._write_set(self.approved_dir, parts)
 
     # ── events ──────────────────────────────────────────────────────────
     def event_count(self) -> int:
@@ -175,8 +202,10 @@ class Store:
 
     # ── archive ─────────────────────────────────────────────────────────
     def archive(self, run: dict, actor: str = 'L1') -> Path:
-        """Move the finished run's files under archive/<run_id>/ (the archive event goes with them)."""
-        require(run['status'] in ('COMPLETE', 'STOPPED'), f'run is {run["status"]}; only COMPLETE or STOPPED runs are archived')
+        """Move the finished run's files under archive/<run_id>/ (the archive event goes with them). A legacy
+        single-file record is also archived while DRAFT (nothing of it was ever approved)."""
+        require(run['status'] in ('COMPLETE', 'STOPPED') or (run['status'] == 'DRAFT' and self.is_legacy()),
+                f'run is {run["status"]}; only COMPLETE or STOPPED runs are archived')
         dest = self.archive_dir / run['run_id']
         require(not dest.exists(), f'archive already exists: {dest}')
         _mkdir(self.archive_dir)
