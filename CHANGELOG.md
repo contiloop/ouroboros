@@ -15,6 +15,16 @@
 - Run L2 as one persistent headless Claude Code session (`claude -p`, resumed between turns) in
   the target project, with every host tool pre-allowed by list and the user's deny rules intact.
   Ready and Go of one cycle use the same session; the session is kept across cycles by default.
+- Replace the single proposal with four documents filled by an elicitation-style interview:
+  `scenario.md` (usage scenarios with generalized step labels and the derived workflow),
+  `validation.md` (behavior, environment, evidence, cost per item), `spec.md` (users, UI references,
+  outline, efficient checks) and `delegation.md` (delegated judgment, L2/L3 models, limits,
+  workspace). `approve` checks completeness naming the file and item and approves the set as one.
+  After approval L1 plans a work graph (`workgraph.yaml`, one node per cycle), gives the worker the
+  whole context each cycle, applies the chosen models to the worker process, and finally beta-tests
+  the result itself in a dedicated beta cycle; COMPLETE is accepted only there. A verification only
+  a human can make is raised as ESCALATE and recorded as `verified`. Older single-file records are
+  archived, not converted.
 - Drive the worker session through the host's streaming control channel so Dryforge's structured
   questions reach L1: `session-wait` returns `QUESTION`, `session-answer` answers it, questions and
   answers are recorded; permission requests outside the allow-list are allowed automatically and

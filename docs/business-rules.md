@@ -14,7 +14,9 @@ runtime implements exactly the behavior below.
 | **L2** | A headless Claude Code session that L1 creates in the target project and keeps across cycles. Runs Dryforge Ready, then Dryforge Go, in the *same* session. May implement directly or spawn L3. |
 | **L3** | Task agents (implementers, researchers, independent reviewers) that L2 creates under Dryforge's own rules. L1 never manages L3 directly. |
 | **Dryforge** | A separately installed plugin providing the `ready`, `go` and `migration` skills. Ouroboros invokes the *installed* copy through the host's native skill mechanism. Ouroboros does not ship, patch or substitute its own copy. |
-| **Proposal** | The editable statement of goal, completion evidence, constraints, delegated judgment, workspace and execution scope that L1 builds with the user during `init`. |
+| **Proposal set** | The four documents L1 fills with the user during `init` (`scenario.md`, `validation.md`, `spec.md`, `delegation.md`) and the user approves as one. |
+| **Work graph** | `workgraph.yaml`: the chunks (nodes) L1 plans after approval, one per cycle, each owning workflow steps and validation items. |
+| **Beta test** | The cycle in which L1 runs the scenarios end to end itself and judges every validation item; the only place a run becomes COMPLETE. |
 | **Cycle** | One Ready → Go run by one L2 session against one bounded outcome. |
 | **Checkpoint** | The accepted Git state (branch/commit) a cycle leaves behind; the next cycle starts from it. |
 
@@ -26,21 +28,27 @@ init  ──(conversation, revisable)──▶  Proposal  ──approve──▶
                                                                   └─ user may keep talking; L1 folds in-scope clarification into work
 ```
 
-### `init` — intent conversation
-- Starts L1. L1 reads the selected project and any existing Ouroboros records, then refines the
-  goal with the user: intended outcome, observable completion criteria, constraints, priorities,
-  non-goals, and which judgments the user delegates.
-- The proposal is **revisable** for as long as the user wants. L1 asks only questions whose answer
-  would materially change the outcome; it researches technical facts instead of asking preferences.
-- **No cycle may run while the proposal is unapproved.** Read-only inspection and draft edits are the
+### `init` — the interview and the proposal set
+- Starts L1. L1 reads the selected project and any existing Ouroboros records, then interviews the
+  user to fill four documents under `.dryforge/ouroboros/`: **`scenario.md`** (usage scenarios whose
+  steps carry a generalized `step:` label, and the Workflow derived from them), **`validation.md`**
+  (items with Behavior, Environment, Evidence and Cost), **`spec.md`** (Users, UI references, Outline
+  of blocks and their function, Efficient checks for slow/hard items), **`delegation.md`** (delegated
+  judgment, L2/L3 models, limits, workspace). The interview follows elicitation discipline: scenarios
+  first, then the decisions they imply, validation, the product's shape, delegation; the project
+  answers what it can, the user answers only what only they hold, technical choices are presented
+  with a recommendation (`src/skills/init/references/interview.md`).
+- The set is **revisable** for as long as the user wants and is shown to the user after every round.
+- **No cycle may run while the set is unapproved.** Read-only inspection and draft edits are the
   only permitted actions. Running Migration, Ready or Go during this stage is a defect.
 - Invoking `init` again on a project with an active run does **not** reset the run, refill budgets
   or discard history; it continues the conversation about changes.
 
 ### `approve` — the single handoff
-- `approve` is the user's approval of the proposal **exactly as last shown**. If the proposal is
-  missing, incomplete or has changed since it was shown, L1 shows the concrete gap instead of
-  treating the invocation as approval.
+- `approve` is the user's approval of the four documents **exactly as last shown**. The record
+  checks completeness (every required item of every file; a refusal names the file and the item)
+  and the shown digest; if the set is missing, incomplete or has changed since it was shown, L1
+  shows the concrete gap (a diff per changed file) instead of treating the invocation as approval.
 - Approval is a **handoff, not the end of the conversation**. After it L1 owns execution; the user
   keeps talking; L1 incorporates clarification within the agreed scope and discusses the impact of
   changes that need a new decision before dependent work proceeds.
@@ -61,16 +69,27 @@ init  ──(conversation, revisable)──▶  Proposal  ──approve──▶
   a blocker L1 cannot resolve with any available means. Everything else is L1's decision.
 - L1 records its decisions as L1. It never presents its own decision as the user's.
 
+### The work graph
+After approval (after Migration when needed) L1 writes `workgraph.yaml` in the record: nodes with
+`id`, `title`, `depends`, the workflow `steps` and validation `items` they realize, and a `status`
+(pending / active / done / replanned). One node = one cycle. Every workflow step and every validation
+item belongs to a node; unowned ones are reported to the user as information. If the node count
+exceeds `max cycles`, L1 says so before starting. The graph is the only document L1 edits on its own
+after approval; the four documents change only through a revision the user approves. The graph is
+shown to the user as progress, never as a question.
+
 ### Running a cycle
-1. **Choose work.** From the approved intent, prior checkpoints and remaining criteria, L1 selects a
-   bounded outcome that advances at least one completion criterion. One cycle targets one repository.
+1. **Choose work.** L1 takes the next node whose dependencies are done and opens a development
+   cycle for it. One cycle targets one repository.
 2. **Prepare L2.** L1 continues the run's recorded L2 session by default; it starts a fresh one
    only when none exists, after REPLAN, when the session cannot be resumed, when its context is near
    its limit, or for Migration. L1 records the real session identity; a process ID or a one-shot
    summary is not a session.
-3. **Ready.** L1 explicitly invokes the installed Dryforge `ready` skill in L2 with the cycle goal,
-   relevant original requirements and decisions, project path and checkpoint. L2 asks questions; L1
-   answers them from the user's intent.
+3. **Ready.** L1 explicitly invokes the installed Dryforge `ready` skill in L2 with the node's goal
+   and the whole picture it holds: the Workflow and the scenarios the node serves, the validation
+   items it must satisfy (with the request to verify them and leave evidence), the outline blocks it
+   touches, what earlier nodes delivered, the checkpoint. `delegation.md` and the record are never
+   quoted. L2 asks questions; L1 answers them from the user's intent.
 4. **Approve Ready.** L1 reads the actual specification, plan and handoff documents (not a summary)
    plus the independent review evidence, requests corrections if needed, then approves the exact
    documents and invokes installed Dryforge `go` **in the same L2 session**. Changed documents need
@@ -79,8 +98,20 @@ init  ──(conversation, revisable)──▶  Proposal  ──approve──▶
    evidence and unresolved issues. In-scope corrections go back to the same L2 as rework. Acceptance
    lets L2 finish archive, integration and cleanup; L1 receives the final commit/branch.
 6. **Evaluate.** L1 records one of CONTINUE (more work, goal advancing), REPLAN (approach must
-   change), ESCALATE (a real user decision is needed), COMPLETE (every completion criterion has
-   evidence). **A finished cycle is not a finished goal**; COMPLETE requires evidence per criterion.
+   change; nodes are added or rewritten), ESCALATE (a real user decision is needed). **A finished
+   node is not a finished goal**; COMPLETE is reserved for the beta test.
+
+### The beta test
+When every node is done, L1 opens a **beta cycle** (no worker turns; not counted toward `max
+cycles`) and runs the scenarios end to end itself, as the user would: for each validation item the
+Evidence check, or the efficient check from `spec.md` for slow/hard items, recording each result as a
+`beta` event. An item only a human can check (visual, device, external account) is raised as
+ESCALATE naming the exact check; the user's answer is recorded as a `verified` event and the beta
+test continues in a new beta cycle (this ESCALATE is not a stalled cycle). A failed item leads to
+REPLAN, new nodes and cycles, then a new beta cycle for the affected items. **COMPLETE is the
+evaluation of a beta cycle in which every item has a verdict**; the record refuses COMPLETE anywhere
+else. Models: the L2 model from `delegation.md` is the session's model, the L3 model is applied to
+the worker process so Dryforge's task agents use it; `default` means the host's default.
 
 ### Migration (existing projects only)
 - When an existing codebase has no project documentation for agents, L1 may first assign the
@@ -127,7 +158,9 @@ init  ──(conversation, revisable)──▶  Proposal  ──approve──▶
 | L2 asks a question outside the approved scope | L1 decides under full delegation if the goal still determines the answer; brings it to the user only if the goal itself is ambiguous. |
 | User stops while a question is open | The question is recorded as unanswered; the same session can be continued later. |
 | A cycle ends with failing tests | Not acceptable; L1 requests rework in the same L2 or replans. |
-| Cycle limit, stall limit or budget reached | L1 reports and the run is STOPPED; the limits are those stated in the proposal. A revised proposal approved again resumes it. |
+| Cycle limit, stall limit or budget reached | The stall and budget limits stop the run at once. The cycle limit counts development cycles: at the limit a development cycle cannot open and asking for more development (REPLAN, or ESCALATE on a development cycle) stops the run; a beta cycle may still open. L1 reports; a revised `delegation.md` approved again resumes it. |
+| A validation item only a human can check | L1 raises ESCALATE from the beta cycle naming the exact check; the user's answer is recorded as `verified`; the beta test continues. This is a verification, not a consent. |
+| An older single-file proposal record (`proposal.md`) is found | Reported as legacy; archived by `draft` (an ACTIVE one must be stopped first); never converted. |
 | Worker session lost mid-cycle | Reconcile effects, resume the same session; otherwise explicit, recorded replacement with the checkpoint and decisions. |
 | User asks to stop | The running turn is killed at once, the run is STOPPED with its last stage and checkpoint, half-done branches and worktrees are listed, nothing is cleaned up. `approve` again (same or revised proposal) resumes it; `archive` then `init` starts a different goal. |
 | Project without `.dryforge/` in `.gitignore` at `init` | L1 appends that one line (uncommitted) and says so; the only pre-approval write outside `.dryforge/`. |

@@ -20,8 +20,8 @@
 ## Test families
 | File | Exercises | Needs |
 | --- | --- | --- |
-| `test_run_record.py` | every record command: draft/shown/approve/amend, required sections and limits, cycles, evaluate and stalled/limit stops, events and payload spill, owner and lock refusals, ignore guard, archive | real temp Git repos, subprocess, `TMPDIR` without symlinks |
-| `test_claude_adapter.py` | argv shape (resume, allow-list, no bypass flags), detached launch, wait/status, cost once, session id recording and mismatch, INTERRUPTED paths, stop, doctor | the fake `claude` on `PATH` |
+| `test_run_record.py` | every record command: the four-document draft/shown/approve/amend with per-file diffs, completeness rules per file (`CompletenessTests`), limits and models, cycles incl. the beta kind (`BetaCycleTests`), evaluate and stalled/limit stops, legacy single-file records (`LegacyTests`), events and payload spill, owner and lock refusals, ignore guard, archive | real temp Git repos, subprocess, `TMPDIR` without symlinks |
+| `test_claude_adapter.py` | argv shape (stream flags, resume, allow-list, no bypass flags), relay and question rounds (`QuestionTests`), L2/L3 models (`ModelTests`), detached launch, wait/status, cost delta, session id recording and mismatch, INTERRUPTED paths, stop, doctor | the fake `claude` on `PATH` |
 | `test_mission_contract.py` | pinned phrases in the skill text, absence of legacy wording, frontmatter rules, package mirror of `init/` | — |
 | `test_runtime_contract.py` | packaged scripts byte-identical, packaged CLI `--help` runs, no bypass modes, no legacy private dir, no third-party imports | — |
 | `test_ouroboros_branding.py` | plugin name `ouroboros`, repo URL, README tokens, no `Dryforge` in Codex overlays, `README.upstream.md` present | — |

@@ -45,7 +45,7 @@ Codex: register the checkout through Codex's local marketplace flow with
 ```bash
 S=src/skills/init/scripts/ouroboros_cli.py
 python3 -B $S --workspace /abs/proj --owner $CLAUDE_PID doctor --host claude
-python3 -B $S --workspace /abs/proj --owner $CLAUDE_PID draft --proposal proposal.md
+python3 -B $S --workspace /abs/proj --owner $CLAUDE_PID draft --scenario scenario.md --validation validation.md --spec spec.md --delegation delegation.md
 python3 -B $S --workspace /abs/proj --owner $CLAUDE_PID shown
 python3 -B $S --workspace /abs/proj --owner $CLAUDE_PID approve
 python3 -B $S --workspace /abs/proj --owner $CLAUDE_PID cycle-start --kind development --goal goal.md --checkpoint <commit>
