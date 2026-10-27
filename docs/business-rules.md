@@ -59,13 +59,13 @@ init  ──(interview, revisable)──▶  Proposal set  ──approve──�
   history; it continues the conversation about changes.
 
 ### `approve` — the single handoff
-- `approve` is the user's approval of the four documents **exactly as last shown**. The record
+- `approve` is the user's approval of the four documents **exactly as last shown**. The record first
+  compares the set with the shown version (a changed set is refused with a diff per file), then
   requires a passing gate review (zero open findings) bound to the content digest of scenario,
   validation and spec: always for a first approval, and for an amendment whenever that content
   changed since the last approved copies; never for an unchanged resume or a change of
-  `delegation.md` alone. Otherwise it refuses with `review the current set`. It then checks completeness (every required item of every file; a refusal names the file and the item)
-  and the shown digest; if the set is missing, incomplete or has changed since it was shown, L1
-  shows the concrete gap (a diff per changed file) instead of treating the invocation as approval.
+  `delegation.md` alone. Otherwise it refuses with `review the current set`. It then checks completeness (every required item of every file; a refusal names the file and the item).
+  Whatever is missing, L1 shows the concrete gap instead of treating the invocation as approval.
 - Approval is a **handoff, not the end of the conversation**. After it L1 owns execution; the user
   keeps talking; L1 incorporates clarification within the agreed scope and discusses the impact of
   changes that need a new decision before dependent work proceeds.

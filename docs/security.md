@@ -52,7 +52,7 @@ settings and hooks apply to it exactly as to a human caller; no bypass flag is e
 
 The intent review and the gate review are agents of the host that did not author the documents;
 they are read-only and return findings. L1 records them with `review` (verbatim findings plus a
-disposition each); `approve` requires a passing gate review on the shown content. The record is
+disposition each); `approve` requires a passing gate review on the shown content for a first approval or a content change. The record is
 bookkeeping: a reviewer never creates an approval, and `approve` stays the human's command.
 
 ## Audit

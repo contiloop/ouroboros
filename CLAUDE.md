@@ -27,7 +27,7 @@ ouroboros/
 │   ├── RESEARCH_MCP_SETUP.md        ← optional research MCP setup for Dryforge's research stage
 │   └── tracking/
 │       ├── status.md                ← direction, what is built/verified, ordered remaining work
-│       ├── decisions/               ← index.md + 0001–0008 decision records
+│       ├── decisions/               ← index.md + 0001–0011 decision records
 │       └── findings.md              ← unresolved problems with reasons
 ├── src/
 │   ├── AGENTS.md                    ← skills source + Python runtime: scope, boundaries, invariants

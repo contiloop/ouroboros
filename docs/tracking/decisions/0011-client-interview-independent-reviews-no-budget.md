@@ -17,7 +17,7 @@ questions; and `approve` checked structure only, so thin documents passed.
   subagent model). L3 effort is not controlled.
 - **English documents.** The "reply in the user's language" instruction is removed.
 - **The interview follows fixed stages** (orient, decompose, elicit, L1-written validation,
-  independent intent review, write + fidelity check, independent gate review, show, approve), and L1
+  independent intent review, documents written and checked against the interview log, independent gate review, show, approve), and L1
   keeps a private interview log the reviewers read.
 - **`approve` requires a passing gate review** recorded with `review`, bound to the content digest
   (scenario, validation, spec): always for a first approval, for amendments only when that content

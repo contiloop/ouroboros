@@ -82,8 +82,8 @@
     value to `spent_usd`, so the run reached 3.89 after turn 2 and went STOPPED `limit:budget`
     although the session had cost 1.99; the proposal was amended to `budget usd: 20`
     (`draft`/`shown`/`approve` → `amended`, ACTIVE, session kept) to finish the procedure. Final
-    `show`: `spent_usd` 5.94 recorded, actual session cost 2.05. The runtime now charges each turn
-    the delta against the session's last reported total (`session.cost_total_usd`); the 5.94 figure
+    `show`: `spent_usd` 5.94 recorded, actual session cost 2.05. The runtime now computes each turn's `cost_usd`
+    as the delta against the session's last reported total (`session.cost_total_usd`); the 5.94 figure
     predates that change.
   - Multi-select and `other` answers: not host-verified.
 
@@ -131,5 +131,5 @@
   cycle 2 merged (167 tests), a beta cycle ran the automatable checks (fresh-clone build, relaunch
   check ×15) and escalated the on-screen items; the human reported all pass; COMPLETE.
 - Cost (list-price conversion): about 43 USD total; one Go turn alone was 16 USD.
-- Observed defects/decisions for the next cycle are in `docs/tracking/status.md` (budget, models and
-  effort in the interview, language, content review before approve).
+- The defects observed (budget, technical questions to the user, language, structure-only approve)
+  were addressed in cycle 004 (decision 0011).

@@ -24,6 +24,7 @@ packaging-only.
 | Host facts the design rests on (skill loads headlessly, resume, allow-list behavior) | live-probed once on 2026-10-27 with claude 2.1.311 | probe results recorded in the engineering notes |
 | README and product docs for the new model | done; translations patched minimally | `ci/test_ouroboros_branding.py` |
 | Five-platform build, manifest/version/marketplace validation, reproducible-build check | passes | `build/build.sh`, `ci/verify.py` |
+| First live unattended run on Claude Code (2026-10-27/28, `~/Desktop/topmemo`): `init → approve → 2 development cycles → beta cycle → ESCALATE for on-screen checks → COMPLETE` | done; the mechanism held | engineering notes ("First live unattended run") |
 | Cycle 004: budget removed (limits = max cycles, max stalled cycles; cost kept as information), `effort` in `delegation.md` validated and passed as `--effort`, English documents, the client interview stage for stage with the interview log, `review` command, `approve` requires a passing gate review bound to the content digest (decision 0011) | built, unit-tested | `ci/test_run_record.py`, `ci/test_claude_adapter.py`, `ci/test_mission_contract.py` |
 
 ## Remaining (in order)
