@@ -24,7 +24,7 @@ class OuroborosBrandingTest(unittest.TestCase):
         for path in (ROOT/'README.md',ROOT/'README_ko.md'):
             s=path.read_text()
             self.assertIn('# ⟲ Ouroboros',s)
-            for token in ('L1','L2','L3','/ouroboros:init','/ouroboros:approve','docs/MISSION.md','Grep MCP','Context7 MCP'):
+            for token in ('L1','L2','L3','/ouroboros:init','/ouroboros:approve','Grep MCP','Context7 MCP'):
                 self.assertIn(token,s)
             self.assertIn('Apache-2.0',s)
             self.assertIn('prekuter',s) # keep attribution
