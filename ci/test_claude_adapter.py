@@ -124,6 +124,7 @@ class ArgvShapeTests(Base):
         self.assertNotIn('AskUserQuestion', tools)
         self.assertEqual(argv[argv.index('--max-turns') + 1], str(claude_adapter.MAX_TURNS))
         self.assertNotIn('--model', argv)
+        self.assertNotIn('--effort', argv)
         for flag in BYPASS:
             self.assertFalse(any(flag in a for a in argv), argv)
         self.assertNotIn('--permission-mode', argv)
@@ -234,6 +235,68 @@ class ModelTests(unittest.TestCase):
         self.assertEqual(base[var], 'opus')  # the caller's mapping is never mutated
 
 
+class EffortTests(unittest.TestCase):
+    """The run's effort level reaches the worker as `--effort <level>` on every turn; `default` passes no flag."""
+
+    def workspace(self, **kw) -> HostWorkspace:
+        ws = HostWorkspace()
+        self.addCleanup(ws.cleanup)
+        ws.approve_fresh(proposal_text(**kw))
+        ws.start_cycle()
+        return ws
+
+    def test_named_effort_sets_the_flag_once_on_start_and_on_resumed_send(self):
+        ws = self.workspace(l2='sonnet', effort='high')
+        out = ws.start('ready', 'x\n', env=dict(FAKE_CLAUDE_SESSION='s-e'))
+        self.assertEqual(out['effort'], 'high')
+        ws.wait()
+        argv, logged = ws.argv(), ws.logged()
+        self.assertEqual(argv.count('--effort'), 1)
+        self.assertEqual(argv[argv.index('--effort') + 1], 'high')
+        self.assertEqual((logged['model_flag'], logged['effort_flag']), ('sonnet', 'high'))
+        # Re-applied on the resumed turn: it is a new process.
+        out = ws.send('again\n', env=dict(FAKE_CLAUDE_SESSION='s-e'))
+        self.assertEqual((out['session_id'], out['effort']), ('s-e', 'high'))
+        ws.wait()
+        argv, logged = ws.argv(), ws.logged()
+        self.assertEqual(argv[argv.index('--resume') + 1], 's-e')
+        self.assertEqual(argv.count('--effort'), 1)
+        self.assertEqual(logged['effort_flag'], 'high')
+        self.assertEqual(ws.record()['turn']['effort'], 'high')
+
+    def test_default_effort_passes_no_flag(self):
+        ws = self.workspace(effort='default')
+        out = ws.start('ready', 'x\n')
+        self.assertEqual(out['effort'], 'default')
+        ws.wait()
+        logged = ws.logged()
+        self.assertNotIn('--effort', logged['argv'])
+        self.assertIsNone(logged['effort_flag'])
+        self.assertEqual(ws.record()['turn']['effort'], 'default')
+        self.assertEqual(ws.ok('session-status')['effort'], 'default')
+
+    def test_session_turn_events_status_and_stored_turn_carry_the_effort(self):
+        ws = self.workspace(effort='max')
+        ws.start('ready', 'x\n')
+        ws.wait()
+        events = {e['kind']: e for e in ws.events() if e['kind'] in ('session', 'turn')}
+        self.assertEqual(events['session']['data']['effort'], 'max')
+        self.assertEqual(events['turn']['data']['effort'], 'max')
+        self.assertEqual(ws.ok('session-status')['effort'], 'max')
+        self.assertEqual(ws.record()['turn']['effort'], 'max')
+        ws.send('more\n')
+        ws.wait()
+        turns = [e for e in ws.events() if e['kind'] == 'turn']
+        self.assertEqual([t['data']['effort'] for t in turns], ['max', 'max'])
+        self.assertEqual(ws.logged()['effort_flag'], 'max')
+
+    def test_adapter_maps_default_and_none_to_no_flag(self):
+        self.assertEqual(claude_adapter.DEFAULT_EFFORT, 'default')
+        self.assertIsNone(claude_adapter.turn_effort('default'))
+        self.assertIsNone(claude_adapter.turn_effort(None))
+        self.assertEqual(claude_adapter.turn_effort('low'), 'low')
+
+
 class WaitAndStatusTests(Base):
     def test_wait_returns_complete_with_parsed_keys(self):
         self.ws.start('ready', 'x\n', env=dict(FAKE_CLAUDE_SESSION='s-9', FAKE_CLAUDE_COST='0.5'))
@@ -339,27 +402,30 @@ class WaitAndStatusTests(Base):
         self.assertEqual(w['state'], 'COMPLETE')
         self.assertEqual(self.ws.ok('session-status')['state'], 'COMPLETE')
 
-    def test_cost_added_exactly_once(self):
+    def test_cost_recorded_exactly_once(self):
         self.ws.start('ready', 'x\n', env=dict(FAKE_CLAUDE_COST='0.25'))
         self.ws.wait()
-        self.ws.ok('session-status'); self.ws.wait(); self.ws.ok('session-status')
-        self.assertEqual(self.ws.record()['spent_usd'], 0.25)
+        self.ws.ok('session-status'); self.ws.wait(); out = self.ws.ok('session-status')
+        self.assertEqual((out['cost_usd'], out['cost_total_usd']), (0.25, 0.25))
+        self.assertEqual(self.ws.record()['session']['cost_total_usd'], 0.25)
         self.assertEqual(sum(1 for k in self.ws.kinds() if k == 'turn_result'), 1)
         self.ws.send('more\n', env=dict(FAKE_CLAUDE_COST='0.5'))
-        self.ws.wait(); self.ws.wait()
-        self.assertEqual(self.ws.record()['spent_usd'], 0.5)
+        self.ws.wait(); out = self.ws.wait()
+        self.assertEqual((out['cost_usd'], out['cost_total_usd']), (0.25, 0.5))
+        run = self.ws.record()
+        self.assertEqual(run['session']['cost_total_usd'], 0.5)
 
     def test_cost_is_the_delta_of_the_session_total(self):
         self.ws.start('ready', 'x\n', env=dict(FAKE_CLAUDE_COST='1.0'))
         out = self.ws.wait()
         self.assertEqual((out['cost_usd'], out['cost_total_usd']), (1.0, 1.0))
         run = self.ws.record()
-        self.assertEqual((run['spent_usd'], run['session']['cost_total_usd']), (1.0, 1.0))
+        self.assertEqual(run['session']['cost_total_usd'], 1.0)
         self.ws.send('more\n', env=dict(FAKE_CLAUDE_COST='1.5'))
         out = self.ws.wait()
         self.assertEqual((out['cost_usd'], out['cost_total_usd']), (0.5, 1.5))
         run = self.ws.record()
-        self.assertEqual((run['spent_usd'], run['session']['cost_total_usd']), (1.5, 1.5))
+        self.assertEqual(run['session']['cost_total_usd'], 1.5)
         self.assertEqual((run['turn']['cost_usd'], run['turn']['cost_total_usd']), (0.5, 1.5))
         ev = self.ws.events()[-1]
         self.assertEqual((ev['kind'], ev['data']['cost_usd'], ev['data']['cost_total_usd']), ('turn_result', 0.5, 1.5))
@@ -367,15 +433,12 @@ class WaitAndStatusTests(Base):
         self.ws.start('ready', 'y\n', '--fresh', '--reason', 'replan', env=dict(FAKE_CLAUDE_COST='0.2'))
         out = self.ws.wait()
         self.assertEqual((out['cost_usd'], out['cost_total_usd']), (0.2, 0.2))
-        run = self.ws.record()
-        self.assertAlmostEqual(run['spent_usd'], 1.7)
-        self.assertEqual(run['session']['cost_total_usd'], 0.2)
-        # A total below the last one (a host reset) is charged in full and becomes the new baseline.
+        self.assertEqual(self.ws.record()['session']['cost_total_usd'], 0.2)
+        # A total below the last one (a host reset) counts in full and becomes the new baseline.
         self.ws.send('z\n', env=dict(FAKE_CLAUDE_COST='0.1'))
         out = self.ws.wait()
-        self.assertEqual(out['cost_usd'], 0.1)
+        self.assertEqual((out['cost_usd'], out['cost_total_usd']), (0.1, 0.1))
         run = self.ws.record()
-        self.assertAlmostEqual(run['spent_usd'], 1.8)
         self.assertEqual(run['session']['cost_total_usd'], 0.1)
 
     def test_session_id_mismatch_is_an_interrupted_turn(self):
@@ -389,56 +452,14 @@ class WaitAndStatusTests(Base):
         self.assertEqual(run['turn']['state'], 'INTERRUPTED')
         self.assertIn('mismatch', run['turn']['reason'])
         self.assertEqual(self.ws.kinds()[-1], 'interrupt')
-        self.assertEqual(self.ws.record()['spent_usd'], 0.25)
+        self.assertEqual((out['cost_usd'], out['cost_total_usd']), (0.125, 0.25))
         again = self.ws.ok('session-status')
         self.assertEqual(again['state'], 'INTERRUPTED')
-        self.assertEqual(self.ws.record()['spent_usd'], 0.25)
+        self.assertEqual((again['cost_usd'], again['cost_total_usd']), (0.125, 0.25))
+        self.assertEqual(self.ws.record()['session']['cost_total_usd'], 0.25)
 
 
-class BudgetTests(Base):
-    def test_turn_cost_over_budget_stops_the_run(self):
-        self.ws.start('ready', 'x\n', env=dict(FAKE_CLAUDE_COST='10.5'))  # proposal budget is 10
-        out = self.ws.wait()
-        self.assertEqual(out['state'], 'COMPLETE')
-        self.assertEqual((out['run_status'], out['stopped_reason']), ('STOPPED', 'limit:budget'))
-        run = self.ws.record()
-        self.assertEqual((run['status'], run['stopped_reason'], run['spent_usd']), ('STOPPED', 'limit:budget', 10.5))
-        self.assertEqual(run['stopped_at'], dict(cycle_id='c1', stage='ready', checkpoint='a' * 40))
-        self.assertEqual(run['turn']['state'], 'COMPLETE')
-        self.assertEqual(run['session']['id'], 'sess-fake-1')
-        ev = self.ws.events()[-1]
-        self.assertEqual((ev['kind'], ev['actor'], ev['cycle_id']), ('stop', 'L1', 'c1'))
-        self.assertEqual((ev['data']['reason'], ev['data']['turn'], ev['data']['budget_usd']), ('limit:budget', 1, 10))
-        self.assertEqual(self.ws.kinds()[-2], 'turn_result')
-        again = self.ws.ok('session-status')
-        self.assertEqual((again['state'], again['run_status']), ('COMPLETE', 'STOPPED'))
-        self.assertEqual(self.ws.kinds().count('stop'), 1)
-        out = self.ws.blocked('session-send', '--message', self.ws.file('more'))
-        self.assertIn('STOPPED', out['error'])
-        # The user resumes with the same proposal; the budget is still exceeded, so no turn is launched.
-        self.ws.ok('approve')
-        self.assertEqual(self.ws.record()['status'], 'ACTIVE')
-        out = self.ws.blocked('session-send', '--message', self.ws.file('more'))
-        self.assertIn('budget', out['error'])
-        self.assertEqual(self.ws.record()['turn_count'], 1)
-        # Raising the budget lets the run continue.
-        self.ws.draft(proposal_text(budget='20'))
-        self.ws.ok('shown'); self.ws.ok('approve')
-        self.ws.send('more\n', env=dict(FAKE_CLAUDE_COST='11.5'))  # session total; this turn costs 1
-        out = self.ws.wait()
-        self.assertEqual((out['state'], out['run_status']), ('COMPLETE', 'ACTIVE'))
-        self.assertEqual((out['cost_usd'], out['cost_total_usd']), (1.0, 11.5))
-        self.assertEqual(self.ws.record()['spent_usd'], 11.5)
-
-    def test_no_cap_budget_never_stops_a_turn(self):
-        ws = HostWorkspace()
-        self.addCleanup(ws.cleanup)
-        ws.approve_fresh(proposal_text(budget='no cap'))
-        ws.start_cycle()
-        ws.start('ready', 'x\n', env=dict(FAKE_CLAUDE_COST='999'))
-        out = ws.wait()
-        self.assertEqual((out['run_status'], ws.record()['status']), ('ACTIVE', 'ACTIVE'))
-
+class LimitTests(Base):
     def test_last_allowed_cycle_still_runs_turns(self):
         for _ in range(2):
             self.ws.evaluate('CONTINUE')
@@ -447,10 +468,11 @@ class BudgetTests(Base):
         self.ws.start('ready', 'x\n', env=dict(FAKE_CLAUDE_COST='1'))
         out = self.ws.wait()
         self.assertEqual((out['state'], out['run_status']), ('COMPLETE', 'ACTIVE'))
-        self.ws.send('more\n', env=dict(FAKE_CLAUDE_COST='11'))  # session total; the budget is still watched in the last cycle
+        self.ws.send('more\n', env=dict(FAKE_CLAUDE_COST='999'))  # cost is information: nothing stops on it
         out = self.ws.wait()
-        self.assertEqual((out['run_status'], out['stopped_reason']), ('STOPPED', 'limit:budget'))
-        self.ws.draft(proposal_text(cycles=2, budget='20'))  # a lowered cycle limit the open cycle already exceeds
+        self.assertEqual((out['state'], out['run_status'], out['stopped_reason']), ('COMPLETE', 'ACTIVE', None))
+        # A lowered cycle limit the open cycle already exceeds (delegation-only amendment: no review needed).
+        self.ws.draft(proposal_text(cycles=2))
         self.ws.ok('shown'); self.ws.ok('approve')
         self.assertEqual(self.ws.record()['status'], 'ACTIVE')
         out = self.ws.blocked('session-send', '--message', self.ws.file('x'))
@@ -525,9 +547,9 @@ class InterruptedTests(Base):
         self.check_interrupted(out)
         self.assertTrue(out['is_error'])
         self.assertEqual(out['subtype'], 'error_during_execution')
-        self.assertEqual(self.ws.record()['spent_usd'], 0.1)
+        self.assertEqual((out['cost_usd'], out['cost_total_usd']), (0.1, 0.1))
         self.assertEqual(self.ws.ok('session-status')['state'], 'INTERRUPTED')
-        self.assertEqual(self.ws.record()['spent_usd'], 0.1)
+        self.assertEqual(self.ws.record()['session']['cost_total_usd'], 0.1)
 
     def test_missing_session_id(self):
         self.ws.start('ready', 'x\n', env=dict(FAKE_CLAUDE_MODE='nosession'))
@@ -587,7 +609,8 @@ class StopTests(Base):
         st = self.ws.ok('session-stop')
         self.assertEqual((st['state'], st['turn'], st['session_id']), ('COMPLETE', 1, 'sess-fake-1'))
         run = self.ws.record()
-        self.assertEqual((run['turn']['state'], run['spent_usd']), ('COMPLETE', 0.3))
+        self.assertEqual((run['turn']['state'], run['turn']['cost_usd'], run['turn']['cost_total_usd']), ('COMPLETE', 0.3, 0.3))
+        self.assertEqual(run['session']['cost_total_usd'], 0.3)
         self.assertNotIn('stop', self.ws.kinds())
         self.assertEqual(self.ws.kinds()[-1], 'turn_result')
 
@@ -618,7 +641,7 @@ class RefusalTests(unittest.TestCase):
         self.assertIn('DRAFT', out['error'])
         self.assertNotIn('turn', self.ws.record())
         self.assertFalse(self.ws.log.exists())
-        self.ws.ok('shown'); self.ws.ok('approve')
+        self.ws.review(); self.ws.ok('shown'); self.ws.ok('approve')
         self.ws.ok('stop', '--reason', 'abort')
         self.ws.blocked('session-start', '--skill', 'ready', '--message', self.ws.file('x'))
         self.ws.blocked('session-send', '--message', self.ws.file('x'))
@@ -630,7 +653,7 @@ class RefusalTests(unittest.TestCase):
         self.ws.blocked('session-start', '--skill', 'ready', '--message', str(self.ws.path / 'missing.md'))
         self.ws.blocked('session-wait')
         self.ws.blocked('session-status')
-        self.assertEqual(len(self.ws.events()), 3)
+        self.assertEqual(self.ws.kinds(), ['draft', 'review', 'shown', 'approve'])
 
     def test_running_turn_blocks_another_start(self):
         self.ws.approve_fresh()
@@ -697,7 +720,14 @@ class PortTests(unittest.TestCase):
         argv = claude_adapter.command_line('s-1', model='sonnet')
         self.assertEqual(argv[argv.index('--resume') + 1], 's-1')
         self.assertEqual(argv[argv.index('--model') + 1], 'sonnet')
+        self.assertNotIn('--effort', argv)
         self.assertNotIn('AskUserQuestion', claude_adapter.ALLOWED_TOOLS)
+        argv = claude_adapter.command_line('s-1', model='sonnet', effort='high')
+        self.assertEqual(argv[-4:], ['--model', 'sonnet', '--effort', 'high'])
+        self.assertEqual(argv.count('--effort'), 1)
+        argv = claude_adapter.command_line(None, effort='high')
+        self.assertEqual(argv[-2:], ['--effort', 'high'])
+        self.assertNotIn('--model', argv)
 
     def test_question_tool_not_in_allow_list(self):
         self.assertEqual(claude_adapter.QUESTION_TOOL, 'AskUserQuestion')
