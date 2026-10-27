@@ -208,12 +208,12 @@ class WaitAndStatusTests(Base):
         self.ws.wait(); self.ws.wait()
         self.assertEqual(self.ws.record()['spent_usd'], 0.5)
 
-    def test_session_id_mismatch_is_refused(self):
+    def test_session_id_mismatch_is_an_interrupted_turn(self):
         self.ws.start('ready', 'x\n', env=dict(FAKE_CLAUDE_SESSION='s-1'))
         self.ws.wait()
         self.ws.send('y\n', env=dict(FAKE_CLAUDE_SESSION='s-2'))
-        out = self.ws.blocked('session-wait')
-        self.assertIn('session id mismatch', out['error'])
+        out = self.ws.wait()
+        self.assertEqual((out['state'], out['reason'], out['session_id']), ('INTERRUPTED', 'session id mismatch', 's-2'))
         run = self.ws.record()
         self.assertEqual(run['session']['id'], 's-1')
         self.assertEqual(run['turn']['state'], 'INTERRUPTED')

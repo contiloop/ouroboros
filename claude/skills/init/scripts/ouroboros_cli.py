@@ -268,7 +268,6 @@ def _settle(store: Store, a) -> dict:
         parsed = host.result(handle)
         cycle = core.open_cycle(run)
         cycle_id = cycle['id'] if cycle else None
-        mismatch = None
         recorded = run['session']['id']
         if parsed['state'] == 'COMPLETE':
             if recorded is None:
@@ -277,7 +276,6 @@ def _settle(store: Store, a) -> dict:
                 if cycle and cycle.get('session_id') is None:
                     cycle['session_id'] = parsed['session_id']
             elif recorded != parsed['session_id']:
-                mismatch = dict(expected=recorded, got=parsed['session_id'])
                 parsed.update(state='INTERRUPTED', reason='session id mismatch')
         text = parsed.pop('text')
         text_path = None
@@ -295,8 +293,6 @@ def _settle(store: Store, a) -> dict:
         if parsed['state'] == 'INTERRUPTED':
             store.append_event('host', 'interrupt', cycle_id, dict(turn=turn['n'], reason=parsed['reason'],
                                                                    raw_path=parsed['raw_path']))
-        require(mismatch is None, 'session id mismatch: the host answered for a different session; the turn is '
-                'recorded INTERRUPTED', **(mismatch or {}))
         return _stored_result(store, turn)
 
 
