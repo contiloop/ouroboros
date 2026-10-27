@@ -19,7 +19,8 @@ from .core import PROPOSAL_FILES, digest, now, require
 LOCK_TIMEOUT = 5.0
 EMBED_LIMIT = 8 * 1024
 LEGACY_FILES = ('proposal.md', 'proposal.shown.md', 'proposal.approved.md')  # single-file records of cycles 001-002
-RUN_FILES = PROPOSAL_FILES + ('shown', 'approved', 'run.json', 'events.jsonl', 'turns', 'workgraph.yaml') + LEGACY_FILES
+RUN_FILES = PROPOSAL_FILES + ('shown', 'approved', 'run.json', 'events.jsonl', 'turns', 'workgraph.yaml',
+                              'interview.md') + LEGACY_FILES
 
 
 def private_dir(workspace: Path | str) -> Path:
@@ -76,6 +77,7 @@ class Store:
         self.events_path = self.dir / 'events.jsonl'
         self.shown_dir = self.dir / 'shown'
         self.approved_dir = self.dir / 'approved'
+        self.interview_path = self.dir / 'interview.md'
         self.legacy_path = self.dir / 'proposal.md'
         self.owner_path = self.dir / 'owner.json'
         self.lock_path = self.dir / 'lock'
@@ -172,6 +174,14 @@ class Store:
     def write_approved(self, parts: dict) -> None:
         self._write_set(self.approved_dir, parts)
 
+    def read_approved(self) -> dict:
+        """The last approved copies (file name → bytes, None when absent; all None before the first approval)."""
+        return self._read_set(self.approved_dir)
+
+    def read_interview(self) -> bytes | None:
+        """The interview log L1 keeps beside the record, or None. Written by L1 directly, never by a command."""
+        return self.interview_path.read_bytes() if self.interview_path.is_file() else None
+
     # ── events ──────────────────────────────────────────────────────────
     def event_count(self) -> int:
         if not self.events_path.is_file():
@@ -187,7 +197,10 @@ class Store:
         """Embed small valid JSON (or, with text=True, small text as a string); otherwise copy under turns/
         and reference by relative path."""
         require(source.is_file(), f'data file not found: {source}')
-        raw = source.read_bytes()
+        return self.event_payload(source.read_bytes(), source.suffix.lstrip('.') or 'bin', text)
+
+    def event_payload(self, raw: bytes, ext: str = 'json', text: bool = False):
+        """`event_data` for bytes already in memory."""
         if len(raw) <= EMBED_LIMIT:
             try:
                 decoded = raw.decode('utf-8')
@@ -195,7 +208,6 @@ class Store:
             except ValueError:
                 pass
         n = 1 + sum(1 for p in self.turns_dir.glob('event-*'))
-        ext = source.suffix.lstrip('.') or 'bin'
         target = self.turns_dir / f'event-{n}.{ext}'
         _write_bytes(target, raw)
         return dict(file=f'turns/{target.name}', sha256=digest(raw), size=len(raw))
