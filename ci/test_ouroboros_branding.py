@@ -52,8 +52,7 @@ class OuroborosBrandingTest(unittest.TestCase):
             self.assertNotIn('docs/SKILL_INTERFACE.md',s)
         self.assertIn(current+'.git', (ROOT/'README_ko.md').read_text())
 
-    def test_legacy_state_is_preserved(self):
-        self.assertIn('.dryforge/', (ROOT/'src/skills/go/SKILL.md').read_text())
+    def test_upstream_readme_is_preserved(self):
         self.assertTrue((ROOT/'README.upstream.md').exists())
 
 if __name__=='__main__': unittest.main()

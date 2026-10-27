@@ -18,11 +18,10 @@
 # Root marketplace manifests are committed repo files, not build outputs.
 #
 # Build-time guards:
-#   ① shared references byte-identical (3 pairs)
-#   ② frontmatter injection post-verified (a silent perl no-op must not ship)
-#   ③ skill list discovered dynamically from src/skills/*/ (a 4th skill without
+#   ① frontmatter injection post-verified (a silent perl no-op must not ship)
+#   ② skill list discovered dynamically from src/skills/*/ (a new skill without
 #     its claude_tools mapping or codex openai.yaml overlay fails the build)
-#   ④ all plugin manifest versions non-empty + identical + match CHANGELOG top
+#   ③ all plugin manifest versions non-empty + identical + match CHANGELOG top
 
 set -euo pipefail
 
@@ -34,34 +33,15 @@ OUT="$BUILD_TMP/output"
 mkdir -p "$OUT"
 trap 'rm -rf "$BUILD_TMP"' EXIT
 
-# ── guard ①: shared references byte-identical (pair list = the contract) ────
-for pair in \
-  "migration/references/harness-format.md:go/references/harness-format.md" \
-  "migration/references/harness-review.md:go/references/harness-review.md" \
-  "ready/references/foundation-format.md:go/references/foundation-format.md"; do
-  a="$SRC/${pair%%:*}"; b="$SRC/${pair##*:}"
-  if ! diff -q "$a" "$b" >/dev/null 2>&1; then
-    echo "FAILED: shared reference drift: ${pair%%:*} != ${pair##*:}" >&2
-    diff "$a" "$b" >&2 || true
-    exit 1
-  fi
-done
-echo "✓ shared references byte-identical (3 pairs)"
-
-# ── guard ③: skills discovered dynamically from src ─────────────────────────
+# ── guard ②: skills discovered dynamically from src ─────────────────────────
 SKILLS=""
 for d in "$SRC"/*/; do [ -d "$d" ] && SKILLS="$SKILLS $(basename "$d")"; done
 [ -n "$SKILLS" ] || { echo "FAILED: src/skills is empty" >&2; exit 1; }
 
-# Per-skill allowed-tools for the Claude build. All three add Agent: ready dispatches the
-# intent-completeness + 3-doc-gate subagents, go dispatches implementers/reviewers, and migration
-# dispatches the final independent harness REVIEW subagent. bash 3.2 — no assoc arrays.
+# Per-skill allowed-tools for the Claude build. bash 3.2 — no assoc arrays.
 claude_tools() {
   case "$1" in
-    ready) echo "Read, Edit, Write, Bash, Grep, Glob, Agent, AskUserQuestion, WebSearch, WebFetch, SendMessage" ;;
     init|approve) echo "Read, Edit, Write, Bash, Grep, Glob, Agent, SendMessage, AskUserQuestion" ;;
-    go) echo "Read, Edit, Write, Bash, Grep, Glob, Agent, AskUserQuestion, SendMessage" ;;
-    migration) echo "Read, Edit, Write, Bash, Grep, Glob, Agent, AskUserQuestion" ;;
   esac
 }
 
@@ -76,7 +56,7 @@ for s in $SKILLS; do
     perl -0777 -i -pe 'BEGIN{$j=$ENV{INJECT}} s/\A(---\n.*?\n)---\n/$1$j\n---\n/s' \
     "$OUT/claude/skills/$s/SKILL.md"
 done
-# guard ②: assert the injection actually landed (perl substitution can no-op silently)
+# guard ①: assert the injection actually landed (perl substitution can no-op silently)
 for s in $SKILLS; do
   f="$OUT/claude/skills/$s/SKILL.md"
   if [ "$(grep -c '^disable-model-invocation: true$' "$f")" -ne 1 ] || [ "$(grep -c '^allowed-tools: ' "$f")" -ne 1 ]; then
@@ -91,7 +71,7 @@ echo "=== build: codex ==="
 mkdir -p "$OUT/codex/plugin/.codex-plugin"
 cp -R "$SRC" "$OUT/codex/plugin/skills"
 cp -R "$PLAT/codex/skills/." "$OUT/codex/plugin/skills/"   # agents/openai.yaml overlay
-# guard ③ (codex leg): every skill must carry its openai.yaml overlay
+# guard ② (codex leg): every skill must carry its openai.yaml overlay
 for s in $SKILLS; do
   [ -f "$OUT/codex/plugin/skills/$s/agents/openai.yaml" ] \
     || { echo "FAILED: missing Codex openai.yaml overlay for skill: $s" >&2; exit 1; }
@@ -130,7 +110,7 @@ cp -R "$SRC" "$OUT/antigravity/skills"
 cp "$PLAT/antigravity/plugin.json" "$OUT/antigravity/plugin.json"
 cp -R "$PLAT/antigravity/rules" "$OUT/antigravity/rules"
 
-# guard ②: manual-only injection must land once in every Grok and Agent Plugin skill.
+# guard ①: manual-only injection must land once in every Grok and Agent Plugin skill.
 for target in grok agent-plugin; do
   for s in $SKILLS; do
     f="$OUT/$target/skills/$s/SKILL.md"
@@ -148,7 +128,7 @@ done
 find "$OUT/claude" "$OUT/codex" "$OUT/grok" "$OUT/agent-plugin" "$OUT/antigravity" \
   -name ".DS_Store" -delete 2>/dev/null || true
 
-# ── guard ④: version consistency ────────────────────────────────────────────
+# ── guard ③: version consistency ────────────────────────────────────────────
 # All 10 plugin manifests (5 platform inputs + 5 generated) carry the same non-empty
 # version AND it matches the CHANGELOG top entry. Catches manual-edit skew at build time instead of leaving it for a
 # human (or another agent) to spot. Release tags are validated separately so
