@@ -10,13 +10,12 @@ Deciding manifest content (`platform/`), skill text (`src/skills/`), validation 
 result (`ci/verify.py`).
 
 ## Guards (each aborts the build with a `FAILED:` line)
-1. Three shared reference pairs under `src/skills/` are byte-identical.
-2. Skill list is discovered from `src/skills/*/`; every skill needs a `claude_tools` case (bash 3.2
-   `case`, no associative arrays) and a Codex `agents/openai.yaml` overlay.
-3. Frontmatter injection is verified after the fact: exactly one `disable-model-invocation: true`
+1. Frontmatter injection is verified after the fact: exactly one `disable-model-invocation: true`
    (and for Claude exactly one `allowed-tools:`) per generated `SKILL.md`; Grok and Agent Plugin
    outputs must contain no `allowed-tools:`.
-4. Ten manifest versions (five inputs, five outputs) are identical and equal the first `## v…`
+2. Skill list is discovered from `src/skills/*/`; every skill needs a `claude_tools` case (bash 3.2
+   `case`, no associative arrays) and a Codex `agents/openai.yaml` overlay.
+3. Ten manifest versions (five inputs, five outputs) are identical and equal the first `## v…`
    heading in `CHANGELOG.md`.
 
 ## Invariants

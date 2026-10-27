@@ -7,11 +7,6 @@
 - **MUST** run `bash build/build.sh` after changing `src/skills/` or `platform/` and commit the
   regenerated packages in the same commit. Violation: CI's reproducible-build check fails with
   "generated outputs are stale or uncommitted".
-- **MUST** keep these reference pairs byte-identical:
-  `migration/references/harness-format.md` = `go/references/harness-format.md`,
-  `migration/references/harness-review.md` = `go/references/harness-review.md`,
-  `ready/references/foundation-format.md` = `go/references/foundation-format.md`.
-  Violation: build aborts before producing packages.
 - Anything placed under `src/skills/` ships to users in all five packages. **MUST NOT** place
   developer-only material there (module notes, design docs, tests).
 
@@ -38,32 +33,31 @@
 ## README
 
 - `README.md` and `README_ko.md` **MUST** contain: `# ⟲ Ouroboros`, the tokens `L1`, `L2`, `L3`,
-  `/ouroboros:init`, `/ouroboros:approve`, `docs/MISSION.md`, `Grep MCP`, `Context7 MCP`,
+  `/ouroboros:init`, `/ouroboros:approve`, `Grep MCP`, `Context7 MCP`,
   `Apache-2.0`, `prekuter`, and the clone line
   `git clone --depth 1 https://github.com/contiloop/ouroboros.git`. `README.upstream.md` **MUST**
-  exist, and `src/skills/go/SKILL.md` **MUST** contain the string `.dryforge/` for as long as that
-  skill exists (`test_legacy_state_is_preserved`). Violation: `ci/test_ouroboros_branding.py` fails.
+  exist. Violation: `ci/test_ouroboros_branding.py` fails.
 - Translations `README_ko.md`, `README_ja.md`, `README_zh.md` follow `README.md`; only the Korean one
   is test-checked.
 
 ## Verification gates (before merging to `main`)
 
 1. `PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s ci -p 'test_*.py'` passes
-   (on macOS set `TMPDIR=/private/tmp`).
+   (on macOS set `TMPDIR=/private/tmp`; never run it concurrently with the build).
 2. `bash build/build.sh` succeeds and leaves no diff.
 3. `python3 ci/verify.py` passes from a **clean** tree (no untracked files anywhere in the repo).
 4. CI additionally runs `actionlint` on workflows and `shellcheck build/build.sh`; both must pass.
 
 ## Runtime code
 
-- Python **MUST** stay standard-library only, except the optional `claude-agent-sdk` imported lazily
-  inside `ClaudeAdapter.connect`. Violation: `worker_runtime.py doctor` and tests break on hosts
-  without the package.
-- Private runtime state **MUST** live under the *target project's* git-ignored `.dryforge/`; the
-  runtime refuses to start if `.dryforge/` is not ignored there. The Ouroboros repository itself also
-  ignores `.dryforge/`.
-- Paths `.git`, `.dryforge`, `.claude`, `.codex`, `.agents` in a target project are protected
-  metadata and are never ordinary delegated-write targets for a worker.
+- Python **MUST** stay standard-library only (`ci/test_runtime_contract.py` checks imports).
+- Private runtime state **MUST** live under the *target project's* git-ignored
+  `.dryforge/ouroboros/`; every record write refuses if `.dryforge/` is not ignored there. The
+  Ouroboros repository itself also ignores `.dryforge/`.
+- The worker process **MUST** be started with a tool allow-list, never with
+  `--dangerously-skip-permissions` or `--permission-mode bypassPermissions`
+  (`ci/test_runtime_contract.py`). The message sent to the worker carries only caller text.
+- Tests **MUST NOT** call a live model or host; the adapter is tested against `ci/fixtures/fake_claude.py`.
 
 ## Git conventions (current practice, changeable)
 

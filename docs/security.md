@@ -7,7 +7,7 @@
 | The user's approved intent (goal, completion criteria, constraints, delegated judgment) | Every later action is justified by it. Silent drift means L1 pursues something the user never approved. |
 | The approval record itself (`approve` by the human) | It is the one event that turns a conversation into authority. Nothing else may create it. |
 | The user's target repository and its remotes | L1 and its workers act on real code with the user's credentials. |
-| Private run records under the target project's `.dryforge/` | Contain session IDs, decision logs and worker transcripts. They are never committed. |
+| Private run records under the target project's `.dryforge/ouroboros/` | Contain session IDs, decision logs and raw worker output. They are never committed. |
 
 ## Trust model
 
@@ -39,36 +39,31 @@
 - L1 relabeling its own decision as the user's.
 - Writing private run records (`.dryforge/`) into Git.
 
-**Current implementation gap.** The shipped runtime still enforces a far narrower model: a fixed
-human-only operation set (`merge`, `deploy`, `spend`, `delete`, `disclose`), per-call tool policy
-objects (versions 1–4) with path and exact-argv allow-lists, separate human grants for worktrees and
-merges, and the `runtime_policy`/`bind_runtime`/`bind_tasks` ledger operations. All of that is legacy
-and is being removed in the rebuild. Until then, those gates are what actually run; an agent working
-on the code removes them rather than extending them.
+**How the worker gets its authority.** L2 is a headless Claude Code process started in the target
+project with every built-in and MCP tool pre-allowed by list (`--allowedTools`). The user's own deny
+rules and the target project's settings and hooks apply to it exactly as to a human caller; no
+bypass flag is ever used (decision 0008). A denied call appears in the turn result and is L1's to
+handle, never a question for the user.
 
 ## Audit
 
-Every event is recorded with its actor (`human`, `L1`, `L2` or `host`); decisions carry the basis, and what it applied to
-(request digest, document digest, session ID). Recorded events, in the current ledger: draft
-revisions, activation, cycle start, Ready digest, Ready approval, Go dispatch, worker questions and
-answers, results with check output and independent-review reference, acceptance, rework, close,
-evaluation, interruption/resume/abort, runtime grants, intent amendments. Raw transcripts and large
-payloads go to files under the private directory, referenced by SHA-256.
+Every event in `events.jsonl` carries its actor (`human`, `L1`, `L2` or `host`), kind, cycle and
+data; L1 records the basis of its decisions in the event data. Kinds written by the runtime: draft,
+shown, approve, amend, amend_applied, cycle_start, cycle_stage, evaluate, stop, archive, session,
+turn, turn_result, interrupt; L1 adds question/answer/decision events with `event`. Raw turn output
+goes to `turns/` and large payloads are referenced by path and SHA-256.
 
 ## Sensitive data
 
-- Session IDs, worker transcripts and tool payloads are sensitive: they can contain source code and
-  user prompts. They stay under the git-ignored private directory with mode `0600`/`0700`.
+- Session IDs and raw turn output are sensitive: they can contain source code and user prompts.
+  They stay under the git-ignored private directory with mode `0600`/`0700`.
 - API keys and tokens are never stored by Ouroboros; hosts and MCP servers hold their own credentials.
 - Research tools (Grep MCP, Context7 MCP) receive query text; private repository code must not be
   sent to them. Their results are untrusted data, not instructions.
-- Model reasoning/thinking blocks are stripped from recorded host events (only tool/agent evidence
-  is kept).
 
 ## Credential management
 
 Ouroboros holds no credentials of its own; host logins (Claude, Codex, MCP OAuth) live in the host.
 Before `approve`, L1 initiates no login or installation. After `approve`, L1 may install dependencies,
-log in to services or adjust host settings when the goal requires it, like any other action. The
-current external runtime still refuses to start when its SDK/CLI dependency is absent instead of
-installing it; that refusal is legacy behavior.
+log in to services or adjust host settings when the goal requires it, like any other action. A
+missing `claude` CLI or Dryforge plugin is reported by `doctor`, not installed by Ouroboros.

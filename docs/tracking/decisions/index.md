@@ -9,3 +9,4 @@
 | [0005](0005-single-source-generated-packages.md) | One canonical skill tree, five generated packages committed to the repository | 2026-10-25 (recorded 2026-10-27) |
 | [0006](0006-minimal-policy-files.md) | Drop LICENSE/CONTRIBUTING/SECURITY files during the experimental stage | 2026-10-25 (recorded 2026-10-27) |
 | [0007](0007-english-project-docs.md) | Project documentation is written in English | 2026-10-27 |
+| [0008](0008-headless-l2-session-and-allowlist.md) | L2 is a headless Claude Code session with a tool allow-list, kept across cycles | 2026-10-27 |

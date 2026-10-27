@@ -1,18 +1,17 @@
 # Findings
 
-## Runtime tests depend on an un-symlinked temp directory
-- **Observed:** on macOS with default `TMPDIR` (`/var/folders/...`), 32 tests error and 2 fail in
-  `test_runtime_bridge` and `test_runtime_merge`; with
-  `TMPDIR=/private/tmp` all 247 pass.
-- **Why it matters:** a contributor running the suite as documented in `README.md` (no `TMPDIR`)
-  sees red and may "fix" production symlink checks.
-- **Why not now:** the affected modules are slated for removal in the rebuild; fixing fixtures for
-  code that is going away is wasted effort. If the modules survive, resolve fixture paths with
-  `Path.resolve()` before use.
+## Translated READMEs lag the English one
+- **Observed:** `README_ko.md`, `README_ja.md`, `README_zh.md` only had false sentences removed and
+  carry a note that the English README is current; their prose still describes the older
+  orchestration wording in places.
+- **Why it matters:** non-English readers get a thinner picture of the rebuilt model.
+- **Why not now:** full translations are scheduled with the release (tracking item 3) so they are
+  written once, after the live run has settled the wording.
 
-## Bundled Dryforge-derived skills diverge from the installed Dryforge
-- **Observed:** `src/skills/ready|go|migration` differ from the installed Dryforge 1.3.8 in
-  `SKILL.md` and several references (e.g. an extra `go/references/agent-lifecycle.md`).
-- **Why it matters:** a user who runs `ouroboros:ready` directly gets behavior that differs from
-  the Dryforge L1 actually invokes, and three CI contract tests pin the bundled text.
-- **Why not now:** the skills are being removed, not reconciled.
+## `session-wait` relies on pid liveness, not the exit file
+- **Observed:** `alive()` answers from `os.kill(pid, 0)`; the wrapper writes `turns/<n>.exit` on
+  exit but the adapter does not consult it for liveness.
+- **Why it matters:** a reused pid could make a finished turn look RUNNING until the unrelated
+  process exits. Rare on a developer machine.
+- **Why not now:** no live run has exercised long turns yet; revisit with the evidence from
+  tracking item 1.
