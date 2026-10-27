@@ -5,7 +5,8 @@ All commands: `python3 -B <skill root>/scripts/ouroboros_cli.py --workspace <abs
 `<pid>` is this host process (`$CLAUDE_PID` on Claude Code). Success prints JSON and exits 0; a
 refusal prints `{"status":"BLOCKED","error":…}`, exits 2 and changes nothing. The record lives in
 the target project's git-ignored `.dryforge/ouroboros/` (`run.json`, `events.jsonl`,
-`proposal.md`, `turns/`, `archive/`). Writes refuse while `.dryforge/` is not ignored there.
+`proposal.md`, `proposal.approved.md` — the governing text after `approve`, `turns/`, `archive/`).
+Writes refuse while `.dryforge/` is not ignored there.
 
 | Command | Use |
 | --- | --- |

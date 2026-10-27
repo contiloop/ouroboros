@@ -18,7 +18,7 @@ from .core import digest, now, require
 
 LOCK_TIMEOUT = 5.0
 EMBED_LIMIT = 8 * 1024
-RUN_FILES = ('proposal.md', 'proposal.shown.md', 'run.json', 'events.jsonl', 'turns')
+RUN_FILES = ('proposal.md', 'proposal.shown.md', 'run.json', 'events.jsonl', 'turns', 'proposal.approved.md',)
 
 
 def private_dir(workspace: Path | str) -> Path:
@@ -75,6 +75,7 @@ class Store:
         self.events_path = self.dir / 'events.jsonl'
         self.proposal_path = self.dir / 'proposal.md'
         self.shown_path = self.dir / 'proposal.shown.md'
+        self.approved_path = self.dir / 'proposal.approved.md'
         self.owner_path = self.dir / 'owner.json'
         self.lock_path = self.dir / 'lock'
         self.turns_dir = self.dir / 'turns'
@@ -137,6 +138,9 @@ class Store:
 
     def write_shown(self, data: bytes) -> None:
         _write_bytes(self.shown_path, data)
+
+    def write_approved(self, data: bytes) -> None:
+        _write_bytes(self.approved_path, data)
 
     def read_shown(self) -> bytes | None:
         return self.shown_path.read_bytes() if self.shown_path.is_file() else None

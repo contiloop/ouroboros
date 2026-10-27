@@ -104,6 +104,7 @@ def cmd_approve(store: Store, a) -> dict:
         if action == 'unchanged':
             return summary(store)
         store.write_owner(a.owner)
+        store.write_approved(raw)
         store.write_run(run)
         store.append_event('human', 'amend' if action == 'amended' else 'approve', None,
                            dict(digest=current, limits=run['limits'], action=action))

@@ -387,6 +387,18 @@ class ApproveTests(Base):
         self.assertEqual(self.ws.ok('approve'), self.ws.ok('show'))  # ACTIVE + same digest stays a no-op
         self.assertEqual(self.ws.kinds().count('approve'), 2)
 
+    def test_approve_writes_the_governing_text(self):
+        self.ws.approve_fresh()
+        approved = self.ws.private / 'proposal.approved.md'
+        self.assertTrue(approved.is_file())
+        self.assertEqual(approved.read_text(), proposal())
+        self.assertEqual(approved.stat().st_mode & 0o777, 0o600)
+        self.ws.draft(proposal() + '\nrevised\n')
+        self.assertEqual(approved.read_text(), proposal())  # a pending revision does not touch it
+        self.ws.ok('shown')
+        self.ws.ok('approve')
+        self.assertEqual(approved.read_text(), proposal() + '\nrevised\n')
+
     def test_complete_run_cannot_be_approved(self):
         self.ws.approve_fresh()
         self.ws.start_cycle()

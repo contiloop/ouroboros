@@ -18,8 +18,8 @@ packaging-only.
 | Area | State | Evidence |
 | --- | --- | --- |
 | Bundled `ready`/`go`/`migration` removed, build guard and overlays dropped | done | `src/skills/` holds `init` and `approve` only; `ci/verify.py` passes |
-| Run record (`run.json`, `events.jsonl`, owner, lock, archive) and record commands | built, unit-tested | `ci/test_run_record.py` (48 tests) |
-| Claude Code host adapter: headless `claude -p` turns, resume, allow-list, parse, stop, doctor | built, unit-tested against a fake `claude`; `doctor` checked once against the real host | `ci/test_claude_adapter.py` (22 tests) |
+| Run record (`run.json`, `events.jsonl`, owner, lock, archive) and record commands | built, unit-tested | `ci/test_run_record.py` |
+| Claude Code host adapter: headless `claude -p` turns, resume, allow-list, parse, stop, doctor | built, unit-tested against a fake `claude`; `doctor` checked once against the real host | `ci/test_claude_adapter.py` |
 | Skill text for the rebuilt loop (`init`, `approve`, interview, orchestration, runtime guide) | written, contract-pinned | `ci/test_mission_contract.py`, `ci/test_runtime_contract.py` |
 | Host facts the design rests on (skill loads headlessly, resume, allow-list behavior) | live-probed once on 2026-10-27 with claude 2.1.311 | probe results recorded in the engineering notes |
 | README and product docs for the new model | done; translations patched minimally | `ci/test_ouroboros_branding.py` |
