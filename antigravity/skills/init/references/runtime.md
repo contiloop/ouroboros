@@ -4,21 +4,22 @@ All commands: `python3 -B <skill root>/scripts/ouroboros_cli.py --workspace <abs
 --owner <pid> <command> …`. The skill root is the directory containing this skill's `SKILL.md`.
 `<pid>` is this host process (`$CLAUDE_PID` on Claude Code). Success prints JSON and exits 0; a
 refusal prints `{"status":"BLOCKED","error":…}`, exits 2 and changes nothing. The record lives in
-the target project's git-ignored `.dryforge/ouroboros/` (`run.json`, `events.jsonl`,
-`proposal.md`, `proposal.approved.md` — the governing text after `approve`, `turns/`, `archive/`).
+the target project's git-ignored `.dryforge/ouroboros/` (`run.json`, `events.jsonl`, the four
+documents `scenario.md`, `validation.md`, `spec.md`, `delegation.md`, their copies under `shown/`
+and `approved/` (the governing text after `approve`), `workgraph.yaml`, `turns/`, `archive/`).
 Writes refuse while `.dryforge/` is not ignored there.
 
 | Command | Use |
 | --- | --- |
 | `doctor --host claude` | `claude` on PATH, its version, `dryforge` plugin installed and enabled |
-| `draft --proposal <file>` | create the DRAFT proposal, or revise the proposal of the current DRAFT, ACTIVE or STOPPED run (it must be shown and approved again); a COMPLETE run is archived first and a new run starts |
-| `shown` | mark the current proposal as shown to the user |
-| `show` | status, digests, limits, spent budget, session, open cycle |
-| `approve` | approve exactly the shown proposal: activates a DRAFT, amends an active or stopped run whose proposal changed, resumes a stopped run whose proposal is unchanged |
-| `cycle-start --kind development\|migration --goal <file> --checkpoint <commit>` | open a cycle |
+| `draft --scenario <f> --validation <f> --spec <f> --delegation <f>` | write the four documents (all four for a new run; any subset revises the current DRAFT, ACTIVE or STOPPED run, which must be shown and approved again); a COMPLETE run or a legacy record is archived first and a new run starts (a legacy ACTIVE run must be stopped first) |
+| `shown` | mark the current set as shown to the user (keeps copies under `shown/`) |
+| `show` | status, `legacy`, combined digest, limits, models, spent budget, `beta_cycles`, session, open cycle, open question |
+| `approve` | check the set is complete (a refusal names the file and the item) and approve exactly the shown set: activates a DRAFT, amends an active or stopped run whose set changed, resumes a stopped run whose set is unchanged; on a mismatch prints a diff per changed file |
+| `cycle-start --kind development\|migration\|beta --goal <file> --checkpoint <commit>` | open a cycle; `beta` runs no worker turns and does not count toward max cycles |
 | `cycle-stage --stage ready\|go\|review\|done [--ready-digest <hex>] [--checkpoint <commit>]` | advance it (`go` needs a ready digest) |
-| `evaluate --decision CONTINUE\|REPLAN\|ESCALATE\|COMPLETE --basis <file>` | close it; applies limits and amendments |
-| `event --actor human\|L1\|L2\|host --kind <kind> [--cycle <id>] --data <file>` | record a question, answer, decision or evidence |
+| `evaluate --decision CONTINUE\|REPLAN\|ESCALATE\|COMPLETE --basis <file>` | close it; applies limits and amendments; `COMPLETE` only on a beta cycle; `ESCALATE` on a beta cycle is not a stalled cycle; max cycles stops the run when more development is asked for at the limit |
+| `event --actor human\|L1\|L2\|host --kind <kind> [--cycle <id>] --data <file>` | record a decision or evidence; kinds used by the loop: `answer` (plain-text questions), `resume`, `beta` (one per validation item), `verified` (the user's own check) |
 | `stop --reason abort\|limit:<which>` | set STOPPED |
 | `archive` | move a finished run under `archive/<run_id>/` |
 | `session-start --skill ready\|go\|migration --message <file> [--fresh --reason <text>]` | launch a detached turn whose message is `/dryforge:<skill> ` + the file text (`go --fresh` is refused once the cycle's Ready ran in a session) |
@@ -32,7 +33,9 @@ Writes refuse while `.dryforge/` is not ignored there.
 
 L2 is a headless `claude` session driven through its streaming control channel, resumed by session
 id on every later turn, with its working directory in the target project so the project's own
-settings, hooks and deny rules apply to it as to any caller. Its question tool is live: a structured
+settings, hooks and deny rules apply to it as to any caller. The models in `delegation.md` are
+applied on every turn: the L2 model as the session's model flag, the L3 model as the subagent
+model of the worker process (`default` = the host's default). Its question tool is live: a structured
 question arrives as a `QUESTION` result and you answer it with `session-answer`. Tools are
 pre-allowed by list (built-in tools plus MCP tools) and any other permission request is allowed
 automatically and recorded; the user's deny rules are applied by the host first; no bypass flag is

@@ -7,15 +7,18 @@ description: >
 
 # Hand execution to L1
 
-This invocation is the user's approval of the proposal **exactly as last shown**. Reply in the
-user's language. Load `../init/references/runtime.md` for the commands.
+This invocation is the user's approval of the four documents (`scenario.md`, `validation.md`,
+`spec.md`, `delegation.md`) **exactly as last shown**. Reply in the user's language. Load
+`../init/references/runtime.md` for the commands.
 
 1. On Codex (or any host other than Claude Code) report that no worker adapter exists for this host
    yet and stop; nothing is recorded as approved. Claude Code is the supported execution host.
-2. Run `approve`. The record compares the current proposal with the version marked `shown`:
+2. Run `approve`. The record checks the set is complete (every required item of the four files;
+   a refusal names the file and the item: go back to `init` and fill it) and compares it with the
+   version marked `shown`:
    - nothing proposed → say so and start the `init` conversation;
-   - changed since it was shown → show the user the difference; nothing is approved until they see
-     the current version and invoke `approve` again;
+   - changed since it was shown → show the user the difference per file; nothing is approved until
+     they see the current version and invoke `approve` again;
    - equal → the run is `ACTIVE` (or, for a changed proposal on an active or stopped run, an
      amendment is recorded and applied at the next cycle boundary); a stopped run approved again
      resumes, with or without a changed proposal.
