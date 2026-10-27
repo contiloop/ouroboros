@@ -46,7 +46,13 @@ on-screen checks → COMPLETE`. Everything below is what the next cycle changes;
 4. **Content completeness before approve, with re-asking.** `approve` checks structure only. Add an
    independent review of the four documents (an agent that did not author them) before approval; its
    findings are re-asked to the user by L1 until none remain; the passing review is recorded and
-   `approve` requires it.
+   `approve` requires it. Model the whole interview on Dryforge `ready`'s stages, stage for stage:
+   orient → decompose the user's words into the four documents' axes (conflicts become questions) →
+   elicit (decision surface, extract domain / present technical, grounds gate, ≤4 questions with a
+   recommendation) → independent intent-completeness subagent (guess hunt, findings re-asked) →
+   write the four documents + fidelity check → independent gate subagent on the finished documents
+   (executability, contract consistency; findings re-asked) → `approve`. Both independent checks are
+   recorded in the run and `approve` requires the last one to have passed on the shown set.
 5. Then: Codex adapter; release (version bump, translated READMEs).
 
 ## Blockers
