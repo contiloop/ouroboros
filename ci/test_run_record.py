@@ -350,7 +350,7 @@ class DraftTests(Base):
 
     def test_draft_archives_complete_run_and_starts_a_new_one(self):
         self.ws.approve_fresh()
-        self.ws.start_cycle()
+        self.ws.start_cycle(kind='beta')
         self.ws.evaluate('COMPLETE')
         old = self.ws.record()
         (self.ws.private / 'workgraph.yaml').write_text('nodes: []\n')
@@ -616,7 +616,7 @@ class ApproveTests(Base):
 
     def test_complete_run_cannot_be_approved(self):
         self.ws.approve_fresh()
-        self.ws.start_cycle()
+        self.ws.start_cycle(kind='beta')
         self.ws.evaluate('COMPLETE')
         self.assertEqual(self.ws.record()['status'], 'COMPLETE')
         self.ws.ok('shown')
@@ -875,10 +875,23 @@ class CycleTests(Base):
         self.assertEqual(self.ws.record()['status'], 'ACTIVE')
         self.ws.ok('evaluate', '--decision', 'CONTINUE', '--basis', self.ws.file(''))  # empty basis only blocks COMPLETE
         self.ws.start_cycle()
+        out = self.ws.blocked('evaluate', '--decision', 'COMPLETE', '--basis', self.ws.file('because'))
+        self.assertEqual(out['error'], 'COMPLETE is the evaluation of a beta cycle; open one with cycle-start --kind beta')
+        run = self.ws.record()
+        self.assertEqual((run['status'], run['cycles'][-1]['stage'], run['cycles'][-1]['evaluation']), ('ACTIVE', 'ready', None))
+        self.assertNotIn('evaluate', self.ws.kinds()[-1:])
+        self.ws.evaluate('CONTINUE')
+        self.ws.start_cycle(kind='beta')
         self.ws.evaluate('COMPLETE')
         run = self.ws.record()
         self.assertEqual(run['status'], 'COMPLETE')
         self.assertIsNone(run['stopped_reason'])
+
+    def test_complete_refused_on_a_migration_cycle(self):
+        self.ws.start_cycle(kind='migration')
+        out = self.ws.blocked('evaluate', '--decision', 'COMPLETE', '--basis', self.ws.file('because'))
+        self.assertIn('beta cycle', out['error'])
+        self.assertEqual((self.ws.record()['status'], self.ws.record()['cycles'][-1]['evaluation']), ('ACTIVE', None))
 
     def test_large_basis_goes_to_turns(self):
         self.ws.start_cycle()

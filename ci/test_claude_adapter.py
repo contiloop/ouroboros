@@ -173,6 +173,67 @@ class ArgvShapeTests(Base):
         self.assertEqual(self.ws.record()['session']['id'], 's-2')
 
 
+class ModelTests(unittest.TestCase):
+    """The run's L2/L3 models reach the worker process: `--model` for L2, CLAUDE_CODE_SUBAGENT_MODEL for L3."""
+
+    def workspace(self, **models) -> HostWorkspace:
+        ws = HostWorkspace()
+        self.addCleanup(ws.cleanup)
+        ws.approve_fresh(proposal_text(**models))
+        ws.start_cycle()
+        return ws
+
+    def test_named_models_set_the_flag_and_the_subagent_variable(self):
+        ws = self.workspace(l2='sonnet', l3='haiku')
+        out = ws.start('ready', 'x\n')
+        self.assertEqual(out['models'], dict(l2='sonnet', l3='haiku'))
+        ws.wait()
+        argv, logged = ws.argv(), ws.logged()
+        self.assertEqual(argv[argv.index('--model') + 1], 'sonnet')
+        self.assertEqual(argv.count('--model'), 1)
+        self.assertEqual((logged['model_flag'], logged['subagent_model']), ('sonnet', 'haiku'))
+        # Re-applied on the resumed turn: it is a new process.
+        ws.send('again\n', env=dict(CLAUDE_CODE_SUBAGENT_MODEL='opus'))
+        ws.wait()
+        logged = ws.logged()
+        self.assertEqual((logged['model_flag'], logged['subagent_model']), ('sonnet', 'haiku'))
+        self.assertEqual(ws.record()['turn']['models'], dict(l2='sonnet', l3='haiku'))
+
+    def test_default_models_pass_no_flag_and_strip_the_inherited_variable(self):
+        ws = self.workspace(l2='default', l3='default')
+        ws.start('ready', 'x\n', env=dict(CLAUDE_CODE_SUBAGENT_MODEL='opus'))
+        ws.wait()
+        logged = ws.logged()
+        self.assertNotIn('--model', logged['argv'])
+        self.assertEqual((logged['model_flag'], logged['subagent_model']), (None, None))
+        self.assertEqual(ws.record()['turn']['models'], dict(l2='default', l3='default'))
+
+    def test_session_and_turn_events_carry_the_models(self):
+        ws = self.workspace(l2='sonnet', l3='haiku')
+        ws.start('ready', 'x\n')
+        ws.wait()
+        events = {e['kind']: e for e in ws.events() if e['kind'] in ('session', 'turn')}
+        self.assertEqual(events['session']['data']['models'], dict(l2='sonnet', l3='haiku'))
+        self.assertEqual(events['turn']['data']['models'], dict(l2='sonnet', l3='haiku'))
+        self.assertEqual(ws.ok('session-status')['models'], dict(l2='sonnet', l3='haiku'))
+        ws.send('more\n')
+        ws.wait()
+        turns = [e for e in ws.events() if e['kind'] == 'turn']
+        self.assertEqual(len(turns), 2)
+        self.assertEqual(turns[-1]['data']['models'], dict(l2='sonnet', l3='haiku'))
+        self.assertEqual(len([e for e in ws.events() if e['kind'] == 'session']), 1)
+
+    def test_environment_helper_sets_or_removes_the_variable(self):
+        var = claude_adapter.SUBAGENT_MODEL_VAR
+        self.assertEqual(var, 'CLAUDE_CODE_SUBAGENT_MODEL')
+        base = {var: 'opus', 'PATH': '/bin'}
+        self.assertEqual(claude_adapter.turn_environment(base, dict(l2='x', l3='haiku')), {var: 'haiku', 'PATH': '/bin'})
+        self.assertEqual(claude_adapter.turn_environment(base, dict(l2='x', l3='default')), {'PATH': '/bin'})
+        self.assertEqual(claude_adapter.turn_environment(base, None), {'PATH': '/bin'})
+        self.assertEqual(claude_adapter.turn_environment({'PATH': '/bin'}, {}), {'PATH': '/bin'})
+        self.assertEqual(base[var], 'opus')  # the caller's mapping is never mutated
+
+
 class WaitAndStatusTests(Base):
     def test_wait_returns_complete_with_parsed_keys(self):
         self.ws.start('ready', 'x\n', env=dict(FAKE_CLAUDE_SESSION='s-9', FAKE_CLAUDE_COST='0.5'))
