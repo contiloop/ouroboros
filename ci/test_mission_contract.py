@@ -32,11 +32,12 @@ class MissionContractTest(unittest.TestCase):
         t=text('init/references/orchestration.md')
         for s in ('/dryforge:ready','/dryforge:go','/dryforge:migration','same','session-wait','background',
                   'CONTINUE','REPLAN','ESCALATE','COMPLETE','session-stop','stop --reason abort','doctor',
-                  '--fresh','cycle-start','evaluate','$CLAUDE_PID'):
+                  '--fresh','cycle-start','evaluate','$CLAUDE_PID','QUESTION','session-answer'):
             self.assertIn(s,t)
+        self.assertNotIn('--kind question',t)
         r=text('init/references/runtime.md')
         for cmd in ('doctor','draft','shown','show','approve','cycle-start','cycle-stage','evaluate','event',
-                    'stop','archive','session-start','session-send','session-wait','session-status','session-stop'):
+                    'stop','archive','session-start','session-send','session-wait','session-answer','session-status','session-stop'):
             self.assertIn(f'`{cmd}',r)
         self.assertIn('budget',text('init/references/interview.md'))
 

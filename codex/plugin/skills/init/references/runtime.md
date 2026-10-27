@@ -23,22 +23,32 @@ Writes refuse while `.dryforge/` is not ignored there.
 | `archive` | move a finished run under `archive/<run_id>/` |
 | `session-start --skill ready\|go\|migration --message <file> [--fresh --reason <text>]` | launch a detached turn whose message is `/dryforge:<skill> ` + the file text (`go --fresh` is refused once the cycle's Ready ran in a session) |
 | `session-send --message <file>` | launch a detached turn on the recorded session with the file text |
-| `session-wait [--timeout <s>]` | block until the turn exits, then print the parsed result |
+| `session-wait [--timeout <s>]` | block until the turn exits or the worker asks a question, then print the parsed result (`QUESTION` carries `round` and `questions`) |
+| `session-answer --answers <file> [--basis <file>]` | answer the open question round: JSON object `{"<question text>": "<label>" \| ["<label>", …] \| {"other": "<text>"}}`; records `question` and `answer` events; refuses an unknown question or a non-option answer |
 | `session-status` | `RUNNING` or the last parsed result, without blocking |
 | `session-stop` | terminate the running turn and record it (a turn that already exited is settled instead) |
 
 ## The worker process
 
-L2 is `claude -p <message> --output-format json`, resumed by session id on every later turn, with
-its working directory in the target project so the project's own settings, hooks and deny rules
-apply to it as to any caller. Every tool is pre-allowed by list (built-in tools plus MCP tools);
-no bypass flag is ever used. Dryforge skills are started by sending `/dryforge:<kind>` as the
-first words of the message; the host loads the installed skill. Without a question tool the skill
-asks in plain text and the turn ends; your next `session-send` is the answer.
+L2 is a headless `claude` session driven through its streaming control channel, resumed by session
+id on every later turn, with its working directory in the target project so the project's own
+settings, hooks and deny rules apply to it as to any caller. Its question tool is live: a structured
+question arrives as a `QUESTION` result and you answer it with `session-answer`. Tools are
+pre-allowed by list (built-in tools plus MCP tools) and any other permission request is allowed
+automatically and recorded; the user's deny rules are applied by the host first; no bypass flag is
+ever used. Dryforge skills are started by sending `/dryforge:<kind>` as the first words of the
+message; the host loads the installed skill. A skill may still ask in plain text; then the turn
+ends and your next `session-send` is the answer.
 
-Parsed turn result keys: `state` (`COMPLETE`, `INTERRUPTED`, `STOPPED`), `session_id`, `text`,
+While a question is open, `session-start`/`session-send` are refused (answer or stop first) and
+`show` reports the open question under `turn`.
+
+Parsed turn result keys: `state` (`QUESTION`, `COMPLETE`, `INTERRUPTED`, `STOPPED`), `session_id`, `text`,
+`questions` (answered rounds), `skills` (the installed `dryforge:` commands the session saw),
+`auto_allowed` (permission requests the worker process allowed on its own),
 `num_turns`, `cost_usd`, `usage` (`input_tokens`, `cache_read_input_tokens`,
 `cache_creation_input_tokens`, `output_tokens`; null when the host did not report one),
+`cost_total_usd` (the host's cumulative session total; `cost_usd` is this turn's share of it),
 `permission_denials`, `is_error`, `subtype`, `raw_path`, `text_path`, `reason`, and the run's
 `run_status` and `stopped_reason` after the turn. The first result that names a session id records
 it; a later result with a different id is an `INTERRUPTED` turn. Cost is added to the run's spent
