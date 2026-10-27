@@ -6,12 +6,15 @@ permission prompts, and never puts anything but the caller's message text in fro
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
 
-class Turn(Protocol):
-    """Handle of one launched turn: the host process and the file its raw result is written to."""
+@dataclass(frozen=True)
+class Turn:
+    """Handle of one launched turn: the host process (group leader) and the file its raw result is written to.
+    The CLI rebuilds it from the run record, so it carries nothing adapter-specific."""
 
     pid: int
     raw_path: Path
@@ -28,10 +31,17 @@ class HostSession(Protocol):
     def send(self, workspace: Path, session_id: str, message: str, raw_path: Path) -> Turn:
         """Launch one more turn on the existing `session_id` with `message` as the user message."""
 
+    def alive(self, turn: Turn) -> bool:
+        """True while the turn's process is still running."""
+
     def terminate(self, turn: Turn) -> None:
         """Stop a running turn now (its whole process group). Idempotent on an exited turn."""
 
     def result(self, turn: Turn) -> dict:
         """Parse a finished turn's raw result: {state ∈ {COMPLETE, INTERRUPTED}, session_id, text, num_turns,
         cost_usd, permission_denials, is_error, subtype, raw_path}. `state` is a turn state, never a run
-        status. Missing session id, non-zero exit or malformed output → INTERRUPTED."""
+        status. Missing session id, non-zero exit or malformed output → INTERRUPTED (with `reason`)."""
+
+    def doctor(self) -> dict:
+        """Report the host prerequisites: {host, <executable>: path | null, version, dryforge: {installed, enabled}}.
+        Reports, never refuses."""
