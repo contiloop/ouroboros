@@ -6,10 +6,10 @@ stdin line, a `system/init` event opens the stream, question and permission requ
 events answered through stdin, and a `result` event ends the turn.
 
 Modes (environment):
-  FAKE_CLAUDE_LOG         file that receives {"argv", "cwd", "stdin", "message", "model_flag", "subagent_model"}
-                          for every `-p` call (stdin = the first stdin line verbatim, message = its user content,
-                          model_flag = the `--model` value or null, subagent_model = CLAUDE_CODE_SUBAGENT_MODEL
-                          as seen by the process or null when absent)
+  FAKE_CLAUDE_LOG         file that receives {"argv", "cwd", "stdin", "message", "model_flag", "effort_flag",
+                          "subagent_model"} for every `-p` call (stdin = the first stdin line verbatim, message =
+                          its user content, model_flag / effort_flag = the `--model` / `--effort` value or null,
+                          subagent_model = CLAUDE_CODE_SUBAGENT_MODEL as seen by the process or null when absent)
   FAKE_CLAUDE_SLEEP       seconds to sleep after the init event, before answering
   FAKE_CLAUDE_MODE        ok (default) | garbage (non-JSON stdout, exit 0) | fail (result, exit 1)
                           | error (result with is_error true, exit 1) | nosession (no session_id anywhere)
@@ -96,8 +96,9 @@ def stream_mode(argv: list) -> int:
     if log:
         with open(log, 'w', encoding='utf-8') as f:
             model_flag = argv[argv.index('--model') + 1] if '--model' in argv else None
+            effort_flag = argv[argv.index('--effort') + 1] if '--effort' in argv else None
             json.dump(dict(argv=argv, cwd=os.getcwd(), stdin=first, message=message, model_flag=model_flag,
-                           subagent_model=os.environ.get('CLAUDE_CODE_SUBAGENT_MODEL')), f)
+                           effort_flag=effort_flag, subagent_model=os.environ.get('CLAUDE_CODE_SUBAGENT_MODEL')), f)
     mode = os.environ.get('FAKE_CLAUDE_MODE', 'ok')
     if mode == 'garbage':
         sys.stdout.write('not json at all\n')

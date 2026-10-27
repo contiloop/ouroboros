@@ -34,21 +34,38 @@ init  ──(interview, revisable)──▶  Proposal set  ──approve──�
   steps carry a generalized `step:` label, and the Workflow derived from them), **`validation.md`**
   (items with Behavior, Environment, Evidence and Cost), **`spec.md`** (Users, UI references, Outline
   of blocks and their function, Efficient checks for slow/hard items), **`delegation.md`** (delegated
-  judgment, L2/L3 models, limits, workspace). The interview follows elicitation discipline: scenarios
-  first, then the decisions they imply, validation, the product's shape, delegation; the project
-  answers what it can, the user answers only what only they hold, technical choices are presented
-  with a recommendation (`src/skills/init/references/interview.md`).
+  judgment, L2/L3 models, effort level, limits, workspace). **The user is a client, not a
+  developer**: the interview asks only what a client would know (scenarios, observable conditions,
+  taste and references, priorities); technical choices are L1's, presented only when they change
+  the user's experience and then in plain words. Stages, in order: orient on the project; decompose
+  the user's words into the four documents' axes (differences become questions); elicit (scenarios
+  first, the decisions they imply, at most four questions per prompt each with a recommendation);
+  validation items written by L1 and confirmed by the user as "this is what I will check"; an
+  independent intent review by an agent that did not author the interview; the documents written
+  and checked against the interview log; an independent gate review of the finished documents
+  (executability, contract consistency); only then `shown` and `approve`. Findings of both reviews
+  are re-asked to the user through the same client filter until none remain; a finding the user
+  settles is recorded and not raised again. Both reviews are recorded with `review`; the four
+  documents are written in English (`src/skills/init/references/interview.md`).
+- L1 keeps a private interview log (`interview.md` in the record): questions, answers verbatim,
+  settled decisions, review findings and their dispositions. It is never quoted to the worker and
+  moves with the run on archive.
+- L1 picks the L2/L3 models and the effort level as the expert, says in one line that they can be
+  changed, and asks at most one plain-language choice when it matters.
 - The set is **revisable** for as long as the user wants and is shown to the user after every round.
 - **No cycle may run while the set is unapproved.** Read-only inspection and draft edits are the
   only permitted actions. Running Migration, Ready or Go during this stage is a defect.
-- Invoking `init` again on a project with an active run does **not** reset the run, refill budgets
-  or discard history; it continues the conversation about changes.
+- Invoking `init` again on a project with an active run does **not** reset the run or discard
+  history; it continues the conversation about changes.
 
 ### `approve` — the single handoff
-- `approve` is the user's approval of the four documents **exactly as last shown**. The record
-  checks completeness (every required item of every file; a refusal names the file and the item)
-  and the shown digest; if the set is missing, incomplete or has changed since it was shown, L1
-  shows the concrete gap (a diff per changed file) instead of treating the invocation as approval.
+- `approve` is the user's approval of the four documents **exactly as last shown**. The record first
+  compares the set with the shown version (a changed set is refused with a diff per file), then
+  requires a passing gate review (zero open findings) bound to the content digest of scenario,
+  validation and spec: always for a first approval, and for an amendment whenever that content
+  changed since the last approved copies; never for an unchanged resume or a change of
+  `delegation.md` alone. Otherwise it refuses with `review the current set`. It then checks completeness (every required item of every file; a refusal names the file and the item).
+  Whatever is missing, L1 shows the concrete gap instead of treating the invocation as approval.
 - Approval is a **handoff, not the end of the conversation**. After it L1 owns execution; the user
   keeps talking; L1 incorporates clarification within the agreed scope and discusses the impact of
   changes that need a new decision before dependent work proceeds.
@@ -158,7 +175,7 @@ the worker process so Dryforge's task agents use it; `default` means the host's 
 | L2 asks a question outside the approved scope | L1 decides under full delegation if the goal still determines the answer; brings it to the user only if the goal itself is ambiguous. |
 | User stops while a question is open | The question is recorded as unanswered; the same session can be continued later. |
 | A cycle ends with failing tests | Not acceptable; L1 requests rework in the same L2 or replans. |
-| Cycle limit, stall limit or budget reached | The stall and budget limits stop the run at once. The cycle limit counts development cycles: at the limit a development cycle cannot open and asking for more development (REPLAN, or ESCALATE on a development cycle) stops the run; a beta cycle may still open. L1 reports; a revised `delegation.md` approved again resumes it. |
+| Cycle limit or stall limit reached | The stall limit stops the run at once. The cycle limit counts development cycles: at the limit a development cycle cannot open and asking for more development (REPLAN, or ESCALATE on a development cycle) stops the run; a beta cycle may still open. L1 reports; a revised `delegation.md` approved again resumes it. |
 | A validation item only a human can check | L1 raises ESCALATE from the beta cycle naming the exact check; the user's answer is recorded as `verified`; the beta test continues. This is a verification, not a consent. |
 | An older single-file proposal record (`proposal.md`) is found | Reported as legacy; archived by `draft` (an ACTIVE one must be stopped first); never converted. |
 | Worker session lost mid-cycle | Reconcile effects, resume the same session; otherwise explicit, recorded replacement with the checkpoint and decisions. |

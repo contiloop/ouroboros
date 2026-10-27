@@ -2,6 +2,16 @@
 
 ## Unreleased — rebuild from the concept
 
+- Remove the USD budget: limits are max cycles and max stalled cycles; per-turn cost stays in turn
+  results as information only.
+- `delegation.md` records an `effort` level (the host's levels or `default`), validated at approve
+  and passed to the worker session with `--effort`; L1 chooses models and effort as the expert.
+- The four documents are written in English; the "reply in the user's language" instruction is gone.
+- The `init` interview asks only what a client would know and follows fixed stages; L1 keeps a
+  private interview log; two independent reviewers (intent, gate) check the documents and their
+  findings are re-asked until none remain. A new `review` command records them; `approve` requires
+  a passing gate review bound to the content of scenario, validation and spec.
+
 - Remove the bundled `ready`, `go` and `migration` skills and their build mappings. `src/skills/`
   now contains `init` and `approve` only; L1 invokes the user's installed Dryforge plugin and
   reports a missing plugin instead of substituting procedure text.

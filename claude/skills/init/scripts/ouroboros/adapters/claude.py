@@ -12,6 +12,10 @@ Models: the run's `{l2, l3}` names are applied on every turn (each turn is a new
 `default` becomes `--model <l2>`; `l3` other than `default` is exported as `CLAUDE_CODE_SUBAGENT_MODEL` in the
 worker's environment, and for `default` that variable is removed from the inherited environment so the
 caller's own shell value never reaches the worker.
+
+Effort: the run's effort level is applied on every turn the same way. A level other than `default` (`low` …
+`max`) becomes `--effort <level>` after the model flag; `default` (or no level) passes no flag, so the host
+chooses. It reaches the worker (L2) only: subagents (L3) get whatever effort the host gives them.
 """
 from __future__ import annotations
 
@@ -45,6 +49,7 @@ USAGE_KEYS = ('input_tokens', 'cache_read_input_tokens', 'cache_creation_input_t
 SKILL_PREFIX = 'dryforge:'
 SUBAGENT_MODEL_VAR = 'CLAUDE_CODE_SUBAGENT_MODEL'
 DEFAULT_MODEL = 'default'
+DEFAULT_EFFORT = 'default'
 
 
 # Twin of core.models(): the adapter must not import core, so the default fallback is repeated here.
@@ -65,8 +70,13 @@ def turn_environment(base: dict, models: dict | None) -> dict:
     return env
 
 
+def turn_effort(effort: str | None) -> str | None:
+    """The `--effort` value of one turn: the level itself, or None (no flag) for `default` or a missing level."""
+    return None if not effort or effort == DEFAULT_EFFORT else effort
+
+
 def command_line(session_id: str | None, *, allowed_tools: str = ALLOWED_TOOLS, max_turns: int = MAX_TURNS,
-                 model: str | None = MODEL, executable: str = EXECUTABLE) -> list:
+                 model: str | None = MODEL, executable: str = EXECUTABLE, effort: str | None = None) -> list:
     """The exact argv of one turn. There is no prompt argument: the relay sends the user message on stdin as
     the first stream-json line, and `--permission-prompt-tool stdio` routes tool requests to the same channel."""
     argv = [executable, '-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose',
@@ -76,6 +86,8 @@ def command_line(session_id: str | None, *, allowed_tools: str = ALLOWED_TOOLS, 
     argv += ['--allowedTools', allowed_tools, '--max-turns', str(max_turns)]
     if model is not None:
         argv += ['--model', model]
+    if effort is not None:
+        argv += ['--effort', effort]
     return argv
 
 
@@ -160,13 +172,14 @@ class ClaudeAdapter:
         return shutil.which(EXECUTABLE)
 
     def _launch(self, workspace: Path, message: str, session_id: str | None, raw_path: Path,
-                models: dict | None) -> Turn:
+                models: dict | None, effort: str | None) -> Turn:
         exe = self.executable()
         if exe is None:
             raise FileNotFoundError(f'{EXECUTABLE} is not on PATH')
         l2 = turn_models(models)['l2']
         argv = command_line(session_id, allowed_tools=self.allowed_tools, max_turns=self.max_turns,
-                            model=self.model if l2 == DEFAULT_MODEL else l2, executable=exe)
+                            model=self.model if l2 == DEFAULT_MODEL else l2, executable=exe,
+                            effort=turn_effort(effort))
         err_path, exit_path = side_paths(raw_path)
         for p in raw_path.parent.glob(f'{raw_path.stem}.*'):
             p.unlink(missing_ok=True)  # the result, .err, .exit and every relay file of a reused turn number
@@ -189,13 +202,15 @@ class ClaudeAdapter:
                                 start_new_session=True, close_fds=True, env=turn_environment(os.environ, models))
         return Turn(pid=proc.pid, raw_path=raw_path)
 
-    def start(self, workspace: Path, message: str, raw_path: Path, models: dict | None = None) -> Turn:
-        return self._launch(workspace, message, None, raw_path, models)
+    def start(self, workspace: Path, message: str, raw_path: Path, models: dict | None = None,
+              effort: str | None = None) -> Turn:
+        return self._launch(workspace, message, None, raw_path, models, effort)
 
-    def send(self, workspace: Path, session_id: str, message: str, raw_path: Path, models: dict | None = None) -> Turn:
+    def send(self, workspace: Path, session_id: str, message: str, raw_path: Path, models: dict | None = None,
+             effort: str | None = None) -> Turn:
         if not session_id:
             raise ValueError('send requires a session id')
-        return self._launch(workspace, message, session_id, raw_path, models)
+        return self._launch(workspace, message, session_id, raw_path, models, effort)
 
     # ── liveness and termination ─────────────────────────────────────────
     def alive(self, turn: Turn) -> bool:
@@ -280,7 +295,7 @@ class ClaudeAdapter:
         if not isinstance(data, dict):
             out['reason'] = 'result is not a JSON object'
             return out
-        # `total_cost_usd` is the session's cumulative total; the caller charges this turn's delta as cost_usd.
+        # `total_cost_usd` is the session's cumulative total; the caller reports this turn's delta as cost_usd.
         cost = data.get('total_cost_usd')
         cost = cost if isinstance(cost, (int, float)) and cost >= 0 else 0
         out.update(session_id=data.get('session_id'), text=data.get('result'), num_turns=data.get('num_turns'),

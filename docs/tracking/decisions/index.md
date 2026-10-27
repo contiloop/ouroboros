@@ -12,3 +12,4 @@
 | [0008](0008-headless-l2-session-and-allowlist.md) | L2 is a headless Claude Code session with a tool allow-list, kept across cycles | 2026-10-27 |
 | [0009](0009-structured-questions-relay.md) | Structured questions reach L1 through the control channel; remaining permission requests are auto-allowed | 2026-10-27 |
 | [0010](0010-four-document-proposal-and-beta-test.md) | Four-document proposal filled by interview; work graph; L1 beta-tests; models enforced on the worker | 2026-10-27 |
+| [0011](0011-client-interview-independent-reviews-no-budget.md) | Client-grade interview with two independent reviews before approve; no budget; L1-chosen models and effort; English documents | 2026-10-28 |

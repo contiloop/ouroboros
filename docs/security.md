@@ -31,7 +31,7 @@
 | --- | --- | --- |
 | Before `approve` (draft) | Human only | Conversation, read-only inspection, draft edits. **No** cycle, Migration, Ready or Go. No tool authority beyond reading. |
 | `approve` | Human only | Activates the exact proposal set last shown. Cannot be issued by L1, L2 or any worker. |
-| After `approve` (active) | **L1, without exception** | Every action the goal requires: answering worker questions, approving Ready documents, acting on permission denials reported in turn results, local Git operations, merge to the integration branch, push, tags, releases, spending within the stated budget, deleting its own task branches/worktrees. The one thing L1 asks of the human afterwards is a **verification only a human can make** during the beta test (a visual check, a device, an external account), raised as ESCALATE and recorded as `verified`; it is not a consent and grants nothing. |
+| After `approve` (active) | **L1, without exception** | Every action the goal requires: answering worker questions, approving Ready documents, acting on permission denials reported in turn results, local Git operations, merge to the integration branch, push, tags, releases, spending what the goal requires, deleting its own task branches/worktrees. The one thing L1 asks of the human afterwards is a **verification only a human can make** during the beta test (a visual check, a device, an external account), raised as ESCALATE and recorded as `verified`; it is not a consent and grants nothing. |
 | Goal/scope change | Human | Changing the scenarios, validation items, the product's shape, delegation, models or limits is recorded only with the human's approval (a revised set approved again). |
 | Abort of an active cycle | Human | Stopping L1's execution before the goal is met. |
 
@@ -48,12 +48,19 @@ listed in the turn result (`auto_allowed`). The user's own deny rules and the ta
 settings and hooks apply to it exactly as to a human caller; no bypass flag is ever used (decisions
 0008, 0009). The worker's structured questions reach L1 as `QUESTION` results and L1 answers them.
 
+## Independent reviews before approval
+
+The intent review and the gate review are agents of the host that did not author the documents;
+they are read-only and return findings. L1 records them with `review` (verbatim findings plus a
+disposition each); `approve` requires a passing gate review on the shown content for a first approval or a content change. The record is
+bookkeeping: a reviewer never creates an approval, and `approve` stays the human's command.
+
 ## Audit
 
 Every event in `events.jsonl` carries its actor (`human`, `L1`, `L2` or `host`), kind, cycle and
 data; L1 records the basis of its decisions in the event data. Kinds written by the runtime: draft,
 shown, approve, amend, amend_applied, cycle_start, cycle_stage, evaluate, stop, archive, session,
-turn, turn_result, interrupt, question, answer, unanswered; L1 adds decision events (and `answer`
+review, turn, turn_result, interrupt, question, answer, unanswered; L1 adds decision events (and `answer`
 for plain-text questions) with `event`. Raw turn output
 goes to `turns/` and large payloads are referenced by path and SHA-256.
 
@@ -74,6 +81,6 @@ missing `claude` CLI or Dryforge plugin is reported by `doctor`, not installed b
 
 ## What the worker never sees
 
-`delegation.md` (models, limits, delegated judgment, workspace), `run.json`, `events.jsonl`,
+`delegation.md` (models, effort, limits, delegated judgment, workspace), `interview.md`, `run.json`, `events.jsonl`,
 `workgraph.yaml` and anything about Ouroboros, L1 or approvals are never quoted to L2. Scenario,
 validation and spec content is product text and is quoted freely.

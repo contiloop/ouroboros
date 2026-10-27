@@ -22,10 +22,12 @@ class MissionContractTest(unittest.TestCase):
             for legacy in ('ready','go','migration'):
                 self.assertFalse((root/legacy).exists(), f'{package}/{legacy} must not ship')
         init=text('init/SKILL.md')
-        for s in ('references/interview.md','references/runtime.md','.gitignore','Do not start any worker session','conversation stays open'):
+        for s in ('references/interview.md','references/runtime.md','.gitignore','Do not start any worker session','conversation stays open',
+                  'independent agent of the host','read-only reviewer dispatches','review'):
             self.assertIn(s,init)
         approve=text('approve/SKILL.md')
-        for s in ('exactly as last shown','../init/references/orchestration.md','no further consent','Codex'):
+        for s in ('exactly as last shown','../init/references/orchestration.md','no further consent','Codex',
+                  'review the current set','max cycles','max stalled cycles'):
             self.assertIn(s,approve)
 
     def test_loop_vocabulary_and_commands(self):
@@ -39,7 +41,9 @@ class MissionContractTest(unittest.TestCase):
         self.assertNotIn('--kind question',t)
         i=text('init/references/interview.md')
         for s in ('scenario.md','validation.md','spec.md','delegation.md','step:','## Workflow','Evidence',
-                  'Efficient checks','L2:','L3:','max cycles','budget usd','Workspace','draft --scenario'):
+                  'Efficient checks','L2:','L3:','effort:','max cycles','max stalled cycles','Workspace','draft --scenario',
+                  'review --kind intent','review --kind gate','interview.md','English','client filter',
+                  'review the current set','shown'):
             self.assertIn(s,i)
         for rel in SKILL_TEXT:
             self.assertNotIn('proposal.md',text(rel).replace('`proposal.md` (an older version','LEGACY'),f'{rel} mentions proposal.md')
@@ -47,7 +51,16 @@ class MissionContractTest(unittest.TestCase):
         for cmd in ('doctor','draft','shown','show','approve','cycle-start','cycle-stage','evaluate','event',
                     'stop','archive','session-start','session-send','session-wait','session-answer','session-status','session-stop'):
             self.assertIn(f'`{cmd}',r)
-        self.assertIn('budget',text('init/references/interview.md'))
+        for s in ('review --kind','interview.md','content_digest','effort','review the current set',
+                  'no_gate_review','stale','open_findings','cost_usd'):
+            self.assertIn(s,r)
+        self.assertIn('--effort',t)
+
+    def test_budget_and_chat_language_rule_are_gone(self):
+        for rel in SKILL_TEXT:
+            t=text(rel)
+            for s in ('budget usd',"Reply in the user's language",'limit:budget','spent budget'):
+                self.assertNotIn(s,t,f'{rel} still mentions {s!r}')
 
     def test_legacy_wording_is_gone(self):
         for rel in SKILL_TEXT:
