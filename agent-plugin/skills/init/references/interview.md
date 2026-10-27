@@ -1,46 +1,118 @@
-# Intent conversation
+# The interview and the proposal set
 
-Start from the user's words, corrections and the project itself. Build a model of what they are
-trying to achieve, what they value, what constrains them and which facts they have given. Clarify
-only uncertainties that would materially change the outcome; research technical facts instead of
-asking for preferences. Use concrete examples rather than a questionnaire. Lead every question with
-a recommended answer. Keep original excerpts beside your interpretation and distinguish what is
-known, tentative and agreed.
+`init` ends with four documents the user approves as one set. You fill them by interviewing the
+user with the discipline of a good design partner: the user owns the domain (what the result is
+for, how it is used, what must hold), you own the technical shape (propose options with a
+recommendation), and the project itself answers what can be read from it. Never ask what the
+project or the user already settled; never leave a load-bearing decision to a guess.
 
-## The proposal
+## The four files (`<workspace>/.dryforge/ouroboros/`)
 
-A markdown file with these `##` sections (all required; `approve` refuses an incomplete one):
+### `scenario.md` — usage scenarios and the workflow they imply
+```
+## Scenarios
+### <scenario title>
+1. <what the user does or what happens> — step: <generalized label>
+2. … — step: <label>
+### <another scenario>
+…
+## Workflow
+- <label>: <one line on what this step does>
+- <label>: …
+```
+Every step ends with ` — step: <label>`; the same label is reused wherever the same general step
+recurs. `## Workflow` lists each distinct label once, in order. At least one scenario; every label in
+the Workflow.
 
-| Section | Content |
-| --- | --- |
-| Goal | the intended outcome in the user's terms |
-| Completion criteria | observable evidence that the goal is met; one bullet per criterion |
-| Constraints | what must hold (compatibility, style, platforms, data, time) |
-| Priorities | what wins when criteria compete |
-| Non-goals | what is explicitly out of scope |
-| Delegated judgment | what L1 decides without asking; default: everything after approval |
-| Workspace | absolute path of the target git root (one repository per run) |
-| Limits | `max cycles: N`, `max stalled cycles: N`, `budget usd: <number>` or `budget usd: no cap` |
+### `validation.md` — what must be verified
+```
+## Items
+### V1 <title>
+Behavior: <what must hold, observable>
+Environment: <where and how it runs: OS, runtime, services, data>
+Evidence: <what proves it: command and expected output, file, screenshot, log>
+Cost: fast | slow/hard (<why, when slow/hard>)
+covers: <label>, <label>
+```
+At least one item; all four fields non-empty; ids `V1`, `V2`, … unique.
 
-Add a line about Migration when the project is an existing codebase without documentation for
-agents (L1 will run the installed Dryforge `migration` first).
+### `spec.md` — the product's shape
+```
+## Users
+<who it is for>
+## UI references
+<styles or products to resemble, or: none>
+## Outline
+- <block>: <its function>
+- …
+## Efficient checks
+V3: <a cheaper way to check the slow/hard item V3>
+(or: none, when no item is slow/hard)
+```
+Users and Outline non-empty; UI references may be `none`; an Efficient checks entry is required for
+every item whose Cost is slow/hard.
 
-The limits are the only thing that bounds L1 after approval, so they must be explicit. The run
-stops when the cycle count or the stalled-cycle count reaches its limit, or when summed worker cost
-exceeds the budget; the user can raise a limit by revising the proposal and approving again.
+### `delegation.md` — what L1 holds and within what bounds
+```
+## Delegated judgment
+<what L1 decides without asking; default: everything after approval>
+## Models
+L2: <model name or default>
+L3: <model name or default>
+## Limits
+max cycles: <N>
+max stalled cycles: <N>
+budget usd: <number> | no cap
+## Workspace
+<absolute git root>
+```
+`default` means the host's default model. This file is never shown to the worker.
+
+## How to interview
+
+1. **Orient on the project.** Read git state, existing documentation for agents, the code map.
+   Fill what the project settles (workspace, whether Migration is needed, conventions, existing
+   verify commands) and show it; do not ask about it.
+2. **Scenarios first.** Ask for the situations in which the result is used, as concrete
+   walkthroughs: who does what, what happens, what they see. Label each step with the general step
+   it represents. Before closing, ask whether other scenarios exist. Derive the Workflow and show it.
+3. **Enumerate the decisions the scenarios imply.** For every entity, actor and external system the
+   scenarios name, walk four lenses: structure (how many, identity, relations), behavior (lifecycle,
+   concurrency, policy, edges), technical (persistence, interface, consistency), contract (status
+   sets, keys, uniqueness). Resolve each slot in order: settled by the user or the project → write
+   it; a tuning value inside a settled mechanism → default it and say so; otherwise it is a question.
+4. **Validation from the scenarios.** For each workflow step and each load-bearing decision, draw
+   out what must be verified, where it runs and what counts as evidence. Mark items that are slow
+   or hard and get an efficient check for each.
+5. **Present the product's shape.** Propose users, UI references and the outline from the project
+   and the scenarios; where the user would plausibly have a preference, present options with a
+   recommendation and let them choose.
+6. **Delegation and limits.** Present the defaults (everything delegated; models `default`; limits
+   you recommend from the size of the work, with the reason) and let the user adjust. Explain that
+   the limits are the only thing bounding L1 after approval.
+7. **Rhythm.** At most four questions per prompt, each with a recommended answer; batch related
+   ones. After each round write the four files with `draft` and mark them with `shown`, and show
+   the user what changed. Stop asking when no load-bearing slot is left to a guess; a small goal
+   makes the documents short, never incomplete.
 
 ## Showing and recording
 
-Every time the proposal is shown to the user, write it with `draft --proposal <file>` and then run
-`shown`. Approval binds to the shown version: if the file changes afterwards, `approve` shows the
-difference instead of approving.
+Every showing = `draft --scenario <f> --validation <f> --spec <f> --delegation <f>` (a revision may
+pass only the files that changed) followed by `shown`. Approval binds to the shown set: if any file
+changes afterwards, `approve` shows the difference per file instead of approving.
 
 ## While the run is active or stopped
 
-The user may keep talking. Clarification inside the agreed scope goes into the next worker message
-or the next cycle with no new approval. A change to goal, completion criteria, constraints,
-priorities, non-goals or limits is a proposal revision: write it with `draft` (which revises the
-current run instead of starting a new one), run `shown`, and the user's next `approve` records the
-amendment, applied at the next cycle boundary. The same path revises a stopped run, for example to
-raise a limit; `approve` then resumes it. A different goal after a stop is a new run: `archive`
-the stopped run first, then `draft`.
+Clarification inside the agreed scope goes into the next worker message or the next cycle with no
+new approval. A change to scenarios, validation items, the product's shape, delegation, models or
+limits is a revision: write it with `draft` (which revises the current run), run `shown`, and the
+user's next `approve` records the amendment. Limits and models take effect at the next check or
+turn; content changes shape the next cycle. A stopped run resumes the same way (`approve` again,
+with or without a revision). A different goal after a stop is a new run: `archive` first, then
+`draft`.
+
+## Legacy records
+
+A record that still holds a single `proposal.md` (an older version of this plugin) is reported by
+`show` as `legacy: true`. Tell the user; `draft` archives it (unless it is ACTIVE, which must be
+stopped first) and starts the four-document set. Nothing is converted.

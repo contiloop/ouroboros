@@ -32,9 +32,17 @@ class MissionContractTest(unittest.TestCase):
         t=text('init/references/orchestration.md')
         for s in ('/dryforge:ready','/dryforge:go','/dryforge:migration','same','session-wait','background',
                   'CONTINUE','REPLAN','ESCALATE','COMPLETE','session-stop','stop --reason abort','doctor',
-                  '--fresh','cycle-start','evaluate','$CLAUDE_PID','QUESTION','session-answer'):
+                  '--fresh','cycle-start','evaluate','$CLAUDE_PID','QUESTION','session-answer',
+                  'workgraph.yaml','--kind beta','--kind beta --data','--kind verified','delegation.md',
+                  'scenario.md','validation.md','.dryforge/ouroboros/','only on a beta cycle'):
             self.assertIn(s,t)
         self.assertNotIn('--kind question',t)
+        i=text('init/references/interview.md')
+        for s in ('scenario.md','validation.md','spec.md','delegation.md','step:','## Workflow','Evidence',
+                  'Efficient checks','L2:','L3:','max cycles','budget usd','Workspace','draft --scenario'):
+            self.assertIn(s,i)
+        for rel in SKILL_TEXT:
+            self.assertNotIn('proposal.md',text(rel).replace('`proposal.md` (an older version','LEGACY'),f'{rel} mentions proposal.md')
         r=text('init/references/runtime.md')
         for cmd in ('doctor','draft','shown','show','approve','cycle-start','cycle-stage','evaluate','event',
                     'stop','archive','session-start','session-send','session-wait','session-answer','session-status','session-stop'):

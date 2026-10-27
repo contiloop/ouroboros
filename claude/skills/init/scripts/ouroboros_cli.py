@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ouroboros import adapters, core  # noqa: E402
 from ouroboros.core import RecordError, now, require  # noqa: E402
 from ouroboros.ports import Turn  # noqa: E402
-from ouroboros.store import Store, _write_bytes, check_owner  # noqa: E402
+from ouroboros.store import PROPOSAL_FILES, Store, _write_bytes, check_owner  # noqa: E402
 
 SKILLS = ('ready', 'go', 'migration')
 LIVE_STATES = ('RUNNING', 'QUESTION')
@@ -30,10 +30,22 @@ def read_text(path: str) -> str:
     return p.read_text(encoding='utf-8')
 
 
+def _complete_set(parts: dict) -> bool:
+    return all(parts.get(name) is not None for name in PROPOSAL_FILES)
+
+
 def summary(store: Store) -> dict:
     run = store.read_run()
-    raw = store.read_proposal()
-    return core.summary(run, core.digest(raw) if raw is not None else None, store.event_count())
+    parts = store.read_set()
+    return core.summary(run, core.set_digest(parts) if _complete_set(parts) else None, store.event_count(),
+                        legacy=store.is_legacy())
+
+
+def _flag(name: str) -> str:
+    return '--' + name.removesuffix('.md')
+
+
+LEGACY_SET = 'legacy single-file run (proposal.md); draft the four-document set to replace it'
 
 
 # ── commands ──────────────────────────────────────────────────────────────
@@ -44,40 +56,65 @@ def cmd_doctor(store: Store, a) -> dict:
 
 
 def cmd_draft(store: Store, a) -> dict:
-    """Create the DRAFT, or revise the proposal of the current DRAFT, ACTIVE or STOPPED run (the revision must be
-    shown and approved again). A COMPLETE run is archived first and a new run starts."""
-    data = Path(a.proposal).read_bytes() if Path(a.proposal).is_file() else None
-    require(data is not None, f'proposal file not found: {a.proposal}')
+    """Create the DRAFT from the four proposal files, or revise any subset of them on the current DRAFT, ACTIVE or
+    STOPPED run (the revision must be shown and approved again; the other files are kept). A COMPLETE run is
+    archived first and a new run starts. A legacy single-file record is archived unless ACTIVE (stop it first)."""
+    parts = {}
+    for name in PROPOSAL_FILES:
+        given = getattr(a, name.removesuffix('.md'))
+        if given is not None:
+            require(Path(given).is_file(), f'{name} file not found: {given}')
+            parts[name] = Path(given).read_bytes()
+    require(bool(parts), 'draft needs at least one of ' + ', '.join(_flag(n) for n in PROPOSAL_FILES))
     store.ensure_dir()
     with store.transaction():
         check_owner(store, a.owner)
         run = store.read_run() if store.has_run() else None
-        if run is not None and run['status'] == 'COMPLETE':
+        legacy = run is not None and store.is_legacy()
+        if legacy:
+            require(run['status'] != 'ACTIVE',
+                    'legacy single-file run is ACTIVE; stop it first (stop --reason abort), then draft')
+        starts_new = run is None or legacy or run['status'] == 'COMPLETE'
+        if starts_new:
+            # Every refusal comes before the archive so a refused draft changes nothing.
+            missing = [_flag(n) for n in PROPOSAL_FILES if n not in parts]
+            require(not missing, 'a new draft needs all four files; missing ' + ', '.join(missing))
+        if starts_new and run is not None:
             store.archive(run)
             run = None
         if run is not None:
             run = core.redraft(run)
-            if store.shown_path.exists():
-                store.shown_path.unlink()
+            store.clear_shown()
         else:
             run = core.new_run(str(store.workspace))
         store.write_owner(a.owner)
-        store.write_proposal(data)
+        store.write_set(parts)
         store.write_run(run)
-        store.append_event('human', 'draft', None, dict(run_id=run['run_id'], proposal_digest=core.digest(data)))
+        current = store.read_set()
+        store.append_event('human', 'draft', None, dict(
+            run_id=run['run_id'], revised=sorted(parts, key=PROPOSAL_FILES.index),
+            proposal_digest=core.set_digest(current) if _complete_set(current) else None,
+            files={name: core.digest(data) for name, data in current.items() if data is not None}))
         return summary(store)
 
 
-def cmd_shown(store: Store, a) -> dict:
+def _proposed(store: Store) -> dict:
+    """The complete proposal set, or a refusal: a legacy record is named, an incomplete set is nothing proposed."""
     require(store.has_run(), 'nothing proposed')
+    require(not store.is_legacy(), LEGACY_SET)
+    parts = store.read_set()
+    require(_complete_set(parts), 'nothing proposed')
+    return parts
+
+
+def cmd_shown(store: Store, a) -> dict:
     with store.transaction():
         run = store.read_run()
-        raw = store.read_proposal()
-        require(raw is not None, 'nothing proposed')
-        d = core.digest(raw)
-        store.write_shown(raw)
+        parts = _proposed(store)
+        d = core.set_digest(parts)
+        store.write_shown(parts)
         store.write_run(core.record_shown(run, d))
-        store.append_event('L1', 'shown', None, dict(digest=d))
+        store.append_event('L1', 'shown', None, dict(digest=d, files={n: core.digest(parts[n]) for n in PROPOSAL_FILES}))
         return summary(store)
 
 
@@ -85,30 +122,40 @@ def cmd_show(store: Store, a) -> dict:
     return summary(store)
 
 
+def _set_diff(shown: dict, current: dict) -> tuple[list, dict]:
+    """Names of the files that differ from their shown copies and a unified diff per changed file."""
+    changed, diffs = [], {}
+    for name in PROPOSAL_FILES:
+        before, after = shown.get(name) or b'', current[name]
+        if before != after:
+            changed.append(name)
+            diffs[name] = ''.join(difflib.unified_diff(
+                before.decode('utf-8', 'replace').splitlines(True), after.decode('utf-8', 'replace').splitlines(True),
+                f'shown/{name}', name))
+    return changed, diffs
+
+
 def cmd_approve(store: Store, a) -> dict:
-    require(store.has_run() and store.proposal_path.is_file(), 'nothing proposed')
+    _proposed(store)
     with store.transaction():
         check_owner(store, a.owner)
         run = store.read_run()
-        raw = store.read_proposal()
-        require(raw is not None, 'nothing proposed')
-        current = core.digest(raw)
+        parts = _proposed(store)
+        current = core.set_digest(parts)
+        texts = {name: data.decode('utf-8', 'replace') for name, data in parts.items()}
         try:
-            run, action = core.approve(run, current, raw.decode('utf-8'))
+            run, action = core.approve(run, current, texts)
         except RecordError as exc:
             if 'shown_digest' in exc.details:
-                shown = (store.read_shown() or b'').decode('utf-8', 'replace')
-                exc.details['diff'] = ''.join(difflib.unified_diff(
-                    shown.splitlines(True), raw.decode('utf-8', 'replace').splitlines(True),
-                    'proposal.shown.md', 'proposal.md'))
+                exc.details['changed'], exc.details['diff'] = _set_diff(store.read_shown(), parts)
             raise
         if action == 'unchanged':
             return summary(store)
         store.write_owner(a.owner)
-        store.write_approved(raw)
+        store.write_approved(parts)
         store.write_run(run)
         store.append_event('human', 'amend' if action == 'amended' else 'approve', None,
-                           dict(digest=current, limits=run['limits'], action=action))
+                           dict(digest=current, limits=run['limits'], models=run['models'], action=action))
         return dict(summary(store), approval=action)
 
 
@@ -235,6 +282,9 @@ def _launch(store: Store, a, message: str, kind: str, fresh: bool, reason: str |
         check_owner(store, a.owner)
         run = store.read_run()
         require(run['status'] == 'ACTIVE', f'run is {run["status"]}, not ACTIVE')
+        cycle = core.open_cycle(run)
+        require(not (cycle and cycle['kind'] == 'beta'),
+                f'beta cycle runs no worker turns ({cycle["id"] if cycle else ""} is open; L1 runs the scenarios itself)')
         which = core.limit_exceeded(run, mid_cycle=True)
         require(which is None, f'limit already exceeded: {which}')
         running = _running(run)
@@ -247,22 +297,22 @@ def _launch(store: Store, a, message: str, kind: str, fresh: bool, reason: str |
             require(session_id is not None, 'no session recorded; start one with session-start')
         elif session_id is None:
             fresh = True
-        cycle = core.open_cycle(run)
         cycle_id = cycle['id'] if cycle else None
         # Gate 3: Go runs in the session where this cycle's Ready ran, never in a fresh one.
         require(not (kind == 'go' and fresh and cycle and cycle.get('session_id')),
                 f'go must run in the session of this cycle\'s Ready ({cycle.get("session_id") if cycle else None}); '
                 'drop --fresh, or run ready in a fresh session first')
         host = _host(run)
+        models = core.models(run)  # re-applied on every turn: an amendment takes effect at the next one
         store.ensure_dir()
         _claim(store, a, run)
         n = int(run.get('turn_count', 0)) + 1
         raw_path = store.turns_dir / f'{n}.json'
         try:
             if fresh:
-                handle = host.start(store.workspace, message, raw_path)
+                handle = host.start(store.workspace, message, raw_path, models)
             else:
-                handle = host.send(store.workspace, session_id, message, raw_path)
+                handle = host.send(store.workspace, session_id, message, raw_path, models)
         except (OSError, ValueError) as exc:
             raise RecordError(f'could not launch the host session: {exc}')
         started = now()
@@ -273,13 +323,13 @@ def _launch(store: Store, a, message: str, kind: str, fresh: bool, reason: str |
                 cycle['session_id'] = None  # the cycle's session is the one its turns actually run in
         run['turn_count'] = n
         run['turn'] = dict(n=n, pid=handle.pid, started=started, kind=kind, state='RUNNING', cost_recorded=False,
-                           questions_answered=0)
+                           questions_answered=0, models=models)
         store.write_run(run)
         if fresh:
-            store.append_event('L1', 'session', cycle_id, dict(reason=run['session']['reason'], turn=n))
+            store.append_event('L1', 'session', cycle_id, dict(reason=run['session']['reason'], turn=n, models=models))
         store.append_event('L1', 'turn', cycle_id, dict(turn=n, pid=handle.pid, kind=kind, session_id=session_id,
-                                                        resumed=not fresh, raw_path=str(raw_path)))
-        return dict(turn=n, pid=handle.pid, session_id=session_id)
+                                                        resumed=not fresh, raw_path=str(raw_path), models=models))
+        return dict(turn=n, pid=handle.pid, session_id=session_id, models=models)
 
 
 def cmd_session_start(store: Store, a) -> dict:
@@ -299,7 +349,7 @@ def _stored_result(store: Store, run: dict) -> dict:
     turn = run['turn']
     out = {k: turn.get(k) for k in ('state', 'session_id', 'num_turns', 'cost_usd', 'cost_total_usd', 'usage', 'permission_denials',
                                     'is_error', 'subtype', 'raw_path', 'stderr_path', 'exit_code', 'reason', 'text_path',
-                                    'skills', 'auto_allowed', 'questions', 'stream_path')}
+                                    'skills', 'auto_allowed', 'questions', 'stream_path', 'models')}
     text_path = turn.get('text_path')
     out['text'] = (store.dir / text_path).read_text(encoding='utf-8') if text_path and (store.dir / text_path).is_file() else None
     return dict(out, turn=turn['n'], pid=turn['pid'], kind=turn['kind'], run_status=run['status'],
@@ -535,11 +585,13 @@ def add_commands(sub) -> dict:
         return p
 
     cmd('doctor', cmd_doctor, 'report host prerequisites').add_argument('--host', default='claude', choices=['claude'])
-    cmd('draft', cmd_draft, 'create the DRAFT proposal or revise the current run\'s proposal').add_argument('--proposal', required=True)
-    cmd('shown', cmd_shown, 'record the current proposal digest as shown')
+    p = cmd('draft', cmd_draft, 'create the DRAFT from the four proposal files (all required) or revise any subset on the current run')
+    for name in PROPOSAL_FILES:
+        p.add_argument(_flag(name), metavar='FILE', help=f'markdown file to store as {name}')
+    cmd('shown', cmd_shown, 'record the combined digest of the four proposal files as shown; keeps copies under shown/')
     cmd('show', cmd_show, 'print the run summary')
-    cmd('approve', cmd_approve, 'approve the proposal exactly as shown (activate, resume or amend the run)')
-    p = cmd('cycle-start', cmd_cycle_start, 'open a cycle')
+    cmd('approve', cmd_approve, 'approve the proposal set exactly as shown (activate, resume or amend the run); checks completeness')
+    p = cmd('cycle-start', cmd_cycle_start, 'open a cycle (migration, development or beta)')
     p.add_argument('--kind', required=True)
     p.add_argument('--goal', required=True)
     p.add_argument('--checkpoint', required=True)

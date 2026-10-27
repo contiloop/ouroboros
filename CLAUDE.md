@@ -1,10 +1,12 @@
 # Ouroboros
 
 A coding-agent plugin (Claude Code first, Codex packaged) that puts one agent, **L1**, in charge of
-a user's development goal: `init` is an open-ended conversation that produces a proposal, `approve`
-is the single human handoff, and from then on L1 runs installed-Dryforge Ready–Go cycles in one
-persistent headless worker session until the goal is met. Small repository: skill text under
-`src/skills/`, ~1.1k lines of standard-library Python runtime (run record + Claude Code adapter), a
+a user's development goal: `init` is an interview that produces four documents (scenarios,
+validation, spec, delegation), `approve`
+is the single human handoff, and from then on L1 plans a work graph, runs installed-Dryforge
+Ready–Go cycles in one persistent headless worker session, and finally beta-tests the result
+itself. Small repository: skill text under
+`src/skills/`, ~2k lines of standard-library Python runtime (run record, relay, Claude Code adapter), a
 bash build that emits five host packages, and a unittest suite. Maintained by one person;
 experimental; rebuilt from its concept on 2026-10-27, live run still pending (see
 `docs/tracking/status.md`).
@@ -45,7 +47,9 @@ ouroboros/
 ## Hard gates
 
 1. **One approval, no further consent.** Nothing executes before `approve`; after it, L1 decides
-   everything. Any design that asks the human to confirm an action during execution is wrong.
+   everything. Any design that asks the human to confirm an action during execution is wrong. The
+   only thing L1 may ask afterwards is a verification only a human can perform (beta test
+   ESCALATE); that is evidence, not consent.
 2. **Installed Dryforge only.** L1 sends `/dryforge:ready|go|migration` as the user message of a
    headless worker session; a missing plugin is reported, never replaced by bundled or pasted text.
 3. **Same L2 session for Ready and Go** of one cycle (and across cycles by default); L2 sees only

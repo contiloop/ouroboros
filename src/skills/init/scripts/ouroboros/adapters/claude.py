@@ -7,6 +7,11 @@ message, mirrors the event stream to `<n>.stream.jsonl`, relays the question too
 result to `<n>.json`. stderr → `<n>.err`, exit code → `<n>.exit`. Tool access is an allow-list
 (`--allowedTools`); the host's own deny rules still apply, and no bypass of the permission system is
 ever requested.
+
+Models: the run's `{l2, l3}` names are applied on every turn (each turn is a new process). `l2` other than
+`default` becomes `--model <l2>`; `l3` other than `default` is exported as `CLAUDE_CODE_SUBAGENT_MODEL` in the
+worker's environment, and for `default` that variable is removed from the inherited environment so the
+caller's own shell value never reaches the worker.
 """
 from __future__ import annotations
 
@@ -38,6 +43,26 @@ RESULT_KEYS = ('session_id', 'text', 'num_turns', 'cost_usd', 'cost_total_usd', 
                'skills', 'auto_allowed', 'questions', 'stream_path')
 USAGE_KEYS = ('input_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens', 'output_tokens')
 SKILL_PREFIX = 'dryforge:'
+SUBAGENT_MODEL_VAR = 'CLAUDE_CODE_SUBAGENT_MODEL'
+DEFAULT_MODEL = 'default'
+
+
+# Twin of core.models(): the adapter must not import core, so the default fallback is repeated here.
+def turn_models(models: dict | None) -> dict:
+    """The `{l2, l3}` names applied to one turn; a missing or empty entry is `default`."""
+    found = models or {}
+    return {key: found.get(key) or DEFAULT_MODEL for key in ('l2', 'l3')}
+
+
+def turn_environment(base: dict, models: dict | None) -> dict:
+    """A copy of `base` with the L3 model exported (`l3` not default) or the variable removed (default)."""
+    env = dict(base)
+    l3 = turn_models(models)['l3']
+    if l3 == DEFAULT_MODEL:
+        env.pop(SUBAGENT_MODEL_VAR, None)
+    else:
+        env[SUBAGENT_MODEL_VAR] = l3
+    return env
 
 
 def command_line(session_id: str | None, *, allowed_tools: str = ALLOWED_TOOLS, max_turns: int = MAX_TURNS,
@@ -134,12 +159,14 @@ class ClaudeAdapter:
     def executable(self) -> str | None:
         return shutil.which(EXECUTABLE)
 
-    def _launch(self, workspace: Path, message: str, session_id: str | None, raw_path: Path) -> Turn:
+    def _launch(self, workspace: Path, message: str, session_id: str | None, raw_path: Path,
+                models: dict | None) -> Turn:
         exe = self.executable()
         if exe is None:
             raise FileNotFoundError(f'{EXECUTABLE} is not on PATH')
+        l2 = turn_models(models)['l2']
         argv = command_line(session_id, allowed_tools=self.allowed_tools, max_turns=self.max_turns,
-                            model=self.model, executable=exe)
+                            model=self.model if l2 == DEFAULT_MODEL else l2, executable=exe)
         err_path, exit_path = side_paths(raw_path)
         for p in raw_path.parent.glob(f'{raw_path.stem}.*'):
             p.unlink(missing_ok=True)  # the result, .err, .exit and every relay file of a reused turn number
@@ -156,18 +183,19 @@ class ClaudeAdapter:
                   f'echo $? >{shlex.quote(str(exit_path))}')
         # The detached group is intentionally never reaped here: the CLI exits long before the turn ends and
         # `.exit` is the end-of-turn signal (hence the ResourceWarning about a running child in tests).
+        # The wrapper, the relay and `claude` inherit this environment: the L3 model is set or removed here.
         proc = subprocess.Popen(['/bin/sh', '-c', script, 'sh', *argv], cwd=str(workspace),
                                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                start_new_session=True, close_fds=True)
+                                start_new_session=True, close_fds=True, env=turn_environment(os.environ, models))
         return Turn(pid=proc.pid, raw_path=raw_path)
 
-    def start(self, workspace: Path, message: str, raw_path: Path) -> Turn:
-        return self._launch(workspace, message, None, raw_path)
+    def start(self, workspace: Path, message: str, raw_path: Path, models: dict | None = None) -> Turn:
+        return self._launch(workspace, message, None, raw_path, models)
 
-    def send(self, workspace: Path, session_id: str, message: str, raw_path: Path) -> Turn:
+    def send(self, workspace: Path, session_id: str, message: str, raw_path: Path, models: dict | None = None) -> Turn:
         if not session_id:
             raise ValueError('send requires a session id')
-        return self._launch(workspace, message, session_id, raw_path)
+        return self._launch(workspace, message, session_id, raw_path, models)
 
     # ── liveness and termination ─────────────────────────────────────────
     def alive(self, turn: Turn) -> bool:

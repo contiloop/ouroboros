@@ -6,7 +6,7 @@
   `references/orchestration.md`, the command guide in `references/runtime.md`) and `approve`
   (handoff; points at init's references).
 - `skills/init/scripts/` — all executable code: `ouroboros_cli.py` (entry point), `ouroboros/core.py`
-  (pure record rules), `ouroboros/store.py` (private dir, lock, owner, events, archive),
+  (pure record rules: the four proposal documents' parsers and completeness, set digest, cycles incl. beta), `ouroboros/store.py` (private dir, lock, owner, events, archive),
   `ouroboros/ports.py` (`HostSession` protocol), `ouroboros/adapters/claude.py` (headless `claude`
   through the streaming control channel), `ouroboros/relay.py` (per-turn relay: stdin/stdout of
   `claude`, question files, automatic permission allow; standard library, run by path, no package imports).
@@ -56,3 +56,9 @@
   (the latter against `ci/fixtures/fake_claude.py`, never the real host).
 - After any change here: `bash build/build.sh`, then check `git status` shows only intended
   regenerated files.
+- The proposal is a set of four documents (`scenario.md`, `validation.md`, `spec.md`, `delegation.md`);
+  `core.check_set` is the single completeness authority and `core.set_digest` the single digest; keep
+  `interview.md`'s templates and the parsers' leniency in step. `delegation.md` is never quoted to L2.
+- `COMPLETE` is accepted only on a `beta` cycle; the cycles limit is enforced at development
+  `cycle-start` and on REPLAN / development-ESCALATE, not on CONTINUE (so a beta cycle can follow the
+  last allowed development cycle).

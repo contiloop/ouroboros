@@ -4,12 +4,12 @@
 
 | Host | Command | Input | Effect | Errors |
 | --- | --- | --- | --- | --- |
-| Claude Code | `/ouroboros:init` | free text about the goal, over any number of turns | starts or continues the proposal conversation; ensures `.dryforge/` is ignored; writes the draft record; never runs a cycle | project without git is reported |
+| Claude Code | `/ouroboros:init` | free text about the goal, over any number of turns | starts or continues the interview that fills `scenario.md`, `validation.md`, `spec.md`, `delegation.md`; ensures `.dryforge/` is ignored; writes the draft record; never runs a cycle | project without git is reported |
 | Codex | `$ouroboros:init` | same | same | same |
-| Claude Code | `/ouroboros:approve` | none | approves the proposal exactly as last shown and starts L1's loop in the session; conversation stays open | no proposal → "nothing proposed"; changed since shown → the difference is shown, nothing approved |
+| Claude Code | `/ouroboros:approve` | none | checks the set is complete, approves it exactly as last shown and starts L1's loop in the session; conversation stays open | incomplete → the missing file and item; nothing proposed → "nothing proposed"; changed since shown → the difference per file is shown, nothing approved |
 | Codex | `$ouroboros:approve` | none | reports that no Codex worker adapter exists; records nothing | — |
 
-Any later message to L1 is conversation: in-scope clarification, a proposal revision (approved
+Any later message to L1 is conversation: in-scope clarification, a revision of the set (approved
 again with `approve`, applied between cycles) or a request to stop (immediate abort).
 
 All skills are manual-only on every host (`disable-model-invocation: true` for Claude/Grok/Agent
@@ -37,13 +37,13 @@ the workspace.
 | Command | Arguments | Effect |
 | --- | --- | --- |
 | `doctor` | `--host claude` | `{host, claude: path\|null, version, dryforge: {installed, enabled}}`; never exit 2 for a missing host |
-| `draft` | `--proposal <file>` | DRAFT, ACTIVE or STOPPED → replaces `proposal.md` of the current run, clears the shown digest and copy, appends `draft` (the revision must be shown and approved again); COMPLETE → archives the run first and starts a new DRAFT; refuses a live foreign owner |
-| `shown` | — | records the digest of `proposal.md` as shown; keeps a copy (`proposal.shown.md`) for diffs |
-| `show` | — | summary: status, run_id, shown and current digests, limits, spent, session, open cycle, `stopped_at` |
-| `approve` | — | writes `proposal.approved.md` (the governing text L1 re-reads) on every activation, amendment or resume; no proposal → BLOCKED "nothing proposed"; digest ≠ shown → BLOCKED with both digests and a unified diff; DRAFT → ACTIVE + first approval (`activated`); ACTIVE same digest → no-op summary; STOPPED same digest → `resumed`: an approval entry is appended, status ACTIVE, `stopped_reason`/`stopped_at` cleared; ACTIVE/STOPPED with a newer shown digest → `amended`: amendment appended, status ACTIVE. Refuses a proposal missing a required section or a parsable `Limits` section |
-| `cycle-start` | `--kind migration\|development --goal <file> --checkpoint <commit>` | opens `c<n>`; refuses unless ACTIVE, no open cycle and no limit already reached; emits pending `amend_applied` |
+| `draft` | `--scenario <f> --validation <f> --spec <f> --delegation <f>` | new run: all four required; DRAFT, ACTIVE or STOPPED → any subset replaces those files of the current run, clears the shown digest and the `shown/` copies, appends `draft` (the revision must be shown and approved again); COMPLETE, or a legacy record (single `proposal.md`) that is DRAFT/COMPLETE/STOPPED → archived first and a new DRAFT starts; legacy ACTIVE → BLOCKED "stop it first"; refuses a live foreign owner |
+| `shown` | — | records the combined digest of the four files as shown (`core.set_digest`: SHA-256 over `<name>\n<byte length>\n<bytes>` per file in the order scenario, validation, spec, delegation); keeps copies under `shown/` |
+| `show` | — | summary: status, run_id, `legacy`, shown and current combined digests, limits, `models {l2, l3}`, spent, `beta_cycles`, session, open cycle, `stopped_at`, open question |
+| `approve` | — | checks completeness first (BLOCKED `<file>: <item>`), then: nothing proposed → BLOCKED; digest ≠ shown → BLOCKED with both digests, `changed[]` and a unified diff per changed file; DRAFT → ACTIVE + first approval (`activated`); ACTIVE same digest → no-op summary; STOPPED same digest → `resumed`; ACTIVE/STOPPED with a newer shown digest → `amended`. On success writes the approved copies under `approved/` (the governing text L1 re-reads) and stores `limits` and `models` from `delegation.md` |
+| `cycle-start` | `--kind migration\|development\|beta --goal <file> --checkpoint <commit>` | opens `c<n>`; refuses unless ACTIVE and no cycle is open; a development cycle also refuses at the cycles limit; a beta cycle is exempt from `max cycles` and increments `beta_cycles`; emits pending `amend_applied` |
 | `cycle-stage` | `--stage ready\|go\|review\|done [--ready-digest <hex>] [--checkpoint <commit>]` | advances the open cycle; `go` requires a ready digest; `--checkpoint` sets `checkpoint_after` |
-| `evaluate` | `--decision CONTINUE\|REPLAN\|ESCALATE\|COMPLETE --basis <file>` | closes the cycle; REPLAN/ESCALATE count as stalled; COMPLETE needs a non-empty basis and sets the run COMPLETE; limits reached → STOPPED `limit:cycles\|stalled\|budget` |
+| `evaluate` | `--decision CONTINUE\|REPLAN\|ESCALATE\|COMPLETE --basis <file>` | closes the cycle; REPLAN counts as stalled, ESCALATE too except on a beta cycle; COMPLETE needs a non-empty basis, is accepted only on a beta cycle and sets the run COMPLETE; stalled/budget limits reached → STOPPED; the cycles limit stops the run only when more development is asked for (REPLAN anywhere, ESCALATE on a development cycle) — after a CONTINUE at the limit the run stays ACTIVE so a beta cycle can open |
 | `event` | `--actor human\|L1\|L2\|host --kind <kind> [--cycle <id>] --data <file>` | appends one event; JSON ≤ 8 KB embedded, otherwise copied to `turns/event-<n>.<ext>` |
 | `stop` | `--reason abort\|limit:<which>` | STOPPED with `stopped_at` {cycle, stage, checkpoint}; the open cycle stays open |
 | `archive` | — | moves a finished run under `archive/<run_id>/` |
@@ -82,13 +82,18 @@ shows `run_status: STOPPED`. `session-stop` records its `stop` event with actor 
 action); only the run-level `stop --reason abort` is the human's.
 
 **Run record (`run.json`):** `run_id`, `workspace`, `status` ∈ {DRAFT, ACTIVE, COMPLETE, STOPPED},
-`proposal_digest_shown`, `approvals[] {time, digest, applied}`, `limits {max_cycles,
-max_stalled_cycles, budget_usd|null}`, `spent_usd`, `stalled_cycles`, `host`, `session {id, started,
+`proposal_digest_shown` (combined set digest), `approvals[] {time, digest, applied}`, `limits {max_cycles,
+max_stalled_cycles, budget_usd|null}`, `models {l2, l3}` (literal strings, `default` for the host
+default), `beta_cycles`, `spent_usd`, `stalled_cycles`, `host`, `session {id, started,
 reason, cost_total_usd}`, `cycles[] {id, goal, kind, started, session_id, stage, checkpoint_before, checkpoint_after,
 ready_digest, evaluation}`, `stopped_reason`, `stopped_at`, `turn_count`, `turn`.
 **Events (`events.jsonl`):** `{time, actor, kind, cycle_id, data}`; kinds written by the CLI:
 `draft`, `shown`, `approve`, `amend`, `amend_applied`, `cycle_start`, `cycle_stage`, `evaluate`,
 `stop`, `archive`, `session`, `turn`, `turn_result`, `interrupt`, `question`, `answer`, `unanswered`,
-plus whatever L1 records with `event`.
+plus whatever L1 records with `event` — the loop uses `beta` (one per validation item, actor L1),
+`verified` (the user's own check, actor human), `answer` (plain-text questions) and `resume`.
+**Files:** the four documents, `shown/<name>`, `approved/<name>`, `workgraph.yaml` (L1's plan of
+nodes; the only file L1 edits on its own after approval), `run.json`, `events.jsonl`, `turns/`,
+`archive/<run_id>/`, `owner.json`, `lock`.
 **Owner (`owner.json`):** `{pid, session_id, started}`; a live foreign pid blocks `draft`, `approve`
 and every `session-*` command; a dead pid is replaced.

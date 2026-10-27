@@ -4,7 +4,7 @@
 
 | Asset | Why it matters |
 | --- | --- |
-| The user's approved intent (goal, completion criteria, constraints, delegated judgment) | Every later action is justified by it. Silent drift means L1 pursues something the user never approved. |
+| The user's approved intent (the scenario, validation, spec and delegation documents) | Every later action is justified by it. Silent drift means L1 pursues something the user never approved. |
 | The approval record itself (`approve` by the human) | It is the one event that turns a conversation into authority. Nothing else may create it. |
 | The user's target repository and its remotes | L1 and its workers act on real code with the user's credentials. |
 | Private run records under the target project's `.dryforge/ouroboros/` | Contain session IDs, decision logs and raw worker output. They are never committed. |
@@ -30,9 +30,9 @@
 | Stage | Who decides | What is allowed |
 | --- | --- | --- |
 | Before `approve` (draft) | Human only | Conversation, read-only inspection, draft edits. **No** cycle, Migration, Ready or Go. No tool authority beyond reading. |
-| `approve` | Human only | Activates the exact proposal last shown. Cannot be issued by L1, L2 or any worker. |
-| After `approve` (active) | **L1, without exception** | Every action the goal requires: answering worker questions, approving Ready documents, acting on permission denials reported in turn results, local Git operations, merge to the integration branch, push, tags, releases, spending within the proposal's stated budget, deleting its own task branches/worktrees. |
-| Goal/scope change | Human | Changing goal, completion criteria, constraints, priorities or non-goals is recorded only with the human's approval, between cycles. |
+| `approve` | Human only | Activates the exact proposal set last shown. Cannot be issued by L1, L2 or any worker. |
+| After `approve` (active) | **L1, without exception** | Every action the goal requires: answering worker questions, approving Ready documents, acting on permission denials reported in turn results, local Git operations, merge to the integration branch, push, tags, releases, spending within the stated budget, deleting its own task branches/worktrees. The one thing L1 asks of the human afterwards is a **verification only a human can make** during the beta test (a visual check, a device, an external account), raised as ESCALATE and recorded as `verified`; it is not a consent and grants nothing. |
+| Goal/scope change | Human | Changing the scenarios, validation items, the product's shape, delegation, models or limits is recorded only with the human's approval (a revised set approved again). |
 | Abort of an active cycle | Human | Stopping L1's execution before the goal is met. |
 
 **Explicitly not allowed, at any stage:**
@@ -71,3 +71,9 @@ Ouroboros holds no credentials of its own; host logins (Claude, Codex, MCP OAuth
 Before `approve`, L1 initiates no login or installation. After `approve`, L1 may install dependencies,
 log in to services or adjust host settings when the goal requires it, like any other action. A
 missing `claude` CLI or Dryforge plugin is reported by `doctor`, not installed by Ouroboros.
+
+## What the worker never sees
+
+`delegation.md` (models, limits, delegated judgment, workspace), `run.json`, `events.jsonl`,
+`workgraph.yaml` and anything about Ouroboros, L1 or approvals are never quoted to L2. Scenario,
+validation and spec content is product text and is quoted freely.

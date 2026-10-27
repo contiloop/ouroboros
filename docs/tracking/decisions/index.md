@@ -11,3 +11,4 @@
 | [0007](0007-english-project-docs.md) | Project documentation is written in English | 2026-10-27 |
 | [0008](0008-headless-l2-session-and-allowlist.md) | L2 is a headless Claude Code session with a tool allow-list, kept across cycles | 2026-10-27 |
 | [0009](0009-structured-questions-relay.md) | Structured questions reach L1 through the control channel; remaining permission requests are auto-allowed | 2026-10-27 |
+| [0010](0010-four-document-proposal-and-beta-test.md) | Four-document proposal filled by interview; work graph; L1 beta-tests; models enforced on the worker | 2026-10-27 |
