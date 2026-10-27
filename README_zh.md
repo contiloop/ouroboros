@@ -6,6 +6,8 @@
 
 [English](README.md) · [한국어](README_ko.md) · [日本語](README_ja.md)
 
+> 在本翻译更新之前，以[英文 README](README.md) 为当前基准。
+
 ## 使用流程
 
 | Codex | Claude Code | 作用 |
@@ -23,7 +25,7 @@
 
 按既有 Go 规则，单个 `MECHANICAL`/`NONE` 任务由 L2 直接实现，并行或 `RISKY` 工作委托给下层代理，同时保留必要的独立审查。同一会话让 Ready 中形成的设计上下文延续到实现判断中。
 
-L1 调用已安装的 Dryforge 技能。Codex 使用 `$dryforge:ready`、`$dryforge:go` 与技能附件，Claude Code 使用 `/dryforge:ready`、`/dryforge:go`。L2 会话由 L1 创建，并不是 Ready 技能自行创建。L1 对 L2 承担普通用户的角色，具体 L3 的管理由 L2 负责。缺少判断依据或超出委托范围的决定才返回用户协调。完成一轮并不意味着已经实现整体目标。
+L1 调用已安装的 Dryforge 技能。Claude Code 使用 `/dryforge:ready`、`/dryforge:go`。Ouroboros 不附带 Dryforge 副本；若未安装，L1 会报告并且不启动任何工作。L2 会话由 L1 创建，并不是 Ready 技能自行创建。L1 对 L2 承担普通用户的角色，具体 L3 的管理由 L2 负责。缺少判断依据或超出委托范围的决定才返回用户协调。完成一轮并不意味着已经实现整体目标。
 
 Ready、Go 及其下层代理使用普通调用者接口，不必根据上层是人还是 L1 改变流程。访谈属于用户与 L1 的对话，不是额外的代理或使用阶段。
 
@@ -31,12 +33,12 @@ Ready、Go 及其下层代理使用普通调用者接口，不必根据上层是
 
 ## 安装与当前状态
 
-按[英文安装说明](README.md#try-it)加载插件。Claude Code 使用 `/ouroboros:init` → `/ouroboros:approve`，Codex 使用 `$ouroboros:init` → `$ouroboros:approve`。需要亲自监督单轮开发时，也可以直接使用 `ready` 和 `go`。
+按[英文安装说明](README.md#try-it)加载插件。Claude Code 使用 `/ouroboros:init` → `/ouroboros:approve`，Codex 的宿主适配器尚未实现，`$ouroboros:approve` 会报告这一点且不会启动执行。
 
-项目处于实验阶段，包含草案与批准状态管理、循环与权限检查，以及连接 Claude SDK / Codex App Server 的可选执行层。Codex 已验证新命令识别，以及父代理回合结束后向 L1 转交子代理批准请求的流程。从新会话开始直至实现最终目标的完整实机验证仍未完成。目前正式目标变更在已评估的循环边界提交。
+项目处于实验阶段，正在从概念重新构建。当前包含草案与批准状态管理、私有运行记录，以及 Claude Code 无头工作会话。在 Claude Code 上从 `init → approve → 循环 → 最终目标` 的完整无人值守实机验证仍未完成。目前正式目标变更在已评估的循环边界提交。
 
-Grep MCP 和 Context7 MCP 是可选（Optional）调查工具。参见 [MCP 设置](docs/RESEARCH_MCP_SETUP.md)、[对话与循环运行指南](docs/MISSION.md)。
+Grep MCP 和 Context7 MCP 是可选（Optional）调查工具。参见 [MCP 设置](docs/RESEARCH_MCP_SETUP.md)。
 
 ## 来源与许可证
 
-Ouroboros 是基于 **prekuter** 的 [Dryforge](https://github.com/prekuter/dryforge) 开发的独立项目，遵循 [Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0)。保留现有 `.dryforge/` 记录。公开 `mission` 命令已替换为 `init` 和 `approve`，但不会因此重置已有运行记录。
+Ouroboros 是基于 **prekuter** 的 [Dryforge](https://github.com/prekuter/dryforge) 开发的独立项目，遵循 [Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0)。

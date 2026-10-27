@@ -6,6 +6,8 @@ Ouroboros에서는 **L1**이 사용자와 계속 대화하면서 개발 전체�
 
 [English](README.md) · [日本語](README_ja.md) · [中文](README_zh.md)
 
+> 이 번역이 갱신될 때까지는 [영문 README](README.md)가 현재 기준 문서입니다.
+
 ## 대화로 시작하기
 
 | Codex | Claude Code | 하는 일 |
@@ -19,7 +21,7 @@ Ouroboros에서는 **L1**이 사용자와 계속 대화하면서 개발 전체�
 
 ## Ready–Go 반복
 
-실행을 인계받은 L1은 설치된 **Dryforge Ready·Go 스킬**을 아래 흐름으로 호출합니다. Codex에서는 `$dryforge:ready`·`$dryforge:go`와 스킬 첨부를, Claude Code에서는 `/dryforge:ready`·`/dryforge:go`를 사용합니다.
+실행을 인계받은 L1은 설치된 **Dryforge Ready·Go 스킬**을 아래 흐름으로 호출합니다. Claude Code에서는 `/dryforge:ready`·`/dryforge:go`를 사용합니다. Ouroboros는 Dryforge 복사본을 포함하지 않으며, 설치되어 있지 않으면 L1이 이를 보고하고 아무것도 시작하지 않습니다.
 
 1. **L1이 L2 에이전트 세션을 만들고 Ready를 요청합니다.** 이번 사이클의 목표와 사용자 의도에 관한 맥락을 전달합니다. Ready 스킬 자체가 에이전트를 생성하는 것은 아닙니다.
 2. **L2가 Dryforge Ready 절차를 수행합니다.** 기존 해결책을 조사하고 요구사항·계획·인계 문서를 작성합니다. 궁금한 점은 L1에 묻고, L1이 사용자 의도와 위임 범위에 따라 답합니다. 판단 근거가 부족하거나 위임 범위를 벗어나는 결정만 사용자와 조율합니다.
@@ -29,7 +31,7 @@ Ouroboros에서는 **L1**이 사용자와 계속 대화하면서 개발 전체�
 
 사용자의 `ouroboros:approve`는 L1에 실행을 맡기는 승인입니다. 이후 사이클별 Ready 승인은 L1이 실제 문서를 보고 수행합니다. 한 사이클이 끝났다는 이유만으로 전체 목표가 완료됐다고 판단하지 않습니다.
 
-기존 코드베이스에 프로젝트 문서와 작업 규칙을 처음 마련해야 한다면, L1이 승인된 범위에서 **Dryforge Migration**(`dryforge:migration`)을 먼저 맡길 수 있습니다. 질문에 답하고 실제 문서와 독립 검토 결과를 확인한 뒤, 수락한 문서를 별도 승인 범위에 따라 커밋합니다. Migration 자체는 문서만 작성하며 제품 코드 구현이나 커밋을 하지 않습니다. 이후 새 작업자 세션에서 Ready–Go를 시작합니다. 새 프로젝트나 이미 준비된 프로젝트는 이 단계를 건너뜁니다. [Migration 운영 절차](src/skills/init/references/orchestration.md#migration)
+기존 코드베이스에 프로젝트 문서와 작업 규칙을 처음 마련해야 한다면, L1이 승인된 범위에서 **Dryforge Migration**(`dryforge:migration`)을 먼저 맡길 수 있습니다. 질문에 답하고 실제 문서와 독립 검토 결과를 확인한 뒤, 수락한 문서를 커밋합니다. Migration 자체는 문서만 작성하며 제품 코드 구현이나 커밋을 하지 않습니다. 이후 새 작업자 세션에서 Ready–Go를 시작합니다. 새 프로젝트나 이미 준비된 프로젝트는 이 단계를 건너뜁니다. [L1 운영 절차](src/skills/init/references/orchestration.md)
 
 ## 구조
 
@@ -76,15 +78,11 @@ claude --plugin-dir ~/ouroboros/claude
 
 ### Codex
 
-`.agents/plugins/marketplace.json`을 사용하는 로컬 마켓플레이스 절차로 이 체크아웃을 등록합니다. 이 파일은 `codex/plugin/` 패키지를 가리킵니다. `ouroboros` 플러그인을 활성화한 뒤 **`$ouroboros:init`**을 선택하고, 초안을 검토한 후 **`$ouroboros:approve`**를 선택합니다.
+`.agents/plugins/marketplace.json`을 사용하는 로컬 마켓플레이스 절차로 이 체크아웃을 등록합니다. 이 파일은 `codex/plugin/` 패키지를 가리킵니다. 패키지는 설치할 수 있고 `$ouroboros:init`으로 대화할 수 있지만, Codex용 호스트 어댑터는 아직 없어 `$ouroboros:approve`는 그 사실을 보고하고 실행을 시작하지 않습니다.
 
-L2를 실행할 호스트에도 Dryforge를 설치하고 활성화해야 합니다. L1 루프는 그 설치본을 호출합니다.
-패키지에 남아 있는 `ouroboros:ready`·`ouroboros:go` 복사본을 백엔드로 사용하지 않습니다.
-별도 Claude 작업자에 플러그인을 로드하는 옵션은 [실행 환경 안내](src/skills/init/references/runtime-bridge.md)를 참고하세요.
+L2를 실행할 Claude Code에는 Dryforge를 설치하고 활성화해야 합니다. L1 루프는 그 설치본을 호출합니다.
 
-### 다른 실행 방식과 패키지
-
-사용자가 직접 감독하는 단일 사이클은 `ouroboros:ready` → `ouroboros:go`로 실행할 수 있습니다. `migration`은 기존 프로젝트에 개발 작업 구조를 구성하는 스킬이며, 작업자를 교체할 때마다 실행하지 않습니다.
+### 다른 패키지
 
 Grok, Agent Plugins, Antigravity용 패키지도 생성합니다. 패키지 제공 여부와 실제 실행 지원은 구분해야 합니다. 실행 호스트가 필요한 지속 세션, 하위 에이전트와 의사결정 중계를 제공해야 합니다.
 
@@ -92,17 +90,16 @@ Grok, Agent Plugins, Antigravity용 패키지도 생성합니다. 패키지 제�
 
 ## 현재 상태
 
-Ouroboros는 실험 단계입니다. 대화 초안과 실행 인계, 사이클·권한 검증, Claude SDK와 Codex App Server 세션을 연결하는 선택적 실행 계층이 구현돼 있습니다. 자동 검사는 상태 전이, 요청 전달과 패키지 정합성을 확인합니다.
+Ouroboros는 실험 단계이며 개념부터 다시 만들고 있습니다. 대화 초안과 실행 인계, 비공개 실행 기록, Claude Code 헤드리스 작업자 세션이 구현돼 있습니다. 자동 검사는 상태 전이, 작업자 호출과 패키지 정합성을 확인하며 실제 모델을 호출하지 않습니다.
 
-Codex에서는 새 명령의 인식과 부모 턴 종료 후 자식의 승인 요청을 L1이 처리하는 흐름을 실제로 확인했습니다. 새 세션에서 `init → approve → Ready–Go → 최종 목표 달성`까지 완주하는 검증은 아직 남아 있습니다. 현재 정식 목표 변경은 평가가 끝난 사이클 경계에서 반영하며, 사이클 도중에도 대화는 계속할 수 있습니다.
+Claude Code에서 `init → approve → 사이클 → 최종 목표 달성`까지 사람의 개입 없이 완주하는 검증은 아직 남아 있습니다. 정식 목표 변경은 평가가 끝난 사이클 경계에서 반영하며, 사이클 도중에도 대화는 계속할 수 있습니다.
 
 ## 상세 문서와 개발
 
-- [대화, 실행 인계와 사이클 운영](docs/MISSION.md)
-- [지속 세션과 실행 환경 설정](src/skills/init/references/runtime-bridge.md)
-- [실행 권한 위임 범위](src/skills/init/references/runtime-bridge.md#execution-scope)
+- [비즈니스 규칙](docs/business-rules.md)
+- [보안과 승인 이후의 권한](docs/security.md)
 
-원본은 `src/skills/`에 있습니다. `init`, `approve`, `ready`, `go`, `migration`을 포함하며, `build/build.sh`가 다섯 플랫폼용 패키지를 생성합니다.
+원본은 `src/skills/`에 있습니다. `init`과 `approve`만 포함하며, `build/build.sh`가 다섯 플랫폼용 패키지를 생성합니다.
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s ci -p 'test_*.py'
@@ -114,5 +111,3 @@ python3 ci/verify.py
 ## 원저작자와 라이선스
 
 Ouroboros는 **prekuter**의 [Dryforge](https://github.com/prekuter/dryforge)에서 가져온 코드와 절차를 포함하는 독립 프로젝트이며 [Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0)을 따릅니다. 원본 [영문](README.upstream.md)과 [한국어](README_ko.upstream.md) README는 참고용으로 보존합니다.
-
-기존 `.dryforge/` 기록 경로와 내부 mission 식별자는 호환성을 위해 유지합니다. 공개 `mission` 명령은 `init`과 `approve`로 바뀌었으며, 이 변경으로 기존 실행 기록을 초기화하지 않습니다.
