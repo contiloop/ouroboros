@@ -48,8 +48,9 @@ class HostSession(Protocol):
         `questions` is the host's list of {question, header, options: [{label, description}], multiSelect}."""
 
     def answer(self, turn: Turn, round_: int, answers: dict) -> None:
-        """Deliver the answers of bundle `round_` (question text → answer string in the host's wire form);
-        the turn continues. The caller validates before calling."""
+        """Deliver the validated structured answers of bundle `round_` (question text → a label, a list of
+        labels, or {"other": text}); the adapter converts them to its host's wire form and the turn continues.
+        The caller validates before calling."""
 
     def session_id(self, turn: Turn) -> str | None:
         """The session id the host announced for this turn, available while the turn is still live, or None

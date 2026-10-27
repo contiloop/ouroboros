@@ -499,6 +499,25 @@ class StopTests(Base):
         self.ws.start('ready', 'again\n')  # a stopped turn is not RUNNING
         self.ws.wait()
 
+    def test_stop_returns_only_once_the_whole_group_is_gone(self):
+        pidfile = self.ws.path.parent / f'fakepid-{self.ws.path.name}'
+        self.addCleanup(lambda: pidfile.unlink(missing_ok=True))
+        out = self.ws.start('ready', 'slow\n', env=dict(FAKE_CLAUDE_SLEEP='30', FAKE_CLAUDE_PIDFILE=str(pidfile)))
+        pid = out['pid']
+        deadline = time.monotonic() + 5
+        while not (pidfile.exists() and self.ws.turn_file('1.relay.json').exists()) and time.monotonic() < deadline:
+            time.sleep(0.05)
+        relay_pid = json.loads(self.ws.turn_file('1.relay.json').read_text())['pid']
+        self.assertTrue(pid_alive(relay_pid) and pid_alive(int(pidfile.read_text())))
+        st = self.ws.ok('session-stop')
+        self.assertEqual(st['state'], 'STOPPED')
+        # Right after session-stop returns, no member of the turn's process group is left ...
+        with self.assertRaises(ProcessLookupError):
+            os.killpg(pid, 0)
+        # ... so a session-send in this window can never overlap a claude still being taken down.
+        self.assertTrue(self.ws.turn_file('1.exit').exists() or not pid_alive(relay_pid))
+        self.assertFalse(pid_alive(int(pidfile.read_text())))
+
     def test_stop_on_an_exited_turn_settles_it_instead(self):
         out = self.ws.start('ready', 'quick\n', env=dict(FAKE_CLAUDE_COST='0.3'))
         deadline = time.monotonic() + 10
@@ -619,6 +638,15 @@ class PortTests(unittest.TestCase):
         self.assertEqual(argv[argv.index('--model') + 1], 'sonnet')
         self.assertNotIn('AskUserQuestion', claude_adapter.ALLOWED_TOOLS)
 
+    def test_question_tool_not_in_allow_list(self):
+        self.assertEqual(claude_adapter.QUESTION_TOOL, 'AskUserQuestion')
+        self.assertNotIn(claude_adapter.QUESTION_TOOL, claude_adapter.ALLOWED_TOOLS.split(','))
+        self.assertNotIn(claude_adapter.QUESTION_TOOL, claude_adapter.ClaudeAdapter().allowed_tools.split(','))
+
+    def test_wire_answers_is_the_adapter_encoding(self):
+        self.assertEqual(claude_adapter.wire_answers({'a?': 'Alpha', 'b?': ['Alpha', 'Beta'], 'c?': {'other': 'free text'}}),
+                         {'a?': 'Alpha', 'b?': 'Alpha, Beta', 'c?': 'free text'})
+
 
 class QuestionTests(Base):
     """The structured-question relay: QUESTION state, session-answer, continuation, stop and auto-allow."""
@@ -698,6 +726,8 @@ class QuestionTests(Base):
         self.assertTrue(self.ws.turn_file('1.q2.json').is_file())
         out = self.ws.answer({'Question 2?': {'other': 'something else'}})
         self.assertEqual(out['round'], 2)
+        # The record keeps L1's structured answers; the adapter writes Claude's wire strings to the relay file.
+        self.assertEqual(json.loads(self.ws.turn_file('1.a1.json').read_text())['answers'], {'Question 1?': 'Alpha, Beta'})
         self.assertEqual(json.loads(self.ws.turn_file('1.a2.json').read_text())['answers'], {'Question 2?': 'something else'})
         out = self.ws.wait()
         self.assertEqual(out['state'], 'COMPLETE')

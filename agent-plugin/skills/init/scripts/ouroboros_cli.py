@@ -456,10 +456,10 @@ def cmd_session_stop(store: Store, a) -> dict:
                     stopped_reason=run['stopped_reason'])
 
 
-def _wire_answers(questions: list, answers) -> dict:
-    """Validate L1's answers against the open bundle and return the host's wire form (question → string):
-    a label as is, a list of labels joined with ", ", {"other": text} as its text. Refuses on the first
-    offending key without applying anything."""
+def _validate_answers(questions: list, answers) -> dict:
+    """Validate L1's answers against the open bundle and return them in the structured form the port takes
+    (question → a label, a list of labels for a multiSelect question, or {"other": text}); the adapter encodes
+    its host's wire form. Refuses on the first offending key without applying anything."""
     require(isinstance(answers, dict), 'answers must be a JSON object mapping question text to an answer')
     by_text = {}
     for q in questions:
@@ -467,7 +467,7 @@ def _wire_answers(questions: list, answers) -> dict:
             by_text[q['question']] = q
     for key in answers:
         require(key in by_text, f'unknown question: {key!r}', question=key)
-    wire = {}
+    valid = {}
     for text, q in by_text.items():
         require(text in answers, f'missing answer for question: {text!r}', question=text)
         value = answers[text]
@@ -475,7 +475,7 @@ def _wire_answers(questions: list, answers) -> dict:
         if isinstance(value, str):
             require(value in labels, f'answer for {text!r} is not one of its options: {value!r}',
                     question=text, options=labels)
-            wire[text] = value
+            valid[text] = value
         elif isinstance(value, list):
             require(bool(q.get('multiSelect')), f'answer for {text!r} is a list but the question is not multiSelect',
                     question=text)
@@ -483,15 +483,15 @@ def _wire_answers(questions: list, answers) -> dict:
                     question=text)
             bad = [v for v in value if v not in labels]
             require(not bad, f'answer for {text!r} names options that do not exist: {bad!r}', question=text, options=labels)
-            wire[text] = ', '.join(value)
+            valid[text] = value
         elif isinstance(value, dict):
             require(set(value) == {'other'} and isinstance(value.get('other'), str) and value['other'].strip() != '',
                     f'answer for {text!r} must be a label, a list of labels or {{"other": "<text>"}}', question=text)
-            wire[text] = value['other']
+            valid[text] = value
         else:
             raise RecordError(f'answer for {text!r} must be a label, a list of labels or {{"other": "<text>"}}',
                               question=text)
-    return wire
+    return valid
 
 
 def cmd_session_answer(store: Store, a) -> dict:
@@ -511,9 +511,9 @@ def cmd_session_answer(store: Store, a) -> dict:
         require(host.alive(handle), f'turn {turn["n"]} has exited; settle it with session-wait')
         bundle = host.questions(handle)
         require(bundle is not None, f'turn {turn["n"]} has no open question')
-        wire = _wire_answers(bundle['questions'], answers)
+        valid = _validate_answers(bundle['questions'], answers)
         _claim(store, a, run)
-        host.answer(handle, bundle['round'], wire)
+        host.answer(handle, bundle['round'], valid)
         turn.update(state='RUNNING', questions_answered=int(turn.get('questions_answered', 0)) + 1)
         turn.pop('question', None)
         store.write_run(run)
@@ -522,7 +522,7 @@ def cmd_session_answer(store: Store, a) -> dict:
         store.append_event('L2', 'question', cycle_id, bundle)
         store.append_event('L1', 'answer', cycle_id, dict(round=bundle['round'], answers=answers, basis=basis))
         return dict(state='RUNNING', turn=turn['n'], pid=turn['pid'], kind=turn['kind'], round=bundle['round'],
-                    answers=wire)
+                    answers=valid)
 
 
 def add_commands(sub) -> dict:
