@@ -29,8 +29,8 @@ Load `references/interview.md` for the interview and the documents' format; load
      log leaves with it; `draft` then starts a new run;
    - `STOPPED` → `draft` revises the stopped run so `approve` can resume it; to start a different
      goal after a stop, run `archive` first and then `draft`;
-   - `legacy: true` (a single-file proposal from an older version) → tell the user; `draft`
-     archives it unless it is ACTIVE (stop it first).
+   - `legacy: true` (a single-file proposal from an older version) → tell the user; run `archive`
+     before the first line of the new interview log (a legacy ACTIVE run must be stopped first).
    Records under `.dryforge/mission/` are from an older version and are ignored.
 
 ## The conversation
