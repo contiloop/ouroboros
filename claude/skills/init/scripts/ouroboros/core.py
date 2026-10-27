@@ -46,7 +46,7 @@ def new_run(workspace: str) -> dict:
     run_id = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S') + '-' + secrets.token_hex(3)
     return dict(run_id=run_id, workspace=workspace, status='DRAFT', proposal_digest_shown=None, approvals=[],
                 limits=None, spent_usd=0, stalled_cycles=0, host=HOST,
-                session=dict(id=None, started=None, reason=None), cycles=[], stopped_reason=None, stopped_at=None)
+                session=dict(id=None, started=None, reason=None, cost_total_usd=0), cycles=[], stopped_reason=None, stopped_at=None)
 
 
 # ── proposal ───────────────────────────────────────────────────────────────

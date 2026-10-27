@@ -12,7 +12,8 @@ Modes (environment):
   FAKE_CLAUDE_MODE        ok (default) | garbage (non-JSON stdout, exit 0) | fail (result, exit 1)
                           | error (result with is_error true, exit 1) | nosession (no session_id anywhere)
   FAKE_CLAUDE_SESSION     session id put in the init and result events (default sess-fake-1)
-  FAKE_CLAUDE_COST        total_cost_usd put in the result (default 0.125)
+  FAKE_CLAUDE_COST        total_cost_usd put in the result (default 0.125); like the real host this is the
+                          session's cumulative total, so a later turn of one session reports a higher figure
   FAKE_CLAUDE_QUESTIONS   number of AskUserQuestion rounds to ask before the result (default 0)
   FAKE_CLAUDE_MULTI       1 → every question is multiSelect
   FAKE_CLAUDE_PERMISSION  1 → one `can_use_tool` request for Bash before the result

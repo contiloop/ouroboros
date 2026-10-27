@@ -57,7 +57,8 @@ class HostSession(Protocol):
 
     def result(self, turn: Turn) -> dict:
         """Parse a finished turn's raw result: {state ∈ {COMPLETE, INTERRUPTED}, session_id, text, num_turns,
-        cost_usd, permission_denials, is_error, subtype, usage, raw_path, stderr_path, exit_code, reason,
+        cost_usd, cost_total_usd (the host's cumulative session total; the caller charges the delta as
+        cost_usd), permission_denials, is_error, subtype, usage, raw_path, stderr_path, exit_code, reason,
         skills (the installed dryforge commands the host listed), auto_allowed (permission requests allowed
         automatically: [{tool_name, tool_use_id}]), questions (answered bundles), stream_path}. `state` is a
         turn state, never a run status. Missing session id, non-zero exit or malformed output → INTERRUPTED
